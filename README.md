@@ -1,49 +1,33 @@
 # TouchStation 4.0.0
 
-TouchStation is an ARM64 Android distribution of the upstream ARMSX3 PlayStation 3 emulator. The Android application is built from its pinned upstream source, with the supplied TouchStation launcher artwork and a focused chipset-profile addition to the existing Performance settings. The native PPU/SPU/RSX libraries are kept unchanged from the matching upstream Android release.
+TouchStation is an Android ARM64 distribution of the ARMSX3 Android PS3 emulator, based on the RPCS3-derived native engine. Version 4.0.0 changes the app's visible name to **TouchStation**, refreshes launcher branding, and adds a bundled chipset-family tuning guide for MediaTek Dimensity, Qualcomm Snapdragon and Samsung Exynos devices.
 
-## What changed in 4.0.0
+## Emulator engine
 
-- Launcher label is **TouchStation** (without the console name).
-- Launcher and adaptive icons are generated from the supplied TouchStation artwork. The wordmark is placed inside Android's adaptive-icon safe area to avoid clipped or undersized artwork.
-- The existing Performance page adds Auto, Dimensity, Snapdragon and Exynos profiles, plus Balanced, Performance and Compatibility tuning targets.
-- Auto detection uses Android's SoC manufacturer/model fields. If the device is not identified as one of the three supported families, no profile is applied; the emulator's existing settings remain available.
-- Profiles use existing RPCS3 settings: ARM64 LLVM PPU/SPU decoders, safe SPU block size, automatic SPU/LLVM thread allocation, Android's normal thread scheduler, and the default clock scale. Balanced uses 720p for Dimensity/Exynos and the device's normal output resolution for Snapdragon; Performance selects a 540p output surface; Compatibility uses conservative 720p output plus supported SPU accuracy options.
-- Profiles do not overclock, change voltage, or force CPU/GPU clocks. The three tuning targets map only to existing emulator settings. GPU Turbo remains a separate, optional upstream control and only operates on compatible Adreno hardware.
-- Existing firmware/game setup, emulator settings, save data, trophies, renderer options, and physical/Bluetooth controller support are preserved from upstream.
+The native PPU/SPU execution, RSX/Vulkan rendering, firmware installation and game-boot workflows are preserved from the pinned upstream ARMSX3 release. This is a downstream rebrand and configuration guide, not a new emulator core. Game compatibility and performance depend on the exact CPU, GPU, Vulkan driver, thermal limits and title.
 
-Profiles are conservative starting points, not device-specific benchmark guarantees. A chipset family contains many tiers and GPU configurations; adjust output resolution and the manual Performance/Graphics controls for the actual phone. Other chipset families do not receive a TouchStation preset and continue using the upstream/manual settings.
+## Device profiles
 
-## User-provided content
+TouchStation includes a tuning reference for exactly these chipset families:
 
-TouchStation does not bundle Sony firmware, commercial games, PSN licenses, or encryption keys. Users provide:
-1. An official PS3 system update package (PUP).
-2. Their own game content in a format supported by the upstream emulator.
+- **MediaTek Dimensity** — Mali/Immortalis Vulkan baseline, conservative resolution scaling, asynchronous shader compilation and safe/default SPU settings.
+- **Qualcomm Snapdragon** — Adreno Vulkan baseline, default system driver and per-game tuning.
+- **Samsung Exynos** — Mali/Xclipse Vulkan baseline, conservative resolution scaling and per-game tuning.
 
-Some digital PSN content can require its own license data. TouchStation cannot generate missing licenses.
+The profiles are guidance for settings exposed by the upstream emulator. They do not change clock speeds or voltage, replace GPU drivers, or guarantee compatibility. Start with the engine's default settings and adjust one option at a time. Use per-game overrides where available.
 
-## Device requirements
+The guide is bundled at `assets/touchstation-soc-profiles.json` inside the app package. Hardware support varies between generations; an SoC family name alone does not guarantee a working Vulkan driver.
 
-The release targets the upstream Android 15 / SDK 35 / ARMv8.2 ARM64 engine package. It requires a compatible 64-bit ARM device and Vulkan-capable graphics driver, plus sufficient RAM, storage and sustained cooling. A successful install does not guarantee that a particular game will boot or run smoothly.
+## User setup
 
-The chipset profiles cover MediaTek Dimensity, Qualcomm Snapdragon and Samsung Exynos only. They are settings presets, not claims that every phone in those families has identical performance.
+Users provide their own official PS3 system update package (PUP) and game files. No Sony firmware, commercial games, encryption keys or copyrighted game assets are bundled. Some digital content may also require its own license data.
 
-## Build pipeline
+## Release build
 
-The workflow:
-1. Checks out the pinned ARMSX3 Android application source.
-2. Downloads the matching upstream ARM64 release and stages its original native libraries.
-3. Applies the TouchStation app name, launcher artwork and chipset profiles.
-4. Builds the Android application, verifies version 4.0.0 / code 400, and checks the PPU/SPU native library, JNI bridge, signing and alignment.
-5. Uploads the APK as a GitHub Actions artifact.
+The workflow downloads the pinned upstream ARMSX3 Android ARM64 release, verifies that its native core and JNI libraries are present, applies TouchStation name/version/icon branding, rebuilds, aligns and signs the APK, then verifies the package version and native libraries.
 
-The APK is not artificially padded. Its size is determined by the real emulator engine and app assets.
+The APK is ARM64 only. It is not padded to reach an arbitrary file size.
 
-## Upstream and license
+## License and credits
 
-Upstream project: https://github.com/ARMSX2/ARMSX3  
-Pinned source commit: https://github.com/ARMSX2/ARMSX3/commit/482d35b6a9f2eee61cdc6c0820a2d57392b235e6  
-Upstream release: https://github.com/ARMSX2/ARMSX3/releases/tag/1.6.4  
-Native emulator engine: RPCS3
-
-The upstream application and emulator core retain their applicable GPL-2.0 terms. The reproducible TouchStation source-preparation script is in tools/prepare_source_build.py. See LICENSE and THIRD_PARTY_NOTICES.md.
+The emulator distribution is governed by GPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md for the upstream source and notices.
