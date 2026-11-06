@@ -68,25 +68,29 @@ PERFORMANCE_STATE = r'''    val detectedChipset = remember { detectTouchStationC
 
     // Auto applies the detected family on first entry; manual profile changes
     // run this same effect. Only supported RPCS3 settings are modified.
-    LaunchedEffect(activeChipset) {
+    LaunchedEffect(activeChipset, selectedTuning.value) {
         if (activeChipset in 1..3) {
             val current = state.value
-            val outputScale = if (activeChipset == 2) 0 else 720
+            val outputScale = when (selectedTuning.value) {
+                1 -> 540
+                2 -> 720
+                else -> if (activeChipset == 2) 0 else 720
+            }
             val preset = current.copy(
                 hwScaler = outputScale,
                 affinityMode = 0,
                 ps3 = current.ps3.copy(
                     ppuDecoder = 1,
-                    spuDecoder = 3,
+                    spuDecoder = if (selectedTuning.value == 2) 2 else 3,
                     spuBlockSize = 0,
                     preferredSpuThreads = 0,
                     llvmThreads = 0,
                     maxSpursThreads = 6,
                     clocksScale = 100,
-                    spuLoopDetection = false,
+                    spuLoopDetection = selectedTuning.value == 2,
                     spuCache = true,
                     llvmPrecompile = true,
-                    accurateSpuDma = false,
+                    accurateSpuDma = selectedTuning.value == 2,
                 ),
             )
             if (preset != current) {
@@ -132,11 +136,12 @@ PERFORMANCE_SECTION = r'''        CollapsibleSection("TouchStation chipset profi
                     else -> "Balanced: uses automatic PPU/SPU thread allocation, safe SPU blocks, and a chipset-aware output scale."
                 },
                 onChange = { choice ->
-                    selectedTuning.value = choice
-                    MainActivityRuntime.prefs.edit {
-                        putInt("ui.touchstationTuningMode", choice)
-                    }
-                    val current = state.value
+                    if (activeChipset in 1..3) {
+                        selectedTuning.value = choice
+                        MainActivityRuntime.prefs.edit {
+                            putInt("ui.touchstationTuningMode", choice)
+                        }
+                        val current = state.value
                     val scale = when (choice) {
                         1 -> 540
                         2 -> 720
@@ -178,8 +183,9 @@ PERFORMANCE_SECTION = r'''        CollapsibleSection("TouchStation chipset profi
                             ),
                         )
                     }
-                    apply(tuned)
-                    MainActivityRuntime.surface.value?.applyOutputScale()
+                        apply(tuned)
+                        MainActivityRuntime.surface.value?.applyOutputScale()
+                    }
                 },
                 notDefault = selectedTuning.value != 0,
             )
