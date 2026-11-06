@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "title": "TouchStation device tuning",
+  "supportedFamilies": [
+    "MediaTek Dimensity",
+    "Qualcomm Snapdragon",
+    "Samsung Exynos"
+  ],
+  "note": "Guidance for settings exposed by the bundled RPCS3-derived emulator. These profiles do not overclock hardware, change voltage, install drivers, or guarantee that a game will run.",
+  "common": {
+    "renderer": "Vulkan (use the device's supported implementation)",
+    "ppuDecoder": "LLVM Recompiler",
+    "spuDecoder": "LLVM Recompiler",
+    "shaderCompilation": "Asynchronous when available",
+    "resolutionScale": "100% baseline; lower only if performance is poor",
+    "gameProfiles": "Use per-game settings rather than forcing one global configuration"
+  },
+  "profiles": {
+    "dimensity": {
+      "label": "MediaTek Dimensity",
+      "gpuFamilies": [
+        "Mali",
+        "Immortalis"
+      ],
+      "recommendedStartingPoint": {
+        "renderer": "Vulkan",
+        "resolutionScale": "100%; try 50% for demanding games",
+        "shaderCompilation": "Asynchronous",
+        "spuBlockSize": "Safe/default",
+        "rsxAccuracy": "Auto/default"
+      },
+      "notes": [
+        "Mali and Immortalis GPU support varies by generation and driver.",
+        "Keep default RSX accuracy first; reduce resolution before changing advanced accuracy options.",
+        "Expect sustained-load throttling on thin phones."
+      ]
+    },
+    "snapdragon": {
+      "label": "Qualcomm Snapdragon",
+      "gpuFamilies": [
+        "Adreno"
+      ],
+      "recommendedStartingPoint": {
+        "renderer": "Vulkan",
+        "resolutionScale": "100%; test higher only after a game is stable",
+        "shaderCompilation": "Asynchronous",
+        "spuBlockSize": "Safe/default",
+        "rsxAccuracy": "Auto/default"
+      },
+      "notes": [
+        "Adreno driver capabilities vary by Snapdragon generation.",
+        "Use the system Vulkan driver by default; do not install unofficial driver packages as a generic fix.",
+        "Per-game compatibility settings are more reliable than a global high-performance preset."
+      ]
+    },
+    "exynos": {
+      "label": "Samsung Exynos",
+      "gpuFamilies": [
+        "Mali",
+        "Xclipse"
+      ],
+      "recommendedStartingPoint": {
+        "renderer": "Vulkan",
+        "resolutionScale": "100%; try 50% for demanding games",
+        "shaderCompilation": "Asynchronous",
+        "spuBlockSize": "Safe/default",
+        "rsxAccuracy": "Auto/default"
+      },
+      "notes": [
+        "Exynos devices use different GPU families across generations, including Mali and Xclipse.",
+        "Confirm Vulkan support on the specific device; GPU driver maturity differs by model.",
+        "Prefer safe defaults and per-game profiles over aggressive global changes."
+      ]
+    }
+  }
+}
