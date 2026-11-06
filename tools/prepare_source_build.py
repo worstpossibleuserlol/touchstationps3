@@ -60,6 +60,36 @@ PERFORMANCE_STATE = r'''    val detectedChipset = remember { detectTouchStationC
         )
     }
     val activeChipset = if (selectedChipset.value == 0) detectedChipset else selectedChipset.value
+
+    // Auto applies the detected family on first entry; manual profile changes
+    // run this same effect. Only supported RPCS3 settings are modified.
+    LaunchedEffect(activeChipset) {
+        if (activeChipset in 1..3) {
+            val current = state.value
+            val outputScale = if (activeChipset == 2) 0 else 720
+            val preset = current.copy(
+                hwScaler = outputScale,
+                affinityMode = 0,
+                ps3 = current.ps3.copy(
+                    ppuDecoder = 1,
+                    spuDecoder = 3,
+                    spuBlockSize = 0,
+                    preferredSpuThreads = 0,
+                    llvmThreads = 0,
+                    maxSpursThreads = 6,
+                    clocksScale = 100,
+                    spuLoopDetection = false,
+                    spuCache = true,
+                    llvmPrecompile = true,
+                    accurateSpuDma = false,
+                ),
+            )
+            if (preset != current) {
+                apply(preset)
+                MainActivityRuntime.surface.value?.applyOutputScale()
+            }
+        }
+    }
 '''
 
 PERFORMANCE_SECTION = r'''        CollapsibleSection("TouchStation chipset profiles", initiallyExpanded = true) {
@@ -79,33 +109,6 @@ PERFORMANCE_SECTION = r'''        CollapsibleSection("TouchStation chipset profi
                     selectedChipset.value = choice
                     MainActivityRuntime.prefs.edit {
                         putInt("ui.touchstationChipsetProfile", choice)
-                    }
-
-                    val family = if (choice == 0) detectedChipset else choice
-                    if (family in 1..3) {
-                        // These are conservative RPCS3 settings, not clock/voltage
-                        // controls. Leave Android's scheduler in charge and use LLVM's
-                        // ARM64 JIT backends with the safe SPU block size.
-                        val outputScale = if (family == 2) 0 else 720
-                        val preset = s.copy(
-                            hwScaler = outputScale,
-                            affinityMode = 0,
-                            ps3 = s.ps3.copy(
-                                ppuDecoder = 1,
-                                spuDecoder = 3,
-                                spuBlockSize = 0,
-                                preferredSpuThreads = 0,
-                                llvmThreads = 0,
-                                maxSpursThreads = 6,
-                                clocksScale = 100,
-                                spuLoopDetection = false,
-                                spuCache = true,
-                                llvmPrecompile = true,
-                                accurateSpuDma = false,
-                            ),
-                        )
-                        apply(preset)
-                        MainActivityRuntime.surface.value?.applyOutputScale()
                     }
                 },
                 notDefault = selectedChipset.value != 0,
@@ -197,6 +200,14 @@ def patch_performance_tab(app_dir: Path) -> None:
     if "detectTouchStationChipset" in text or "TouchStation chipset profiles" in text:
         raise SystemExit("TouchStation chipset profile patch is already present")
 
+    import_marker = "import androidx.compose.runtime.MutableState\n"
+    text = replace_once(
+        text,
+        import_marker,
+        import_marker + "import androidx.compose.runtime.LaunchedEffect\n",
+        "LaunchedEffect import",
+    )
+
     composable_marker = "@Composable\nfun PerformanceTab(state: MutableState<Settings>) {"
     text = replace_once(
         text,
@@ -251,11 +262,9 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path) -> None:
     except Exception as exc:
         raise SystemExit(f"Could not decode the supplied TouchStation icon: {exc}") from exc
 
-    # The artwork is a black square with a wide wordmark. Keep that exact square
-    # for legacy launcher icons; adaptive icons need the wordmark extracted into
-    # Android's central safe area or the launcher mask makes it look too small.
+    # Crop the visible wordmark once, then render it larger on a black square.
+    # The old blank top/bottom margins made legacy launcher icons look tiny.
     source = ImageOps.fit(source, (512, 512), method=Image.Resampling.LANCZOS)
-    legacy = source
     gray = ImageOps.grayscale(source)
     ink_mask = gray.point(lambda value: 255 if value > 24 else 0)
     bbox = ink_mask.getbbox()
@@ -271,6 +280,17 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path) -> None:
         min(source.width, right + pad_x),
         min(source.height, bottom + pad_y),
     )).convert("RGBA")
+
+    legacy = Image.new("RGB", (512, 512), (0, 0, 0))
+    legacy_mark = ImageOps.contain(
+        crop.convert("RGB"),
+        (468, 468),
+        method=Image.Resampling.LANCZOS,
+    )
+    legacy.paste(
+        legacy_mark,
+        ((512 - legacy_mark.width) // 2, (512 - legacy_mark.height) // 2),
+    )
 
     foreground = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
     mark = ImageOps.contain(
@@ -342,7 +362,8 @@ def main() -> None:
     print("TouchStation source preparation complete.")
     print("App label: TouchStation")
     print("Version: 4.0.0 / versionCode 400")
-    print("Chipset profiles: Auto, Dimensity, Snapdragon, Exynos")
+    print("Chipset profiles: Auto detect, Dimensity, Snapdragon, Exynos")
+    print("Auto applies a supported chipset profile when Performance settings are opened.")
     print("Native PPU/SPU/RSX libraries: supplied unchanged from the pinned upstream APK.")
 
 
