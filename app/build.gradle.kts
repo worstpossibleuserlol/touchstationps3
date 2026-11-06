@@ -9,4 +9,14 @@ android {
         versionCode = 200
         versionName = "2.0.0"
     }
+
+    // Keep Java and Kotlin bytecode targets aligned. The previous CI build failed
+    // because Javac targeted 1.8 while Kotlin targeted 17.
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 }
