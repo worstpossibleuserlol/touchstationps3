@@ -57,10 +57,32 @@ def patch_manifest(decoded: Path) -> None:
         text,
         count=1,
     )
-    if not code_count or not name_count:
-        raise SystemExit("Could not find versionCode/versionName in upstream manifest")
     text = text.replace("ARMSX3", "TouchStation PS3")
     manifest.write_text(text, encoding="utf-8")
+
+    # APKTool 3 keeps package version information in apktool.yml when the
+    # original binary manifest had its version metadata in the APK resources.
+    # Patch that metadata too; the rebuilt package manifest is generated from it.
+    if not code_count or not name_count:
+        metadata = decoded / "apktool.yml"
+        if not metadata.exists():
+            raise SystemExit("APKTool did not produce apktool.yml version metadata")
+        yaml_text = metadata.read_text(encoding="utf-8")
+        yaml_text, yaml_code_count = re.subn(
+            r"(?m)^(\\s*versionCode:\\s*).+$",
+            r"\\g<1>'300'",
+            yaml_text,
+            count=1,
+        )
+        yaml_text, yaml_name_count = re.subn(
+            r"(?m)^(\\s*versionName:\\s*).+$",
+            r"\\g<1>'3.0.0'",
+            yaml_text,
+            count=1,
+        )
+        if not yaml_code_count or not yaml_name_count:
+            raise SystemExit("Could not find versionInfo versionCode/versionName in apktool.yml")
+        metadata.write_text(yaml_text, encoding="utf-8")
 
 
 def patch_smali(decoded: Path) -> int:
