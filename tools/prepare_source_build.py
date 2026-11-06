@@ -331,3 +331,7 @@ def main() -> None:
     print("Native PPU/SPU/RSX libraries: supplied unchanged from the pinned upstream APK.")
 
 
+
+
+if __name__ == "__main__":
+    main()
