@@ -38,7 +38,7 @@ def replace_app_strings(decoded: Path) -> None:
             flags=re.DOTALL,
         )
         text = text.replace("ARMSX3", "TouchStation PS3")
-        text = text.replace("1.6.4", "4.0.0")
+        text = text.replace("1.6.4", "3.0.0")
         strings.write_text(text, encoding="utf-8")
 
 
@@ -49,13 +49,13 @@ def patch_manifest(decoded: Path) -> None:
     text = manifest.read_text(encoding="utf-8")
     text, code_count = re.subn(
         r'android:versionCode="[^"]+"',
-        'android:versionCode="400"',
+        'android:versionCode="300"',
         text,
         count=1,
     )
     text, name_count = re.subn(
         r'android:versionName="[^"]+"',
-        'android:versionName="4.0.0"',
+        'android:versionName="3.0.0"',
         text,
         count=1,
     )
@@ -78,7 +78,7 @@ def patch_manifest(decoded: Path) -> None:
         )
         yaml_text, yaml_name_count = re.subn(
             r"(?m)^(\s*versionName:\s*).+$",
-            r"\g<1>'400'",
+            r"\g<1>'300'",
             yaml_text,
             count=1,
         )
@@ -98,7 +98,7 @@ def patch_smali(decoded: Path) -> int:
             except (UnicodeDecodeError, OSError):
                 continue
             updated = original.replace("ARMSX3", "TouchStation PS3")
-            updated = updated.replace("1.6.4", "4.0.0")
+            updated = updated.replace("1.6.4", "3.0.0")
             if updated != original:
                 file.write_text(updated, encoding="utf-8")
                 changed += 1
@@ -115,18 +115,19 @@ def write_icon_assets(decoded: Path, logo_b64: Path) -> None:
     except Exception as exc:
         raise SystemExit(f"TouchStation logo is not valid Base64: {exc}") from exc
 
-    # Use Google's dwebp decoder rather than relying on Pillow having been
-    # compiled with optional WebP support on the hosted runner.
+    # The supplied logo asset is JPEG data (not WebP), despite the legacy
+    # filename. Pillow handles normal builds; ImageMagick is the fallback for
+    # hosted runners where Pillow's JPEG decoder is unavailable.
     try:
         source = Image.open(io.BytesIO(raw)).convert("RGB")
-    except Exception:
+    except Exception as pillow_error:
         with tempfile.TemporaryDirectory(prefix="touchstation-logo-") as temp_dir:
-            webp_path = Path(temp_dir) / "touchstation-logo.webp"
+            source_path = Path(temp_dir) / "touchstation-logo.jpg"
             png_path = Path(temp_dir) / "touchstation-logo.png"
-            webp_path.write_bytes(raw)
+            source_path.write_bytes(raw)
             try:
                 subprocess.run(
-                    ["dwebp", str(webp_path), "-o", str(png_path)],
+                    ["convert", str(source_path), str(png_path)],
                     check=True,
                     capture_output=True,
                     text=True,
@@ -134,7 +135,10 @@ def write_icon_assets(decoded: Path, logo_b64: Path) -> None:
                 source = Image.open(png_path).convert("RGB")
             except (OSError, subprocess.CalledProcessError) as exc:
                 details = getattr(exc, "stderr", None) or str(exc)
-                raise SystemExit(f"Could not decode TouchStation WebP logo: {details}") from exc
+                raise SystemExit(
+                    f"Could not decode TouchStation JPEG logo "
+                    f"(Pillow: {pillow_error}; ImageMagick: {details})"
+                ) from exc
 
     full_logo = ImageOps.fit(source, (512, 512), method=Image.Resampling.LANCZOS)
     splash = decoded / "res" / "drawable" / "ic_armsx3_mark.png"
@@ -194,7 +198,7 @@ def main() -> None:
 
     print("TouchStation branding applied.")
     print("Application label: TouchStation PS3")
-    print("Package version: 4.0.0 (versionCode 400)")
+    print("Package version: 3.0.0 (versionCode 400)")
     print("Launcher icon: supplied TouchStation logo")
     print(f"Smali files with visible branding/version updates: {smali_files}")
     print("Native PPU/SPU/RSX engine: preserved unchanged from pinned upstream APK.")
