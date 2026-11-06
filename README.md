@@ -6,10 +6,10 @@ TouchStation is an ARM64 Android distribution of the upstream ARMSX3 PlayStation
 
 - Launcher label is **TouchStation** (without the console name).
 - Launcher and adaptive icons are generated from the supplied TouchStation artwork. The wordmark is placed inside Android's adaptive-icon safe area to avoid clipped or undersized artwork.
-- The existing Performance page adds Auto, Dimensity, Snapdragon and Exynos profiles.
+- The existing Performance page adds Auto, Dimensity, Snapdragon and Exynos profiles, plus Balanced, Performance and Compatibility tuning targets.
 - Auto detection uses Android's SoC manufacturer/model fields. If the device is not identified as one of the three supported families, no profile is applied; the emulator's existing settings remain available.
-- Profiles use existing RPCS3 settings: ARM64 LLVM PPU/SPU decoders, safe SPU block size, automatic SPU/LLVM thread allocation, Android's normal thread scheduler, and the default clock scale. Dimensity and Exynos profiles start with a 720p output scaler; Snapdragon leaves output scaling at the device's normal resolution.
-- Profiles do not overclock, change voltage, or force CPU/GPU clocks. GPU Turbo remains a separate, optional upstream control and only operates on compatible Adreno hardware.
+- Profiles use existing RPCS3 settings: ARM64 LLVM PPU/SPU decoders, safe SPU block size, automatic SPU/LLVM thread allocation, Android's normal thread scheduler, and the default clock scale. Balanced uses 720p for Dimensity/Exynos and the device's normal output resolution for Snapdragon; Performance selects a 540p output surface; Compatibility uses conservative 720p output plus supported SPU accuracy options.
+- Profiles do not overclock, change voltage, or force CPU/GPU clocks. The three tuning targets map only to existing emulator settings. GPU Turbo remains a separate, optional upstream control and only operates on compatible Adreno hardware.
 - Existing firmware/game setup, emulator settings, save data, trophies, renderer options, and physical/Bluetooth controller support are preserved from upstream.
 
 Profiles are conservative starting points, not device-specific benchmark guarantees. A chipset family contains many tiers and GPU configurations; adjust output resolution and the manual Performance/Graphics controls for the actual phone. Other chipset families do not receive a TouchStation preset and continue using the upstream/manual settings.
