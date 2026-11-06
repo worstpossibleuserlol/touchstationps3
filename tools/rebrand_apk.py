@@ -49,7 +49,7 @@ def patch_manifest(decoded: Path) -> None:
     text = manifest.read_text(encoding="utf-8")
     text, code_count = re.subn(
         r'android:versionCode="[^"]+"',
-        'android:versionCode="300"',
+        'android:versionCode="400"',
         text,
         count=1,
     )
@@ -78,7 +78,7 @@ def patch_manifest(decoded: Path) -> None:
         )
         yaml_text, yaml_name_count = re.subn(
             r"(?m)^(\s*versionName:\s*).+$",
-            r"\g<1>'4.0.0'",
+            r"\g<1>'400'",
             yaml_text,
             count=1,
         )
