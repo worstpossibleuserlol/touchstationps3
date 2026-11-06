@@ -1,4 +1,4 @@
-name: TouchStation PS3 4.0.0
+name: TouchStation PS3 3.0.0
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: touchstation-ps3-4-build
+  group: touchstation-ps3-3-build
   cancel-in-progress: true
 
 jobs:
@@ -56,13 +56,13 @@ jobs:
           grep -Fxq "lib/arm64-v8a/libarmsx3-jni.so" "$RUNNER_TEMP/upstream/entries.txt"
           echo "Verified the bundled ARM64 RPCS3-derived core and JNI bridge."
 
-      - name: Install APKTool and WebP decoder
+      - name: Install APKTool and image decoder
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes webp
-          command -v dwebp
+          sudo apt-get install --yes imagemagick
+          command -v convert
           curl --fail --location --retry 3 \
             "https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar" \
             --output "$RUNNER_TEMP/apktool.jar"
@@ -112,10 +112,10 @@ jobs:
             --ks-key-alias touchstation \
             --ks-pass "pass:$signing_password" \
             --key-pass "pass:$signing_password" \
-            --out "$RUNNER_TEMP/TouchStation-PS3-v4.0.0-arm64.apk" \
+            --out "$RUNNER_TEMP/TouchStation-PS3-v3.0.0-arm64.apk" \
             "$RUNNER_TEMP/touchstation-aligned.apk"
 
-          apksigner verify --verbose "$RUNNER_TEMP/TouchStation-PS3-v4.0.0-arm64.apk"
+          apksigner verify --verbose "$RUNNER_TEMP/TouchStation-PS3-v3.0.0-arm64.apk"
           zipalign -c -v 4 "$RUNNER_TEMP/TouchStation-PS3-v4.0.0-arm64.apk"
 
       - name: Verify branding, version and native engine
@@ -124,8 +124,8 @@ jobs:
           set -euo pipefail
           aapt dump badging "$RUNNER_TEMP/TouchStation-PS3-v4.0.0-arm64.apk" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation PS3'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='4.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='400'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='3.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='300'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$RUNNER_TEMP/TouchStation-PS3-v4.0.0-arm64.apk" > "$RUNNER_TEMP/final-entries.txt"
           grep -Fxq "lib/arm64-v8a/libarmsx3-core.so" "$RUNNER_TEMP/final-entries.txt"
