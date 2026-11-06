@@ -105,6 +105,9 @@ def patch_smali(decoded: Path) -> int:
 
 def write_icon_assets(decoded: Path, logo_b64: Path) -> None:
     encoded = "".join(logo_b64.read_text(encoding="ascii").split())
+    # The app's original Android Base64.DEFAULT decoder accepted omitted
+    # trailing padding. Restore it before strict validation in Python.
+    encoded += "=" * (-len(encoded) % 4)
     try:
         raw = base64.b64decode(encoded, validate=True)
         source = Image.open(io.BytesIO(raw)).convert("RGB")
