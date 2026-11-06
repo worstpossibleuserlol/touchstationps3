@@ -10,6 +10,8 @@ import argparse
 import base64
 import io
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -110,9 +112,29 @@ def write_icon_assets(decoded: Path, logo_b64: Path) -> None:
     encoded += "=" * (-len(encoded) % 4)
     try:
         raw = base64.b64decode(encoded, validate=True)
-        source = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception as exc:
-        raise SystemExit(f"Could not decode TouchStation logo asset: {exc}") from exc
+        raise SystemExit(f"TouchStation logo is not valid Base64: {exc}") from exc
+
+    # Use Google's dwebp decoder rather than relying on Pillow having been
+    # compiled with optional WebP support on the hosted runner.
+    try:
+        source = Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:
+        with tempfile.TemporaryDirectory(prefix="touchstation-logo-") as temp_dir:
+            webp_path = Path(temp_dir) / "touchstation-logo.webp"
+            png_path = Path(temp_dir) / "touchstation-logo.png"
+            webp_path.write_bytes(raw)
+            try:
+                subprocess.run(
+                    ["dwebp", str(webp_path), "-o", str(png_path)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                source = Image.open(png_path).convert("RGB")
+            except (OSError, subprocess.CalledProcessError) as exc:
+                details = getattr(exc, "stderr", None) or str(exc)
+                raise SystemExit(f"Could not decode TouchStation WebP logo: {details}") from exc
 
     full_logo = ImageOps.fit(source, (512, 512), method=Image.Resampling.LANCZOS)
     splash = decoded / "res" / "drawable" / "ic_armsx3_mark.png"
