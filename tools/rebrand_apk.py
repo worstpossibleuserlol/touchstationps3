@@ -72,13 +72,13 @@ def patch_manifest(decoded: Path) -> None:
         yaml_text = metadata.read_text(encoding="utf-8")
         yaml_text, yaml_code_count = re.subn(
             r"(?m)^(\s*versionCode:\s*).+$",
-            r"\g<1>'300'",
+            r"\g<1>300",
             yaml_text,
             count=1,
         )
         yaml_text, yaml_name_count = re.subn(
             r"(?m)^(\s*versionName:\s*).+$",
-            r"\g<1>'3.0.0'",
+            r"\g<1>3.0.0",
             yaml_text,
             count=1,
         )
