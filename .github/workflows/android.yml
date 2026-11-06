@@ -1,43 +1,11 @@
-name: Android build
+name: Legacy frontend build (disabled)
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: android-build-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  assemble:
+  notice:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-      - name: Build debug APK
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: touchstation-ps3-2.0.0-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+      - name: Explain retired build
+        run: echo "The 2.0 frontend-only build is retired. Use the TouchStation PS3 3.0.0 release workflow."
