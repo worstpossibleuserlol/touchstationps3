@@ -1,37 +1,31 @@
-# TouchStation PS3 3.0.0
+# TouchStation PS3 4.0.0
 
-TouchStation PS3 3.0.0 is an ARM64 Android PS3 emulator distribution built on the RPCS3-derived native engine in ARMSX3 1.6.4. Unlike the old 2.0 frontend shell, this release pipeline packages the real upstream Android application and its native emulator libraries, then applies the TouchStation name and supplied launcher logo.
+TouchStation PS3 is an ARM64 Android distribution of the upstream ARMSX3 PS3 emulator. This repository pins the upstream Android APK, preserves its native emulator libraries and app functionality, and applies TouchStation branding. It is a downstream rebrand, not a new emulator implementation.
 
-## Emulator engine
+## What is included
 
-The upstream engine provides native PPU and SPU execution, RSX graphics rendering through Vulkan, firmware installation, game boot, and the surrounding emulator systems. The Android app also includes the upstream library, package-install, controller/touch input, save-state, trophy/save-data and per-game configuration workflows.
+The upstream emulator package is expected to provide its own PS3 engine and user-facing workflows, including PPU/SPU execution, RSX/Vulkan rendering, firmware setup, game library and boot, per-game settings, save data, and controller support. The exact features and behavior are those of the pinned upstream release; this repository does not independently implement or test each subsystem.
 
-This is a downstream rebrand, not a new emulator core written from scratch. Compatibility and performance remain game- and device-dependent; an emulator feature being present does not mean every PS3 title will boot or run well.
+The upstream app supports Android input devices, including compatible Bluetooth controllers. Controller recognition, button mapping, vibration, and individual game behavior depend on the upstream build and the connected device. This rebrand does not add a new controller-only input mode or remove upstream touch controls.
 
-## User setup
+## User-provided content
 
-The app does not bundle Sony firmware, commercial games, or encryption keys. The user supplies:
+The distribution does not include Sony firmware, commercial games, PSN licenses, or encryption keys. Users must supply:
 1. An official PS3 system update package (PUP).
-2. Their own PS3 game content in a format supported by the engine.
+2. Their own game content in a format supported by the upstream emulator.
 
-Disc images and package installs are handled by the upstream emulator. Certain digital/PSN content can require its own license data; this is a property of that content, not a file the app should invent or bundle.
+Some digital PSN content may require its own license data. The app cannot generate missing licenses.
 
-## Device target
+## Device requirements
 
-The release workflow uses the upstream Android 15 / SDK 35 / ARMv8.2 build. It is 64-bit ARM only. A device needs a compatible 64-bit ARM CPU, a working Vulkan driver, sufficient memory and storage, and enough sustained performance. PS3 emulation is demanding: a newer Android version alone does not guarantee that a specific game will be playable.
+The release pipeline targets the upstream Android 15 / SDK 35 / ARMv8.2 ARM64 build. A compatible 64-bit ARM processor, Vulkan-capable graphics driver, sufficient memory and storage, and sustained cooling are required. PS3 emulation is demanding; a successful install does not guarantee that a particular game will boot or run smoothly.
 
-## Build and release
+## Build pipeline
 
-The workflow pins:
-- ARMSX3 release 1.6.4
-- upstream commit 482d35b6a9f2eee61cdc6c0820a2d57392b235e6
-- upstream release APK ARMSX3-1.6.4-a15-armv8.2-sdk35.apk
-- Apktool 3.0.3 for resource-safe branding changes
+The workflow downloads the pinned upstream ARMSX3 1.6.4 Android package, verifies its expected ARM64 native libraries, applies the supplied TouchStation launcher branding and version 4.0.0, rebuilds, aligns, signs, verifies, and uploads the APK as a GitHub Actions artifact.
 
-It verifies that the upstream ARM64 native core is present, applies the TouchStation app label/version/icon, rebuilds the APK, aligns and signs it, verifies the signature, and uploads the APK as a GitHub Actions artifact.
+The upstream package is roughly 79 MB. The final APK is not artificially padded to meet a size target. No APK is considered released until the workflow completes successfully and the resulting artifact is checked.
 
-The resulting APK is based on a roughly 79 MB upstream emulator package. The final size can vary after rebuilding and signing. It is not artificially padded to reach 200 MB: file size is not a measure of emulation capability.
+## Upstream and license
 
-## License and credits
-
-The emulator distribution is governed by GPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md for the upstream source, pinned commit, and notices.
+The emulator engine and upstream application remain governed by their upstream licenses. See LICENSE and THIRD_PARTY_NOTICES.md for details and pinned-source information.
