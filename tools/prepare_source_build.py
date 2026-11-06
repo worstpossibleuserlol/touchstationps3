@@ -161,13 +161,13 @@ def patch_gradle(app_dir: Path) -> None:
     # The public upstream checkout intentionally omits the proprietary Discord
     # Social SDK AAR. Discord sign-in is an optional side feature and its activity
     # uses reflection with a guarded failure path; do not make it a build blocker.
-    discord_dependency = '    implementation(files("libs/discord_partner_sdk.aar"))\\n'
+    discord_dependency = '    implementation(files("libs/discord_partner_sdk.aar"))\n'
     if not (app_dir / "libs/discord_partner_sdk.aar").is_file():
         if text.count(discord_dependency) != 1:
             raise SystemExit("Expected exactly one optional Discord AAR dependency")
         text = text.replace(
             discord_dependency,
-            "    // Optional proprietary Discord Social SDK is not included in this public build.\\n",
+            "    // Optional proprietary Discord Social SDK is not included in this public build.\n",
             1,
         )
 
