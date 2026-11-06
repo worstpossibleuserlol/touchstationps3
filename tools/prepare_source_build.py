@@ -60,6 +60,11 @@ PERFORMANCE_STATE = r'''    val detectedChipset = remember { detectTouchStationC
         )
     }
     val activeChipset = if (selectedChipset.value == 0) detectedChipset else selectedChipset.value
+    val selectedTuning = remember {
+        mutableStateOf(
+            MainActivityRuntime.prefs.getInt("ui.touchstationTuningMode", 0).coerceIn(0, 2)
+        )
+    }
 
     // Auto applies the detected family on first entry; manual profile changes
     // run this same effect. Only supported RPCS3 settings are modified.
@@ -107,17 +112,83 @@ PERFORMANCE_SECTION = r'''        CollapsibleSection("TouchStation chipset profi
                 description = profileDescription,
                 onChange = { choice ->
                     selectedChipset.value = choice
+                    selectedTuning.value = 0
                     MainActivityRuntime.prefs.edit {
                         putInt("ui.touchstationChipsetProfile", choice)
+                        putInt("ui.touchstationTuningMode", 0)
                     }
                 },
                 notDefault = selectedChipset.value != 0,
             )
+            SettingsDivider()
+            SegmentedGridRow(
+                label = "Optimization target",
+                options = listOf("Balanced", "Performance", "Compatibility"),
+                selectedIndex = selectedTuning.value,
+                columns = 3,
+                description = when (selectedTuning.value) {
+                    1 -> "Performance: lowers the output surface to 540p and keeps LLVM compilation and SPU caching enabled to reduce GPU load."
+                    2 -> "Compatibility: uses the safe SPU block size, conservative 720p output, and accurate SPU DMA/loop handling where supported."
+                    else -> "Balanced: uses automatic PPU/SPU thread allocation, safe SPU blocks, and a chipset-aware output scale."
+                },
+                onChange = { choice ->
+                    selectedTuning.value = choice
+                    MainActivityRuntime.prefs.edit {
+                        putInt("ui.touchstationTuningMode", choice)
+                    }
+                    val current = state.value
+                    val scale = when (choice) {
+                        1 -> 540
+                        2 -> 720
+                        else -> if (activeChipset == 2) 0 else 720
+                    }
+                    val tuned = when (choice) {
+                        2 -> current.copy(
+                            hwScaler = scale,
+                            affinityMode = 0,
+                            ps3 = current.ps3.copy(
+                                ppuDecoder = 1,
+                                spuDecoder = 2,
+                                spuBlockSize = 0,
+                                preferredSpuThreads = 0,
+                                llvmThreads = 0,
+                                maxSpursThreads = 6,
+                                clocksScale = 100,
+                                spuCache = true,
+                                llvmPrecompile = true,
+                                spuLoopDetection = true,
+                                accurateSpuDma = true,
+                            ),
+                        )
+                        else -> current.copy(
+                            hwScaler = scale,
+                            affinityMode = 0,
+                            ps3 = current.ps3.copy(
+                                ppuDecoder = 1,
+                                spuDecoder = 3,
+                                spuBlockSize = 0,
+                                preferredSpuThreads = 0,
+                                llvmThreads = 0,
+                                maxSpursThreads = 6,
+                                clocksScale = 100,
+                                spuCache = true,
+                                llvmPrecompile = true,
+                                spuLoopDetection = false,
+                                accurateSpuDma = false,
+                            ),
+                        )
+                    }
+                    apply(tuned)
+                    MainActivityRuntime.surface.value?.applyOutputScale()
+                },
+                notDefault = selectedTuning.value != 0,
+            )
             HelpText(
                 "Profiles only change existing emulator settings. They do not overclock, alter voltage, " +
-                    "or force CPU/GPU frequencies. Snapdragon keeps the normal output size; Dimensity " +
-                    "and Exynos start at 720p. You can fine-tune PPU/SPU threads, renderer scale, ADPF, " +
-                    "sustained performance and the optional Adreno-only GPU Turbo below."
+                    "or force CPU/GPU frequencies. Snapdragon keeps its normal output size in Balanced; " +
+                    "Dimensity and Exynos start at 720p. Performance lowers output to 540p. Compatibility " +
+                    "uses conservative SPU settings. You can still fine-tune PPU/SPU threads, renderer " +
+                    "scale, ADPF, sustained performance and optional Adreno-only GPU Turbo below."
             )
         }
         SettingsDivider()
