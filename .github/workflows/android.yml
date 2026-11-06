@@ -1,4 +1,4 @@
-name: TouchStation PS3 3.0.0
+name: TouchStation 4.0.0 Final
 
 on:
   push:
@@ -8,15 +8,16 @@ on:
 permissions:
   contents: read
 
+# Do not cancel an active release build just because another commit was pushed.
 concurrency:
-  group: touchstation-ps3-3-build
-  cancel-in-progress: true
+  group: touchstation-4-final
+  cancel-in-progress: false
 
 jobs:
   build-arm64:
-    name: Rebrand and verify native PS3 emulator APK
+    name: Build TouchStation Android app with native PS3 engine
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout TouchStation
         uses: actions/checkout@v4
@@ -27,7 +28,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Use runner Android SDK
+      - name: Set up Android SDK 37
         shell: bash
         run: |
           set -euo pipefail
@@ -35,107 +36,90 @@ jobs:
           SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" --install "build-tools;35.0.0" --sdk_root="$SDK_ROOT"
-          echo "$SDK_ROOT/build-tools/35.0.0" >> "$GITHUB_PATH"
+          "$SDKMANAGER" --install "platforms;android-37" "build-tools;36.0.0" --sdk_root="$SDK_ROOT"
+          echo "$SDK_ROOT/build-tools/36.0.0" >> "$GITHUB_PATH"
 
-      - name: Download pinned upstream PS3 emulator
+      - name: Fetch pinned upstream Android application source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/upstream"
+          UPSTREAM="$RUNNER_TEMP/armsx3-source"
+          COMMIT="482d35b6a9f2eee61cdc6c0820a2d57392b235e6"
+          git clone --filter=blob:none --no-checkout https://github.com/ARMSX2/ARMSX3.git "$UPSTREAM"
+          git -C "$UPSTREAM" sparse-checkout init --cone
+          git -C "$UPSTREAM" sparse-checkout set android/armsx3-ui
+          git -C "$UPSTREAM" fetch --depth=1 origin "$COMMIT"
+          git -C "$UPSTREAM" checkout --detach FETCH_HEAD
+          test -f "$UPSTREAM/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          echo "Upstream source pinned to $COMMIT"
+
+      - name: Download matching upstream ARM64 native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          UPSTREAM_APK="$RUNNER_TEMP/armsx3-1.6.4.apk"
           curl --fail --location --retry 3 --retry-delay 2 \
             "https://github.com/ARMSX2/ARMSX3/releases/download/1.6.4/ARMSX3-1.6.4-a15-armv8.2-sdk35.apk" \
-            --output "$RUNNER_TEMP/upstream/armsx3.apk"
+            --output "$UPSTREAM_APK"
 
-          actual_size="$(stat -c %s "$RUNNER_TEMP/upstream/armsx3.apk")"
-          echo "Upstream APK bytes: $actual_size"
-          test "$actual_size" -gt 70000000
+          unzip -Z1 "$UPSTREAM_APK" > "$RUNNER_TEMP/upstream-entries.txt"
+          grep -Fxq "lib/arm64-v8a/libarmsx3-core.so" "$RUNNER_TEMP/upstream-entries.txt"
+          grep -Fxq "lib/arm64-v8a/libarmsx3-jni.so" "$RUNNER_TEMP/upstream-entries.txt"
+          mkdir -p "$RUNNER_TEMP/native-libs"
+          unzip -oq "$UPSTREAM_APK" "lib/arm64-v8a/*.so" -d "$RUNNER_TEMP/native-libs"
 
-          unzip -Z1 "$RUNNER_TEMP/upstream/armsx3.apk" > "$RUNNER_TEMP/upstream/entries.txt"
-          grep -Fxq "lib/arm64-v8a/libarmsx3-core.so" "$RUNNER_TEMP/upstream/entries.txt"
-          grep -Fxq "lib/arm64-v8a/libarmsx3-jni.so" "$RUNNER_TEMP/upstream/entries.txt"
-          echo "Verified the bundled ARM64 RPCS3-derived core and JNI bridge."
+          APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
+          mkdir -p "$APP/src/main/jniLibs/arm64-v8a" "$APP/src/github/jniLibs/arm64-v8a"
+          cp "$RUNNER_TEMP/native-libs"/lib/arm64-v8a/*.so "$APP/src/main/jniLibs/arm64-v8a/"
+          if [ -f "$APP/src/main/jniLibs/arm64-v8a/libarmsx3_lsfg.so" ]; then
+            mv "$APP/src/main/jniLibs/arm64-v8a/libarmsx3_lsfg.so" "$APP/src/github/jniLibs/arm64-v8a/"
+          fi
 
-      - name: Install APKTool and image decoder
-        shell: bash
+          test -s "$APP/src/main/jniLibs/arm64-v8a/libarmsx3-core.so"
+          test -s "$APP/src/main/jniLibs/arm64-v8a/libarmsx3-jni.so"
+          test -s "$APP/src/main/jniLibs/arm64-v8a/libEGL_angle.so"
+          test -s "$APP/src/main/jniLibs/arm64-v8a/libGLESv2_angle.so"
+          echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
+
+      - name: Apply TouchStation branding and chipset settings
         run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes imagemagick
-          command -v convert
-          curl --fail --location --retry 3 \
-            "https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar" \
-            --output "$RUNNER_TEMP/apktool.jar"
-          echo "dbf930b076c6b9be08d57c449cacefc3bdd6b71ebd59b3066fc0e1f5b14f9423  $RUNNER_TEMP/apktool.jar" | sha256sum --check
-
-          python3 -m venv "$RUNNER_TEMP/python-env"
-          "$RUNNER_TEMP/python-env/bin/pip" install --disable-pip-version-check Pillow==12.0.0
-          echo "$RUNNER_TEMP/python-env/bin" >> "$GITHUB_PATH"
-
-      - name: Decode upstream APK
-        run: |
-          java -jar "$RUNNER_TEMP/apktool.jar" d --force \
-            "$RUNNER_TEMP/upstream/armsx3.apk" \
-            --output "$RUNNER_TEMP/decoded"
-
-      - name: Apply TouchStation branding and version
-        run: |
-          python tools/rebrand_apk.py \
-            --decoded "$RUNNER_TEMP/decoded" \
+          python tools/prepare_source_build.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui" \
             --logo-b64 assets/touchstation-logo.webp.b64
 
-      - name: Rebuild APK
-        run: |
-          java -jar "$RUNNER_TEMP/apktool.jar" b \
-            "$RUNNER_TEMP/decoded" \
-            --output "$RUNNER_TEMP/touchstation-unsigned.apk"
-
-      - name: Align and sign sideload APK
+      - name: Build TouchStation 4.0.0
+        working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
           set -euo pipefail
-          zipalign -f -p 4 \
-            "$RUNNER_TEMP/touchstation-unsigned.apk" \
-            "$RUNNER_TEMP/touchstation-aligned.apk"
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace :app:assembleGithubRelease
 
-          signing_password="$(openssl rand -hex 24)"
-          keytool -genkeypair -noprompt \
-            -keystore "$RUNNER_TEMP/touchstation-ci.jks" \
-            -storepass "$signing_password" \
-            -keypass "$signing_password" \
-            -alias touchstation \
-            -keyalg RSA -keysize 3072 -validity 10000 \
-            -dname "CN=TouchStation PS3, O=TouchStation, C=ID"
-
-          apksigner sign \
-            --ks "$RUNNER_TEMP/touchstation-ci.jks" \
-            --ks-key-alias touchstation \
-            --ks-pass "pass:$signing_password" \
-            --key-pass "pass:$signing_password" \
-            --out "$RUNNER_TEMP/TouchStation-PS3-v3.0.0-arm64.apk" \
-            "$RUNNER_TEMP/touchstation-aligned.apk"
-
-          apksigner verify --verbose "$RUNNER_TEMP/TouchStation-PS3-v3.0.0-arm64.apk"
-          zipalign -c -v 4 "$RUNNER_TEMP/TouchStation-PS3-v3.0.0-arm64.apk"
-
-      - name: Verify branding, version and native engine
+      - name: Verify package, branding, icon, and native engine
         shell: bash
         run: |
           set -euo pipefail
-          aapt dump badging "$RUNNER_TEMP/TouchStation-PS3-v3.0.0-arm64.apk" | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "application-label:'TouchStation PS3'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='3.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='300'" "$RUNNER_TEMP/badging.txt"
+          APK="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app/build/outputs/apk/github/release/app-github-release.apk"
+          test -s "$APK"
+          aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
+          grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='4.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='400'" "$RUNNER_TEMP/badging.txt"
+          grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
-          unzip -Z1 "$RUNNER_TEMP/TouchStation-PS3-v3.0.0-arm64.apk" > "$RUNNER_TEMP/final-entries.txt"
+          unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
           grep -Fxq "lib/arm64-v8a/libarmsx3-core.so" "$RUNNER_TEMP/final-entries.txt"
           grep -Fxq "lib/arm64-v8a/libarmsx3-jni.so" "$RUNNER_TEMP/final-entries.txt"
-          ls -lh "$RUNNER_TEMP/TouchStation-PS3-v3.0.0-arm64.apk"
+          grep -Fxq "res/mipmap-xxxhdpi-v4/ic_launcher.png" "$RUNNER_TEMP/final-entries.txt"
+          apksigner verify --verbose "$APK"
+          zipalign -c -v 4 "$APK"
+          ls -lh "$APK"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-v4.0.0-arm64.apk"
 
-      - name: Upload TouchStation PS3 APK
+      - name: Upload TouchStation 4.0.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-PS3-v3.0.0-arm64
-          path: ${{ runner.temp }}/TouchStation-PS3-v3.0.0-arm64.apk
+          name: TouchStation-v4.0.0-arm64
+          path: ${{ runner.temp }}/TouchStation-v4.0.0-arm64.apk
           if-no-files-found: error
           retention-days: 90
