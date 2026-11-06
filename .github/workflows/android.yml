@@ -43,6 +43,14 @@ jobs:
           ln -sfn android-37.0 "$SDK_ROOT/platforms/android-37"
           echo "$SDK_ROOT/build-tools/37.0.0" >> "$GITHUB_PATH"
 
+      - name: Install pinned Python image tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/touchstation-python"
+          "$RUNNER_TEMP/touchstation-python/bin/pip" install --disable-pip-version-check Pillow==12.0.0
+          echo "$RUNNER_TEMP/touchstation-python/bin" >> "$GITHUB_PATH"
+
       - name: Fetch pinned upstream Android application source
         shell: bash
         run: |
