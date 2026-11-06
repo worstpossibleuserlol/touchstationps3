@@ -1,46 +1,37 @@
-# TouchStation PS3
+# TouchStation PS3 3.0.0
 
-TouchStation PS3 is an Android frontend for organising a PS3 game file and the official PS3 system update package. Version **2.0.0** includes the supplied TouchStation identity, a redesigned dashboard, dedicated game and firmware screens, persistent document access, and an Android build workflow.
+TouchStation PS3 3.0.0 is an ARM64 Android PS3 emulator distribution built on the RPCS3-derived native engine in ARMSX3 1.6.4. Unlike the old 2.0 frontend shell, this release pipeline packages the real upstream Android application and its native emulator libraries, then applies the TouchStation name and supplied launcher logo.
 
-## Emulator engine status
+## Emulator engine
 
-**This repository does not yet contain a working PS3 emulator core.** It does not currently execute PPU or SPU guest code, render RSX graphics, install PS3 firmware into an emulated console, or boot games. The app is an import manager and frontend at this stage. The game boot action is intentionally unavailable rather than pretending that a native emulator engine is connected.
+The upstream engine provides native PPU and SPU execution, RSX graphics rendering through Vulkan, firmware installation, game boot, and the surrounding emulator systems. The Android app also includes the upstream library, package-install, controller/touch input, save-state, trophy/save-data and per-game configuration workflows.
 
-A real PS3 implementation needs a compatible native engine and Android integration. A practical route is to integrate and maintain an Android-capable RPCS3-derived core, then validate the PPU/SPU, RSX/Vulkan, firmware and game-boot paths on supported hardware. This is substantial native C++/LLVM/Vulkan work; the current Kotlin app is not a substitute for that engine.
+This is a downstream rebrand, not a new emulator core written from scratch. Compatibility and performance remain game- and device-dependent; an emulator feature being present does not mean every PS3 title will boot or run well.
 
 ## User setup
 
-The current import flow asks for only:
+The app does not bundle Sony firmware, commercial games, or encryption keys. The user supplies:
+1. An official PS3 system update package (PUP).
+2. Their own PS3 game content in a format supported by the engine.
 
-1. One PS3 game file: .iso, .pkg, .self, or .elf.
-2. An official PS3UPDATE.PUP firmware package.
+Disc images and package installs are handled by the upstream emulator. Certain digital/PSN content can require its own license data; this is a property of that content, not a file the app should invent or bundle.
 
-The app stores persistable, read-only document references, so it does not ask users to move files into additional folders. The firmware screen checks the SCE PUP header only. It does **not** decrypt, verify the full package, or install firmware.
+## Device target
 
-TouchStation does not bundle games, Sony firmware, encryption keys, or copyrighted system data. Importing files does not make them playable until a PS3 core is integrated.
+The release workflow uses the upstream Android 15 / SDK 35 / ARMv8.2 build. It is 64-bit ARM only. A device needs a compatible 64-bit ARM CPU, a working Vulkan driver, sufficient memory and storage, and enough sustained performance. PS3 emulation is demanding: a newer Android version alone does not guarantee that a specific game will be playable.
 
-## Included in 2.0.0
+## Build and release
 
-- TouchStation logo and launcher identity.
-- Redesigned dark dashboard with blue accents and bottom navigation.
-- Separate Home, Library, Firmware, and Settings screens.
-- Persistent game and firmware document references.
-- Game extension and file-size identification.
-- Basic PS3 PUP header recognition.
-- Connected controller detection through Android input devices.
-- Clear/replace controls for imported files.
-- GitHub Actions workflow that builds and uploads a debug APK.
+The workflow pins:
+- ARMSX3 release 1.6.4
+- upstream commit 482d35b6a9f2eee61cdc6c0820a2d57392b235e6
+- upstream release APK ARMSX3-1.6.4-a15-armv8.2-sdk35.apk
+- Apktool 3.0.3 for resource-safe branding changes
 
-## Build
+It verifies that the upstream ARM64 native core is present, applies the TouchStation app label/version/icon, rebuilds the APK, aligns and signs it, verifies the signature, and uploads the APK as a GitHub Actions artifact.
 
-Requirements: Android Studio or Gradle 8.7, JDK 17, Android Gradle Plugin 8.6.1, Kotlin 2.0.20, and Android SDK 35.
+The resulting APK is based on a roughly 79 MB upstream emulator package. The final size can vary after rebuilding and signing. It is not artificially padded to reach 200 MB: file size is not a measure of emulation capability.
 
-Run:
+## License and credits
 
-    gradle :app:assembleDebug
-
-The GitHub Actions workflow runs the same task and stores the APK as a workflow artifact.
-
-## License
-
-The current frontend source is under the MIT License. Any future emulator engine or third-party code must retain its own license and notices. In particular, integrating an RPCS3-derived core requires preserving its applicable GPL-2.0 obligations.
+The emulator distribution is governed by GPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md for the upstream source, pinned commit, and notices.
