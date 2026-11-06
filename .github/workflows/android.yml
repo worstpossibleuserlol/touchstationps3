@@ -27,13 +27,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android build tools
-        uses: android-actions/setup-android@v3
-
-      - name: Install zipalign and apksigner
+      - name: Use runner Android SDK
+        shell: bash
         run: |
-          sdkmanager --install "build-tools;35.0.0"
-          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "build-tools;35.0.0" --sdk_root="$SDK_ROOT"
+          echo "$SDK_ROOT/build-tools/35.0.0" >> "$GITHUB_PATH"
 
       - name: Download pinned upstream PS3 emulator
         shell: bash
