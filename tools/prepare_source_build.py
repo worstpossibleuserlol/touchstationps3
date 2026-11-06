@@ -158,6 +158,19 @@ def patch_gradle(app_dir: Path) -> None:
     if not code_count or not name_count:
         raise SystemExit("Could not set app versionCode/versionName to 400/4.0.0")
 
+    # The public upstream checkout intentionally omits the proprietary Discord
+    # Social SDK AAR. Discord sign-in is an optional side feature and its activity
+    # uses reflection with a guarded failure path; do not make it a build blocker.
+    discord_dependency = '    implementation(files("libs/discord_partner_sdk.aar"))\\n'
+    if not (app_dir / "libs/discord_partner_sdk.aar").is_file():
+        if text.count(discord_dependency) != 1:
+            raise SystemExit("Expected exactly one optional Discord AAR dependency")
+        text = text.replace(
+            discord_dependency,
+            "    // Optional proprietary Discord Social SDK is not included in this public build.\\n",
+            1,
+        )
+
     # Use the matching upstream JNI/core binaries from its signed Android
     # release. Do not rebuild or replace the native RPCS3 engine in this job.
     text = remove_gradle_block(
