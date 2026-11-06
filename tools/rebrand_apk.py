@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebrand the pinned ARMSX3 Android APK as TouchStation PS3.
+"""Rebrand the pinned ARMSX3 Android APK as TouchStation.
 
 This script changes presentation metadata only. It does not alter, stub, or
 replace the RPCS3-derived native emulator engine.
@@ -33,13 +33,13 @@ def replace_app_strings(decoded: Path) -> None:
             continue
         text = re.sub(
             r'(<string\s+[^>]*name="app_name"[^>]*>).*?(</string>)',
-            r"\1TouchStation PS3\2",
+            r"\1TouchStation\2",
             text,
             flags=re.DOTALL,
         )
         # Only update explicit user-facing string resources. Do not rewrite
         # package/class identifiers or arbitrary upstream string constants.
-        text = text.replace("1.6.4", "3.0.0")
+        text = text.replace("1.6.4", "4.0.0")
         strings.write_text(text, encoding="utf-8")
 
 
@@ -50,13 +50,13 @@ def patch_manifest(decoded: Path) -> None:
     text = manifest.read_text(encoding="utf-8")
     text, code_count = re.subn(
         r'android:versionCode="[^"]+"',
-        'android:versionCode="300"',
+        'android:versionCode="400"',
         text,
         count=1,
     )
     text, name_count = re.subn(
         r'android:versionName="[^"]+"',
-        'android:versionName="3.0.0"',
+        'android:versionName="4.0.0"',
         text,
         count=1,
     )
@@ -79,7 +79,7 @@ def patch_manifest(decoded: Path) -> None:
         )
         yaml_text, yaml_name_count = re.subn(
             r"(?m)^(\s*versionName:\s*).+$",
-            r"\g<1>3.0.0",
+            r"\g<1>4.0.0",
             yaml_text,
             count=1,
         )
@@ -98,8 +98,8 @@ def patch_smali(decoded: Path) -> int:
                 original = file.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
-            updated = original.replace("ARMSX3", "TouchStation PS3")
-            updated = updated.replace("1.6.4", "3.0.0")
+            updated = original.replace("ARMSX3", "TouchStation")
+            updated = updated.replace("1.6.4", "4.0.0")
             if updated != original:
                 file.write_text(updated, encoding="utf-8")
                 changed += 1
@@ -141,6 +141,15 @@ def write_icon_assets(decoded: Path, logo_b64: Path) -> None:
                     f"(Pillow: {pillow_error}; ImageMagick: {details})"
                 ) from exc
 
+    # Bundle the three supported chipset-family tuning profiles.
+    # They are guidance for settings already exposed by the upstream emulator;
+    # they do not overclock the device or replace its GPU driver.
+    profile_source = Path("assets/touchstation-soc-profiles.json")
+    if profile_source.exists():
+        app_assets = decoded / "assets"
+        app_assets.mkdir(parents=True, exist_ok=True)
+        (app_assets / "touchstation-soc-profiles.json").write_bytes(profile_source.read_bytes())
+
     full_logo = ImageOps.fit(source, (512, 512), method=Image.Resampling.LANCZOS)
     splash = decoded / "res" / "drawable" / "ic_armsx3_mark.png"
     splash.parent.mkdir(parents=True, exist_ok=True)
@@ -149,7 +158,7 @@ def write_icon_assets(decoded: Path, logo_b64: Path) -> None:
     foreground = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
     mark = ImageOps.contain(
         full_logo.convert("RGBA"),
-        (338, 338),
+        (360, 360),
         method=Image.Resampling.LANCZOS,
     )
     foreground.alpha_composite(
@@ -200,8 +209,8 @@ def main() -> None:
     write_icon_assets(args.decoded, args.logo_b64)
 
     print("TouchStation branding applied.")
-    print("Application label: TouchStation PS3")
-    print("Package version: 3.0.0 (versionCode 300)")
+    print("Application label: TouchStation")
+    print("Package version: 4.0.0 (versionCode 400)")
     print("Launcher icon: supplied TouchStation logo")
     print("Upstream DEX/smali bytecode: preserved unchanged.")
     print("Native PPU/SPU/RSX engine: preserved unchanged from pinned upstream APK.")
