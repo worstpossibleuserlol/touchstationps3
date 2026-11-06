@@ -122,7 +122,16 @@ jobs:
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
           grep -Fxq "lib/arm64-v8a/libarmsx3-core.so" "$RUNNER_TEMP/final-entries.txt"
           grep -Fxq "lib/arm64-v8a/libarmsx3-jni.so" "$RUNNER_TEMP/final-entries.txt"
-          grep -Fxq "res/mipmap-xxxhdpi-v4/ic_launcher.png" "$RUNNER_TEMP/final-entries.txt"
+
+          # Release resource shrinking can rename packaged resource paths. Verify
+          # the launcher resource produced for this build and then verify the exact
+          # icon path Android reports from the compiled package manifest.
+          APP_RES="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app/src/main/res"
+          test -s "$APP_RES/mipmap-xxxhdpi/ic_launcher.png"
+          icon_path="$(sed -n "s/^application: label='[^']*' icon='\\([^']*\\)'.*/\\1/p" "$RUNNER_TEMP/badging.txt" | head -n 1)"
+          test -n "$icon_path"
+          grep -Fxq "$icon_path" "$RUNNER_TEMP/final-entries.txt"
+
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
