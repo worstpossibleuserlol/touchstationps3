@@ -78,7 +78,7 @@ def patch_manifest(decoded: Path) -> None:
         )
         yaml_text, yaml_name_count = re.subn(
             r"(?m)^(\s*versionName:\s*).+$",
-            r"\g<1>'300'",
+            r"\g<1>'3.0.0'",
             yaml_text,
             count=1,
         )
@@ -198,7 +198,7 @@ def main() -> None:
 
     print("TouchStation branding applied.")
     print("Application label: TouchStation PS3")
-    print("Package version: 3.0.0 (versionCode 400)")
+    print("Package version: 3.0.0 (versionCode 300)")
     print("Launcher icon: supplied TouchStation logo")
     print(f"Smali files with visible branding/version updates: {smali_files}")
     print("Native PPU/SPU/RSX engine: preserved unchanged from pinned upstream APK.")
