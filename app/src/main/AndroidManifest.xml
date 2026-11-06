@@ -2,13 +2,11 @@
     <application
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:label="TouchStation PS3"
-        android:icon="@drawable/touchstation_logo"
-        android:roundIcon="@drawable/touchstation_logo"
+        android:icon="@drawable/touchstation_icon"
+        android:roundIcon="@drawable/touchstation_icon"
         android:allowBackup="false"
         android:supportsRtl="true">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
