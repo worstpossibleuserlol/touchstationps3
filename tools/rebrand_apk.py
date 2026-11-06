@@ -37,7 +37,8 @@ def replace_app_strings(decoded: Path) -> None:
             text,
             flags=re.DOTALL,
         )
-        text = text.replace("ARMSX3", "TouchStation PS3")
+        # Only update explicit user-facing string resources. Do not rewrite
+        # package/class identifiers or arbitrary upstream string constants.
         text = text.replace("1.6.4", "3.0.0")
         strings.write_text(text, encoding="utf-8")
 
@@ -59,7 +60,7 @@ def patch_manifest(decoded: Path) -> None:
         text,
         count=1,
     )
-    text = text.replace("ARMSX3", "TouchStation PS3")
+    # Keep the upstream package id, component names and class references intact.
     manifest.write_text(text, encoding="utf-8")
 
     # APKTool 3 keeps package version information in apktool.yml when the
@@ -193,14 +194,16 @@ def main() -> None:
 
     patch_manifest(args.decoded)
     replace_app_strings(args.decoded)
-    smali_files = patch_smali(args.decoded)
+    # Preserve upstream DEX/smali bytecode exactly. Text substitution inside
+    # smali can corrupt descriptors and method identifiers, making the APK
+    # impossible to rebuild. Branding belongs in Android resources/manifest.
     write_icon_assets(args.decoded, args.logo_b64)
 
     print("TouchStation branding applied.")
     print("Application label: TouchStation PS3")
     print("Package version: 3.0.0 (versionCode 300)")
     print("Launcher icon: supplied TouchStation logo")
-    print(f"Smali files with visible branding/version updates: {smali_files}")
+    print("Upstream DEX/smali bytecode: preserved unchanged.")
     print("Native PPU/SPU/RSX engine: preserved unchanged from pinned upstream APK.")
 
 
