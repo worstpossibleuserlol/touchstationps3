@@ -494,21 +494,35 @@ class MainActivity : Activity() {
         shell("Settings", "Settings", "A few details about this build and your device.")
 
         section(pageContent, "Controller")
-        val controllers = InputDevice.getDeviceIds()
-            .mapNotNull { id -> InputDevice.getDevice(id) }
-            .filter { device ->
-                device.sources and (InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_JOYSTICK) != 0
+        val controllerIds: IntArray = android.view.InputDevice.getDeviceIds()
+        val controllerNames = ArrayList<String>()
+        val controllerSources: Int =
+            android.view.InputDevice.SOURCE_GAMEPAD or android.view.InputDevice.SOURCE_JOYSTICK
+
+        for (deviceId: Int in controllerIds) {
+            val inputDevice: android.view.InputDevice? =
+                android.view.InputDevice.getDevice(deviceId)
+            if (inputDevice != null) {
+                val sources: Int = inputDevice.sources
+                if ((sources and controllerSources) != 0) {
+                    controllerNames.add(inputDevice.name ?: "Android controller")
+                }
             }
+        }
 
         val controllerPanel = panel(pageContent)
-        pill(controllerPanel, if (controllers.isEmpty()) "No controller detected" else "${controllers.size} connected", if (controllers.isEmpty()) secondaryText else green)
+        pill(
+            controllerPanel,
+            if (controllerNames.isEmpty()) "No controller detected" else "${controllerNames.size} connected",
+            if (controllerNames.isEmpty()) secondaryText else green
+        )
         gap(controllerPanel, 10)
         addLabel(
             controllerPanel,
-            if (controllers.isEmpty()) {
+            if (controllerNames.isEmpty()) {
                 "Connect a USB or Bluetooth controller to Android. Detection is shown here; emulator input mapping is not active in this frontend build."
             } else {
-                controllers.joinToString("\n") { it.name }
+                controllerNames.joinToString("\n")
             },
             12f,
             secondaryText
