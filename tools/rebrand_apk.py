@@ -38,7 +38,7 @@ def replace_app_strings(decoded: Path) -> None:
             flags=re.DOTALL,
         )
         text = text.replace("ARMSX3", "TouchStation PS3")
-        text = text.replace("1.6.4", "3.0.0")
+        text = text.replace("1.6.4", "4.0.0")
         strings.write_text(text, encoding="utf-8")
 
 
@@ -55,7 +55,7 @@ def patch_manifest(decoded: Path) -> None:
     )
     text, name_count = re.subn(
         r'android:versionName="[^"]+"',
-        'android:versionName="3.0.0"',
+        'android:versionName="4.0.0"',
         text,
         count=1,
     )
@@ -78,7 +78,7 @@ def patch_manifest(decoded: Path) -> None:
         )
         yaml_text, yaml_name_count = re.subn(
             r"(?m)^(\s*versionName:\s*).+$",
-            r"\g<1>'3.0.0'",
+            r"\g<1>'4.0.0'",
             yaml_text,
             count=1,
         )
@@ -98,7 +98,7 @@ def patch_smali(decoded: Path) -> int:
             except (UnicodeDecodeError, OSError):
                 continue
             updated = original.replace("ARMSX3", "TouchStation PS3")
-            updated = updated.replace("1.6.4", "3.0.0")
+            updated = updated.replace("1.6.4", "4.0.0")
             if updated != original:
                 file.write_text(updated, encoding="utf-8")
                 changed += 1
@@ -194,7 +194,7 @@ def main() -> None:
 
     print("TouchStation branding applied.")
     print("Application label: TouchStation PS3")
-    print("Package version: 3.0.0 (versionCode 300)")
+    print("Package version: 4.0.0 (versionCode 400)")
     print("Launcher icon: supplied TouchStation logo")
     print(f"Smali files with visible branding/version updates: {smali_files}")
     print("Native PPU/SPU/RSX engine: preserved unchanged from pinned upstream APK.")
