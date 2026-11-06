@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
@@ -12,6 +13,7 @@ import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.InputDevice
 import android.view.View
+import android.util.Base64
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -26,6 +28,12 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("touchstation", Context.MODE_PRIVATE) }
     private var game: Uri? = null
     private var firmware: Uri? = null
+
+    private val logoBitmap by lazy {
+        val encoded = resources.openRawResource(R.raw.touchstation_logo).bufferedReader().use { it.readText() }
+        val bytes = Base64.decode(encoded, Base64.DEFAULT)
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }
 
     private val blue = Color.rgb(35, 112, 245)
     private val pageBackground = Color.rgb(7, 10, 17)
@@ -53,7 +61,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         header.addView(ImageView(this).apply {
-            setImageResource(com.touchstation.ps3.R.drawable.touchstation_logo)
+            setImageBitmap(logoBitmap)
             scaleType = ImageView.ScaleType.FIT_CENTER
             contentDescription = "TouchStation PS3 logo"
         }, LinearLayout.LayoutParams(dp(92), dp(92)))
