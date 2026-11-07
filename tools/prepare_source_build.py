@@ -570,6 +570,67 @@ def patch_touch_controls(app_dir: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+
+
+def patch_in_game_settings_button(app_dir: Path) -> None:
+    """Add one touch-only Settings shortcut without binding a gamepad control."""
+    path = app_dir / "src/main/java/com/armsx2/ui/WindowImpl.kt"
+    if not path.is_file():
+        raise SystemExit(f"Missing expected in-game window source: {path}")
+    text = path.read_text(encoding="utf-8")
+
+    if "TouchStation in-game settings button" in text:
+        raise SystemExit("TouchStation in-game settings button patch is already present")
+
+    text = replace_once(
+        text,
+        "import androidx.compose.ui.draw.clip\n",
+        "import androidx.compose.ui.draw.clip\n"
+        + "import androidx.compose.ui.focus.focusProperties\n",
+        "settings shortcut focus import",
+    )
+
+    marker = (
+        "                    com.armsx2.ui.touch.TouchControlsOverlay()\n"
+        "                }\n\n"
+        "                // The keys the IME does not have"
+    )
+    replacement = (
+        "                    com.armsx2.ui.touch.TouchControlsOverlay()\n"
+        "                }\n\n"
+        "                // TouchStation in-game settings button: touch-only; "
+        "the gamepad remains dedicated to gameplay.\n"
+        "                if (gameOnScreen && !showLibrary.value && !overlayVisible.value &&\n"
+        "                    inGameScreen.value == null\n"
+        "                ) {\n"
+        "                    Box(\n"
+        "                        modifier = Modifier\n"
+        "                            .align(Alignment.TopEnd)\n"
+        "                            .padding(12.dp)\n"
+        "                            .size(48.dp)\n"
+        "                            .focusProperties { canFocus = false }\n"
+        "                            .clip(CircleShape)\n"
+        "                            .background(Color.Black.copy(alpha = 0.58f))\n"
+        "                            .clickable(onClickLabel = \"Open settings\") {\n"
+        "                                InGameOverlay.open()\n"
+        "                                WindowImpl.openInGameScreen(InGameScreen.Settings)\n"
+        "                            },\n"
+        "                        contentAlignment = Alignment.Center,\n"
+        "                    ) {\n"
+        "                        Text(\n"
+        "                            \"⚙\",\n"
+        "                            color = Color.White,\n"
+        "                            fontWeight = FontWeight.Bold,\n"
+        "                            style = MaterialTheme.typography.titleLarge,\n"
+        "                        )\n"
+        "                    }\n"
+        "                }\n\n"
+        "                // The keys the IME does not have"
+    )
+    text = replace_once(text, marker, replacement, "in-game settings shortcut insertion")
+    path.write_text(text, encoding="utf-8")
+
+
 def patch_launcher_vector(app_dir: Path) -> None:
     """Replace the legacy blue-accent vector with a black-and-white mark."""
     path = app_dir / "src/main/res/drawable/touchstation_icon.xml"
@@ -613,12 +674,14 @@ def main() -> None:
     patch_launcher_manifest(app_dir)
     patch_launcher_vector(app_dir)
     patch_touch_controls(app_dir)
+    patch_in_game_settings_button(app_dir)
     write_launcher_icons(app_dir, args.logo_b64)
 
     print("TouchStation source preparation complete.")
     print("App label: TouchStation")
     print("Version: 5.0.0 / versionCode 500")
-    print("Virtual touchscreen controls: hidden; physical gamepad, keyboard and gyro input preserved.")
+    print("Virtual gameplay controls: hidden; physical PlayStation/gamepad input remains dedicated to the game.")
+    print("In-game settings access: one white, touch-only gear at the top-right; it cannot take controller focus.")
     print("Extra shader controls: compiler threads and shader/SPU compile notifications.")
     print("Chipset profiles: Auto detect, Dimensity, Snapdragon, Exynos")
     print("Auto applies a supported chipset profile when Performance settings are opened.")
