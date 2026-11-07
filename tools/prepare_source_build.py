@@ -580,6 +580,37 @@ def patch_app_name(app_dir: Path) -> None:
 
 
 
+
+def patch_app_wordmark(app_dir: Path) -> None:
+    """Replace upstream product-name strings shown in the Android UI."""
+    arms = app_dir / "src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
+    text = arms.read_text(encoding="utf-8")
+    text = replace_once(text, 'contentDescription = "ARMSX3",', 'contentDescription = "TouchStation",', "app mark accessibility name")
+    text = replace_once(text, 'text = "ARMSX3",', 'text = "TouchStation",', "app header wordmark")
+    arms.write_text(text, encoding="utf-8")
+
+    screenshots = app_dir / "src/main/java/com/armsx2/Screenshots.kt"
+    text = screenshots.read_text(encoding="utf-8")
+    text = replace_once(text, 'private const val ALBUM = "ARMSX3"', 'private const val ALBUM = "TouchStation"', "screenshot album name")
+    text = replace_once(text, '"ARMSX3_" + System.currentTimeMillis() + ".png"', '"TouchStation_" + System.currentTimeMillis() + ".png"', "screenshot file prefix")
+    screenshots.write_text(text, encoding="utf-8")
+
+    backup = app_dir / "src/main/java/com/armsx2/BackupManager.kt"
+    text = backup.read_text(encoding="utf-8")
+    text = replace_once(text, '"ARMSX2-backup-" + appVersion(context) + ".zip"', '"TouchStation-backup-" + appVersion(context) + ".zip"', "backup filename")
+    backup.write_text(text, encoding="utf-8")
+
+    skins = app_dir / "src/main/java/com/armsx2/ControllerSkinStore.kt"
+    text = skins.read_text(encoding="utf-8")
+    text = replace_once(text, '"ARMSX3 Textured"', '"TouchStation Textured"', "default controller skin display name")
+    skins.write_text(text, encoding="utf-8")
+
+    i18n = app_dir / "src/main/java/com/armsx2/i18n/I18n.kt"
+    text = i18n.read_text(encoding="utf-8")
+    text = replace_once(text, "Your ARMSX3 touch controls", "Your TouchStation touch controls", "remote play touch-controls description")
+    i18n.write_text(text, encoding="utf-8")
+
+
 def patch_launcher_manifest(app_dir: Path) -> None:
     path = app_dir / "src/main/AndroidManifest.xml"
     text = path.read_text(encoding="utf-8")
@@ -906,6 +937,7 @@ def main() -> None:
     patch_gradle(app_dir)
     patch_performance_tab(app_dir)
     patch_app_name(app_dir)
+    patch_app_wordmark(app_dir)
     patch_launcher_manifest(app_dir)
     patch_launcher_vector(app_dir)
     patch_touch_controls(app_dir)
@@ -915,7 +947,7 @@ def main() -> None:
     write_launcher_icons(app_dir)
 
     print("TouchStation source preparation complete.")
-    print("App label: TouchStation")
+    print("App label and visible wordmarks: TouchStation")
     print("Version: 5.0.0 / versionCode 500")
     print("Virtual gameplay controls: hidden; physical PlayStation/gamepad input remains dedicated to the game.")
     print("In-game settings access: one white, touch-only gear at the top-right; it cannot take controller focus.")
