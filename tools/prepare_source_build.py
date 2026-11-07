@@ -943,6 +943,58 @@ def patch_pause_menu_exit(app_dir: Path) -> None:
     xmb_path.write_text(xmb, encoding="utf-8")
 
 
+def patch_in_game_settings_exit(app_dir: Path) -> None:
+    """Add a visible, controller-focusable Exit Game action to the in-game gear Settings page."""
+    path = app_dir / "src/main/java/com/armsx2/ui/settingshub/SettingsScreen.kt"
+    if not path.is_file():
+        raise SystemExit(f"Missing expected in-game Settings screen source: {path}")
+    text = path.read_text(encoding="utf-8")
+
+    if "settings.action.exitGame" in text:
+        raise SystemExit("TouchStation in-game Settings Exit Game patch is already present")
+
+    marker = '''                if (scopeContext != null) {
+                    // Global ↔ Per-Game switch. Re-load()s the ViewModel for the chosen scope, which'''
+    replacement = '''                // TouchStation: the side-gear Settings screen must offer a direct way
+                // to stop the current game without returning to the separate pause menu.
+                if (scopeGame != null) {
+                    val exitGame = {
+                        com.armsx2.ui.WindowImpl.inGameScreen.value = null
+                        com.armsx2.runtime.MainActivityRuntime.closeGame()
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .controllerFocusable(
+                                "settings.action.exitGame",
+                                RoundedCornerShape(12.dp),
+                                onConfirm = exitGame,
+                            ),
+                    ) {
+                        TextButton(
+                            onClick = exitGame,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                "■  Exit Game",
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+
+                if (scopeContext != null) {
+                    // Global ↔ Per-Game switch. Re-load()s the ViewModel for the chosen scope, which'''
+    text = replace_once(
+        text,
+        marker,
+        replacement,
+        "in-game gear Settings Exit Game action",
+    )
+    path.write_text(text, encoding="utf-8")
+
+
 def patch_boot_splash_branding(app_dir: Path) -> None:
     """Show the TouchStation wordmark on the built-in splash instead of upstream branding."""
     layout = app_dir / "src/main/res/layout/activity_boot_splash.xml"
@@ -1028,6 +1080,7 @@ def main() -> None:
     patch_launcher_vector(app_dir)
     patch_touch_controls(app_dir)
     patch_in_game_settings_button(app_dir)
+    patch_in_game_settings_exit(app_dir)
     patch_pause_menu_exit(app_dir)
     patch_boot_splash_branding(app_dir)
     write_launcher_icons(app_dir)
@@ -1037,6 +1090,7 @@ def main() -> None:
     print("Version: 5.0.0 / versionCode 500")
     print("Virtual gameplay controls: hidden; physical PlayStation/gamepad input remains dedicated to the game.")
     print("In-game settings access: one white, touch-only gear at the top-right; it cannot take controller focus.")
+    print("In-game gear Settings screen: controller-focusable Exit Game stops the VM and returns to the library.")
     print("Extra shader controls: compiler threads and shader/SPU compile notifications.")
     print("TouchStation advanced settings: 26 additional live-applied RSX, SPU, VRAM, and compatibility controls.")
     print("Pause menu: explicit Exit Game action in classic and XMB menus.")
