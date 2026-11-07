@@ -11,7 +11,7 @@ permissions:
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
   group: touchstation-wordmark-icon-v3
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-arm64:
