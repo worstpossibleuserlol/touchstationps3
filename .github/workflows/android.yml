@@ -8,7 +8,7 @@ on:
 permissions:
   contents: write
 
-# Do not cancel an active release build just because another commit was pushed.
+# Keep release builds queued so the latest branding fix can finish.
 concurrency:
   group: touchstation-5-final
   cancel-in-progress: false
