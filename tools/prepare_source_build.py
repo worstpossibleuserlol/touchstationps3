@@ -481,22 +481,90 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
 
 
 def patch_touch_controls(app_dir: Path) -> None:
-    """Disable the complete virtual-touch overlay; keep physical controller input."""
+    """Remove virtual touch layers entirely; retain native physical gamepad support."""
     path = app_dir / "src/main/java/com/armsx2/ui/touch/TouchControlsOverlay.kt"
     if not path.is_file():
         raise SystemExit(f"Missing expected touch overlay source: {path}")
     text = path.read_text(encoding="utf-8")
-    composable = "@Composable\nfun TouchControlsOverlay() {"
-    if "TouchStation 5.0.0: controller-only input" in text:
-        raise SystemExit("TouchStation controller-only patch is already present")
-    text = replace_once(
-        text,
-        composable,
-        composable
-        + "\n    // TouchStation 5.0.0: controller-only input; no virtual buttons or gyro overlay.\n"
-        + "    return\n",
-        "controller-only touch overlay entry point",
-    )
+
+    def matching_brace(source: str, opening: int) -> int:
+        depth = 0
+        i = opening
+        state = "code"
+        block_depth = 0
+        while i < len(source):
+            if state == "code":
+                if source.startswith("//", i):
+                    state = "line"
+                    i += 2
+                    continue
+                if source.startswith("/*", i):
+                    state = "block"
+                    block_depth = 1
+                    i += 2
+                    continue
+                if source.startswith('"""', i):
+                    state = "triple"
+                    i += 3
+                    continue
+                ch = source[i]
+                if ch == '"':
+                    state = "string"
+                elif ch == "'":
+                    state = "char"
+                elif ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return i
+            elif state == "line":
+                if source[i] == "\\n":
+                    state = "code"
+            elif state == "block":
+                if source.startswith("/*", i):
+                    block_depth += 1
+                    i += 2
+                    continue
+                if source.startswith("*/", i):
+                    block_depth -= 1
+                    i += 2
+                    if block_depth == 0:
+                        state = "code"
+                    continue
+            elif state == "string":
+                if source[i] == "\\\\":
+                    i += 2
+                    continue
+                if source[i] == '"':
+                    state = "code"
+            elif state == "triple":
+                if source.startswith('"""', i):
+                    state = "code"
+                    i += 3
+                    continue
+            elif state == "char":
+                if source[i] == "\\\\":
+                    i += 2
+                    continue
+                if source[i] == "'":
+                    state = "code"
+            i += 1
+        raise SystemExit("Could not find the end of a Kotlin composable")
+
+    for function_name in ("TouchControlsOverlay", "RemotePlayTouchControls"):
+        marker = f"fun {function_name}() {{"
+        start = text.find(marker)
+        if start < 0:
+            raise SystemExit(f"Could not find expected {function_name} entry point")
+        opening = start + len(marker) - 1
+        closing = matching_brace(text, opening)
+        disabled_body = (
+            "\\n    // TouchStation 5.0.0: physical controller input only; "
+            "virtual touchscreen and motion overlays are removed.\\n"
+        )
+        text = text[: opening + 1] + disabled_body + text[closing:]
+
     path.write_text(text, encoding="utf-8")
 
 
