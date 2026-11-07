@@ -423,55 +423,26 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
             raw = base64.b64decode(encoded, validate=True)
             source = Image.open(io.BytesIO(raw)).convert("RGB")
         except Exception as exc:
-            print(f"WARNING: supplied logo could not be decoded ({exc}); using built-in artwork.")
+            raise SystemExit(f"Supplied TouchStation logo could not be decoded: {exc}")
 
     if source is None:
         source = make_touchstation_logo()
 
-    # Crop the visible wordmark once, then render it larger on a black square.
-    # The old blank top/bottom margins made legacy launcher icons look tiny.
+    # Preserve the supplied square artwork as-is. In particular, do not crop
+    # the large black margins around the horizontal wordmark: those margins
+    # are part of the user's requested launcher and splash composition.
+    if source.width != source.height:
+        raise SystemExit(
+            f"TouchStation logo must be square; received {source.width}x{source.height}"
+        )
     source = ImageOps.fit(source, (512, 512), method=Image.Resampling.LANCZOS)
     gray = ImageOps.grayscale(source)
-    ink_mask = gray.point(lambda value: 255 if value > 24 else 0)
-    bbox = ink_mask.getbbox()
-    if bbox is None:
-        raise SystemExit("TouchStation icon contains no visible logo artwork")
+    legacy = Image.merge("RGB", (gray, gray, gray))
 
-    left, top, right, bottom = bbox
-    pad_x = max(4, int((right - left) * 0.025))
-    pad_y = max(4, int((bottom - top) * 0.06))
-    crop = source.crop((
-        max(0, left - pad_x),
-        max(0, top - pad_y),
-        min(source.width, right + pad_x),
-        min(source.height, bottom + pad_y),
-    )).convert("RGBA")
-
-    legacy = Image.new("RGB", (512, 512), (0, 0, 0))
-    legacy_mark = ImageOps.contain(
-        crop.convert("RGB"),
-        (468, 468),
-        method=Image.Resampling.LANCZOS,
-    )
-    legacy.paste(
-        legacy_mark,
-        ((512 - legacy_mark.width) // 2, (512 - legacy_mark.height) // 2),
-    )
-
-    # Turn the white artwork into an alpha mask so the adaptive foreground
-    # stays transparent; Android composites it over the solid black background.
-    foreground_art = Image.new("RGBA", crop.size, (255, 255, 255, 0))
-    foreground_art.putalpha(ImageOps.grayscale(crop))
-    foreground = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-    mark = ImageOps.contain(
-        foreground_art,
-        (336, 336),
-        method=Image.Resampling.LANCZOS,
-    )
-    foreground.alpha_composite(
-        mark,
-        ((512 - mark.width) // 2, (512 - mark.height) // 2),
-    )
+    # Keep the exact wordmark proportions for adaptive icons too. Black pixels
+    # become transparent and the white/anti-aliased lettering remains white.
+    foreground = Image.new("RGBA", (512, 512), (255, 255, 255, 0))
+    foreground.putalpha(gray)
     background = Image.new("RGBA", (512, 512), (0, 0, 0, 255))
 
     res = app_dir / "src/main/res"
@@ -492,22 +463,21 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
         )
 
     adaptive = (
-        '<?xml version="1.0" encoding="utf-8"?>\n'
-        '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
-        '    <background android:drawable="@mipmap/ic_launcher_background" />\n'
-        '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />\n'
-        '</adaptive-icon>\n'
+        '<?xml version="1.0" encoding="utf-8"?>\\n'
+        '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\\n'
+        '    <background android:drawable="@mipmap/ic_launcher_background" />\\n'
+        '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />\\n'
+        '</adaptive-icon>\\n'
     )
     adaptive_dir = res / "mipmap-anydpi-v26"
     adaptive_dir.mkdir(parents=True, exist_ok=True)
     (adaptive_dir / "ic_launcher.xml").write_text(adaptive, encoding="utf-8")
     (adaptive_dir / "ic_launcher_round.xml").write_text(adaptive, encoding="utf-8")
 
-    # Also update the app's in-app splash mark, without changing its layout.
+    # Reuse the exact supplied square logo for the in-app splash artwork.
     splash = res / "drawable/ic_armsx3_mark.png"
     splash.parent.mkdir(parents=True, exist_ok=True)
     legacy.save(splash, format="PNG", optimize=True)
-
 
 
 def patch_touch_controls(app_dir: Path) -> None:
