@@ -100,6 +100,9 @@ jobs:
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
           grep -Fq 'add(MenuAction("Exit Game"' "$APP/src/main/java/com/armsx2/ui/emulation/EmulationMenuScreen.kt"
+          grep -Fq 'settings.action.exitGame' "$APP/src/main/java/com/armsx2/ui/settingshub/SettingsScreen.kt"
+          grep -Fq '■  Exit Game' "$APP/src/main/java/com/armsx2/ui/settingshub/SettingsScreen.kt"
+          grep -Fq 'MainActivityRuntime.closeGame()' "$APP/src/main/java/com/armsx2/ui/settingshub/SettingsScreen.kt"
           grep -Fq 'Exit Game' "$APP/src/main/java/com/armsx2/ui/xmb/XmbInGame.kt"
           grep -Fq 'TouchStation Advanced Settings (26)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
