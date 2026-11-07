@@ -463,11 +463,11 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
         )
 
     adaptive = (
-        '<?xml version="1.0" encoding="utf-8"?>\\n'
-        '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\\n'
-        '    <background android:drawable="@mipmap/ic_launcher_background" />\\n'
-        '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />\\n'
-        '</adaptive-icon>\\n'
+        '<?xml version="1.0" encoding="utf-8"?>' + chr(10)
+        + '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">' + chr(10)
+        + '    <background android:drawable="@mipmap/ic_launcher_background" />' + chr(10)
+        + '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />' + chr(10)
+        + '</adaptive-icon>' + chr(10)
     )
     adaptive_dir = res / "mipmap-anydpi-v26"
     adaptive_dir.mkdir(parents=True, exist_ok=True)
