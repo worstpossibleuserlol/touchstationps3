@@ -4,7 +4,7 @@ TouchStation is an Android ARM64 distribution of the ARMSX3 Android PS3 emulator
 
 ## 5.0.0 Final
 
-- **Exact supplied launcher artwork:** the supplied square TouchStation wordmark is used for the launcher, adaptive/round launcher assets and splash mark. The build converts it to grayscale to remove JPEG colour artefacts and verifies that the packaged launcher contains no coloured pixels.
+- **Exact supplied launcher artwork:** the supplied square TouchStation wordmark (black background, white lettering) is used for the launcher, adaptive/round launcher assets and splash mark. The build converts it to grayscale to remove JPEG colour artefacts and verifies that the packaged launcher contains no coloured pixels.
 - **Controller-only gameplay:** the in-game virtual touchscreen overlay is not composed. Physical USB and Bluetooth game controllers remain the intended gameplay input. No virtual buttons or motion-control overlay are rendered.
 - **In-game Settings shortcut:** one white gear icon sits in the top-right while a game is running. It opens the existing settings screen by touch only, has no controller binding, and cannot take PlayStation controller focus.
 - **20+ real performance and compatibility controls:** output resolution scale, screen-resolution override, sustained-performance mode, Android Performance Hint Manager (ADPF), Adreno GPU Turbo, log suppression, thread scheduler mode, PPU decoder, SPU decoder, SPU block size, preferred SPU thread count, LLVM thread count, SPURS thread limit, clock scale, SPU cache, LLVM precompilation, SPU loop detection, accurate SPU DMA, savestate-compatible mode, accurate SPU RSV, accurate cache-line mode, SPU XFloat precision, frame-generation options and compiled-code cache management.
