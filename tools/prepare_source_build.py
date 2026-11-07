@@ -589,6 +589,18 @@ def patch_app_wordmark(app_dir: Path) -> None:
     text = replace_once(text, 'text = "ARMSX3",', 'text = "TouchStation",', "app header wordmark")
     arms.write_text(text, encoding="utf-8")
 
+    # The XMB has a literal category title rather than an I18n string, so it
+    # needs its own product-name substitution.
+    xmb_home = app_dir / "src/main/java/com/armsx2/ui/xmb/XmbHome.kt"
+    text = xmb_home.read_text(encoding="utf-8")
+    text = replace_once(
+        text,
+        'title = "ARMSX3",',
+        'title = "TouchStation",',
+        "XMB TouchStation category title",
+    )
+    xmb_home.write_text(text, encoding="utf-8")
+
     screenshots = app_dir / "src/main/java/com/armsx2/Screenshots.kt"
     text = screenshots.read_text(encoding="utf-8")
     text = replace_once(text, 'private const val ALBUM = "ARMSX3"', 'private const val ALBUM = "TouchStation"', "screenshot album name")
