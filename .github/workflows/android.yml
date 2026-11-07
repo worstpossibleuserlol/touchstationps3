@@ -201,6 +201,7 @@ jobs:
 
             - Removed the blue-accent icon resource and added a monochrome icon verification step.
             - Hid the in-game virtual touchscreen control overlay only; physical gamepad, keyboard and gyro input remain available.
+            - Added one white, touch-only Settings gear at the top-right during gameplay; it opens settings without remapping or consuming PlayStation controller buttons.
             - Added shader compiler thread control and shader/SPU compile notification options.
             - Retained chipset profiles for Dimensity, Snapdragon and Exynos.
             
