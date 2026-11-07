@@ -265,7 +265,7 @@ def patch_gradle(app_dir: Path) -> None:
         count=1,
     )
     if not code_count or not name_count:
-        raise SystemExit("Could not set app versionCode/versionName to 400/4.0.0")
+        raise SystemExit("Could not set app versionCode/versionName to 500/5.0.0")
 
     # The public upstream checkout intentionally omits the proprietary Discord
     # Social SDK AAR. Discord sign-in is an optional side feature and its activity
@@ -511,26 +511,21 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
 
 
 def patch_touch_controls(app_dir: Path) -> None:
-    """Hide only the in-game virtual buttons; preserve gyro and physical input."""
+    """Disable the complete virtual-touch overlay; keep physical controller input."""
     path = app_dir / "src/main/java/com/armsx2/ui/touch/TouchControlsOverlay.kt"
+    if not path.is_file():
+        raise SystemExit(f"Missing expected touch overlay source: {path}")
     text = path.read_text(encoding="utf-8")
-    helper = "private fun touchstationOnScreenControlsEnabled(): Boolean = false\n\n"
     composable = "@Composable\nfun TouchControlsOverlay() {"
-    marker = (
-        "    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_START) "
-        "{ gyro.setInSight(true) }\n"
-    )
-    if "touchstationOnScreenControlsEnabled" in text:
-        raise SystemExit("TouchStation on-screen control patch is already present")
-    text = replace_once(text, composable, helper + composable, "touch overlay entry point")
+    if "TouchStation 5.0.0: controller-only input" in text:
+        raise SystemExit("TouchStation controller-only patch is already present")
     text = replace_once(
         text,
-        marker,
-        marker
-        + "\n    // TouchStation 5.0.0: hide virtual touchscreen controls. "
-          "Gamepad, keyboard and gyro input remain active.\n"
-          "    if (!touchstationOnScreenControlsEnabled()) return\n",
-        "touch overlay render gate",
+        composable,
+        composable
+        + "\n    // TouchStation 5.0.0: controller-only input; no virtual buttons or gyro overlay.\n"
+        + "    return\n",
+        "controller-only touch overlay entry point",
     )
     path.write_text(text, encoding="utf-8")
 
