@@ -133,7 +133,7 @@ jobs:
           done
           test ! -e "$APP_RES/mipmap-anydpi-v26/ic_launcher.xml"
           test ! -e "$APP_RES/mipmap-anydpi-v26/ic_launcher_round.xml"
-          icon_path="$(sed -n "s/^application: label='[^']*' icon='\\([^']*\\)'.*/\\1/p" "$RUNNER_TEMP/badging.txt" | head -n 1)"
+          icon_path="$(sed -n "s/^application-icon-640:'\([^']*\)'.*/\1/p" "$RUNNER_TEMP/badging.txt" | head -n 1)"
           test -n "$icon_path"
           case "$icon_path" in
             *.png) ;;
