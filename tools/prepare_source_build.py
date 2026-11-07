@@ -377,49 +377,28 @@ def patch_launcher_manifest(app_dir: Path) -> None:
 
 
 def write_launcher_icons(app_dir: Path) -> None:
-    """Create a black launcher icon with only the white TOUCHSTATION wordmark."""
+    """Install the supplied square TouchStation artwork at every launcher density."""
     size = 512
-    image = Image.new("RGB", (size, size), (0, 0, 0))
-    draw = ImageDraw.Draw(image)
+    logo_asset = Path(__file__).resolve().parent / "assets" / "touchstation-logo.png.b64"
+    if not logo_asset.is_file():
+        raise SystemExit(f"Missing TouchStation logo asset: {logo_asset}")
 
-    font_candidates = (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-    )
-    font = None
-    font_size = 52
-    for font_path in font_candidates:
-        try:
-            font = ImageFont.truetype(font_path, font_size)
-            break
-        except OSError:
-            continue
-    if font is None:
-        font = ImageFont.load_default()
-
-    wordmark = "TOUCHSTATION"
-    tracking = 2.0
-    widths = [draw.textlength(char, font=font) for char in wordmark]
-    total_width = sum(widths) + tracking * (len(wordmark) - 1)
-    while total_width > 464 and font_size > 24:
-        font_size -= 2
-        for font_path in font_candidates:
-            try:
-                font = ImageFont.truetype(font_path, font_size)
-                break
-            except OSError:
-                continue
-        widths = [draw.textlength(char, font=font) for char in wordmark]
-        total_width = sum(widths) + tracking * (len(wordmark) - 1)
-
-    bbox = draw.textbbox((0, 0), wordmark, font=font)
-    text_height = bbox[3] - bbox[1]
-    x = (size - total_width) / 2
-    y = (size - text_height) / 2 - bbox[1]
-    for char, char_width in zip(wordmark, widths):
-        draw.text((round(x), round(y)), char, font=font, fill=(255, 255, 255))
-        x += char_width + tracking
+    try:
+        encoded_logo = logo_asset.read_text(encoding="ascii").strip()
+        logo_bytes = base64.b64decode(encoded_logo, validate=True)
+        with Image.open(io.BytesIO(logo_bytes)) as source:
+            if source.width != source.height:
+                raise SystemExit(
+                    f"TouchStation logo must be square; got {source.width}x{source.height}"
+                )
+            image = ImageOps.fit(
+                source.convert("RGB"),
+                (size, size),
+                method=Image.Resampling.LANCZOS,
+                centering=(0.5, 0.5),
+            )
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"Could not decode the TouchStation logo asset: {exc}") from exc
 
     res = app_dir / "src/main/res"
     for folder, density_size in DENSITIES.items():
@@ -436,11 +415,10 @@ def write_launcher_icons(app_dir: Path) -> None:
         if adaptive.exists():
             adaptive.unlink()
 
-    # The splash mark uses the same black-and-white wordmark artwork.
+    # Use the exact same artwork for the splash mark.
     splash = res / "drawable/ic_armsx3_mark.png"
     splash.parent.mkdir(parents=True, exist_ok=True)
     image.save(splash, format="PNG", optimize=True)
-
 def patch_touch_controls(app_dir: Path) -> None:
     """Remove virtual touch layers entirely; retain native physical gamepad support."""
     path = app_dir / "src/main/java/com/armsx2/ui/touch/TouchControlsOverlay.kt"
