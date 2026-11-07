@@ -519,7 +519,7 @@ def patch_touch_controls(app_dir: Path) -> None:
                     if depth == 0:
                         return i
             elif state == "line":
-                if source[i] == "\\n":
+                if source[i] == chr(10):
                     state = "code"
             elif state == "block":
                 if source.startswith("/*", i):
@@ -533,7 +533,7 @@ def patch_touch_controls(app_dir: Path) -> None:
                         state = "code"
                     continue
             elif state == "string":
-                if source[i] == "\\\\":
+                if source[i] == chr(92):
                     i += 2
                     continue
                 if source[i] == '"':
@@ -544,7 +544,7 @@ def patch_touch_controls(app_dir: Path) -> None:
                     i += 3
                     continue
             elif state == "char":
-                if source[i] == "\\\\":
+                if source[i] == chr(92):
                     i += 2
                     continue
                 if source[i] == "'":
@@ -560,8 +560,10 @@ def patch_touch_controls(app_dir: Path) -> None:
         opening = start + len(marker) - 1
         closing = matching_brace(text, opening)
         disabled_body = (
-            "\\n    // TouchStation 5.0.0: physical controller input only; "
-            "virtual touchscreen and motion overlays are removed.\\n"
+            chr(10)
+            + "    // TouchStation 5.0.0: physical controller input only; "
+            + "virtual touchscreen and motion overlays are removed."
+            + chr(10)
         )
         text = text[: opening + 1] + disabled_body + text[closing:]
 
