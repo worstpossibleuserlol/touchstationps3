@@ -193,7 +193,7 @@ jobs:
           body: |
             TouchStation 5.0.0 Final for Android ARM64.
 
-- Launcher and splash artwork: white TOUCHSTATION wordmark only on a pure black background.
+            - Launcher and splash artwork: white TOUCHSTATION wordmark only on a pure black background.
 
             - Removed the blue-accent icon resource and added a monochrome icon verification step.
             - Hid the in-game virtual touchscreen control overlay only; physical gamepad, keyboard and gyro input remain available.
