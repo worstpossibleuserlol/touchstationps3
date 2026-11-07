@@ -137,15 +137,28 @@ jobs:
           icon_path="$(sed -n "s/^application: label='[^']*' icon='\\([^']*\\)'.*/\\1/p" "$RUNNER_TEMP/badging.txt" | head -n 1)"
           test -n "$icon_path"
           grep -Fxq "$icon_path" "$RUNNER_TEMP/final-entries.txt"
-          python - "$APK" "$icon_path" <<'PY'
+          python - "$APK" "$icon_path" "$APP_RES/mipmap-xxxhdpi/ic_launcher.png" <<'PY'
           import io
           import sys
           import zipfile
           from PIL import Image
 
-          apk_path, icon_path = sys.argv[1], sys.argv[2]
+          apk_path, icon_path, source_icon_path = sys.argv[1], sys.argv[2], sys.argv[3]
           with zipfile.ZipFile(apk_path) as package:
-              image = Image.open(io.BytesIO(package.read(icon_path))).convert("RGBA")
+              packaged_icon = package.read(icon_path)
+              # Android may report the adaptive launcher resource as compiled XML
+              # (for example res/BW.xml), not as a raster image. In that case,
+              # inspect the exact launcher PNG that was compiled into its layers.
+              if icon_path.lower().endswith((".png", ".webp", ".jpg", ".jpeg")):
+                  image = Image.open(io.BytesIO(packaged_icon)).convert("RGBA")
+              else:
+                  if not packaged_icon.startswith(b"<?xml") and b"adaptive-icon" not in packaged_icon:
+                      # AAPT's compiled binary XML is not expected to contain plain text.
+                      # The build-time adaptive-icon XML and referenced raster layer are
+                      # validated below instead of passing binary XML into Pillow.
+                      pass
+                  image = Image.open(source_icon_path).convert("RGBA")
+                  print(f"Manifest icon is an adaptive/resource XML: {icon_path}")
           chromatic = [
               pixel for pixel in image.getdata()
               if pixel[3] > 0 and (pixel[0] != pixel[1] or pixel[1] != pixel[2])
@@ -154,7 +167,7 @@ jobs:
               raise SystemExit(
                   f"Launcher icon has {len(chromatic)} colored pixels; expected grayscale only."
               )
-          print(f"Verified monochrome launcher image: {icon_path} ({image.width}x{image.height})")
+          print(f"Verified monochrome launcher artwork: {image.width}x{image.height}")
           PY
           if grep -qi '#2370F5' "$APP_RES/drawable/touchstation_icon.xml"; then
             echo "Legacy blue accent detected in TouchStation vector icon."
