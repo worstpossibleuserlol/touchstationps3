@@ -493,24 +493,6 @@ class MainActivity : Activity() {
     private fun settings() {
         shell("Settings", "Settings", "A few details about this build and your device.")
 
-        section(pageContent, "Game session")
-        val sessionPanel = panel(pageContent, 16, true)
-        addLabel(
-            sessionPanel,
-            "Return to the TouchStation home screen.",
-            12f,
-            secondaryText
-        )
-        gap(sessionPanel, 10)
-        actionButton(sessionPanel, "Exit Game") {
-            home()
-            Toast.makeText(
-                this,
-                "Returned to TouchStation Home.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-
         section(pageContent, "Controller")
         val controllerIds: IntArray = android.view.InputDevice.getDeviceIds()
         val controllerNames = ArrayList<String>()
