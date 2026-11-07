@@ -96,7 +96,8 @@ jobs:
       - name: Apply TouchStation branding, controls and chipset settings
         run: |
           python tools/prepare_source_build.py \
-            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui" \
+            --logo-b64 tools/assets/touchstation-logo.png.b64
 
       - name: Build TouchStation 5.0.0
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
@@ -165,11 +166,11 @@ jobs:
           ls -lh "$APK"
           cp "$APK" "$RUNNER_TEMP/TouchStation-v5.0.0-arm64.apk"
 
-      - name: Upload TouchStation 4.0.0 APK
+      - name: Upload TouchStation 5.0.0 APK
         uses: actions/upload-artifact@v4
         with:
           name: TouchStation-v5.0.0-arm64
-          path: ${{ runner.temp }}/TouchStation-v4.0.0-arm64.apk
+          path: ${{ runner.temp }}/TouchStation-v5.0.0-arm64.apk
           if-no-files-found: error
           retention-days: 90
 
