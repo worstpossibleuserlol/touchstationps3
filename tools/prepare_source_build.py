@@ -610,6 +610,80 @@ def patch_app_wordmark(app_dir: Path) -> None:
     text = replace_once(text, "Your ARMSX3 touch controls", "Your TouchStation touch controls", "remote play touch-controls description")
     i18n.write_text(text, encoding="utf-8")
 
+    # All strings, including translations loaded from JSON, pass through I18n.get().
+    old_lookup = '''    fun get(key: String): String {
+        if (current != "en") tables[current]?.get(key)?.let { if (it.isNotEmpty()) return it }
+        return EN[key] ?: key
+    }
+'''
+    new_lookup = '''    fun get(key: String): String {
+        val resolved = if (current != "en") {
+            tables[current]?.get(key)?.takeIf { it.isNotEmpty() } ?: (EN[key] ?: key)
+        } else {
+            EN[key] ?: key
+        }
+        return resolved.replace("ARMSX3", "TouchStation")
+    }
+'''
+    text = replace_once(text, old_lookup, new_lookup, "global localized TouchStation branding")
+    i18n.write_text(text, encoding="utf-8")
+
+    # The XMB boot animation renders its wordmark in Kotlin, rather than using
+    # the app label or launcher icon. Replace that renderer's source text too.
+    wordmark = app_dir / "src/main/java/com/armsx2/ui/xmb/XmbWordmark.kt"
+    text = wordmark.read_text(encoding="utf-8")
+    text = replace_once(
+        text,
+        "import android.graphics.Shader\n",
+        "import android.graphics.Shader\nimport android.graphics.Typeface\n",
+        "XMB wordmark Typeface import",
+    )
+    render_pattern = re.compile(
+        r"(?ms)^    fun render\(letterPx: Float\): Layers \{.*?^    \}"
+    )
+    render_body = r'''    fun render(letterPx: Float): Layers {
+        val word = "TOUCHSTATION"
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
+            textSize = letterPx
+            style = Paint.Style.FILL
+            shader = LinearGradient(
+                0f, 0f, 0f, letterPx,
+                android.graphics.Color.WHITE,
+                android.graphics.Color.rgb(0xD2, 0xD2, 0xD2),
+                Shader.TileMode.CLAMP,
+            )
+            setShadowLayer(
+                letterPx * 0.012f,
+                letterPx * 0.045f,
+                letterPx * 0.06f,
+                android.graphics.Color.argb(0x73, 0, 0, 0),
+            )
+        }
+        val metrics = paint.fontMetrics
+        val wordTop = PAD
+        val wordWidth = paint.measureText(word) / letterPx
+        val wordHeight = (metrics.descent - metrics.ascent) / letterPx
+        val unitsWide = PAD + wordWidth + PAD
+        val unitsHigh = wordTop + wordHeight + PAD
+        val logo = Bitmap.createBitmap(
+            kotlin.math.ceil(unitsWide * letterPx).toInt().coerceAtLeast(1),
+            kotlin.math.ceil(unitsHigh * letterPx).toInt().coerceAtLeast(1),
+            Bitmap.Config.ARGB_8888,
+        )
+        Canvas(logo).drawText(
+            word,
+            PAD * letterPx,
+            wordTop * letterPx - metrics.ascent,
+            paint,
+        )
+        return Layers(logo, unitsWide, unitsHigh, wordTop, PAD + wordWidth / 2f)
+    }'''
+    text, count = render_pattern.subn(render_body, text, count=1)
+    if count != 1:
+        raise SystemExit("Could not patch the XMB boot wordmark to TouchStation")
+    wordmark.write_text(text, encoding="utf-8")
+
 
 def patch_launcher_manifest(app_dir: Path) -> None:
     path = app_dir / "src/main/AndroidManifest.xml"
