@@ -96,8 +96,7 @@ jobs:
       - name: Apply TouchStation branding and chipset settings
         run: |
           python tools/prepare_source_build.py \
-            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui" \
-            --logo-b64 assets/touchstation-logo.webp.b64
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
       - name: Build TouchStation 4.0.0
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
@@ -128,6 +127,12 @@ jobs:
           # icon path Android reports from the compiled package manifest.
           APP_RES="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app/src/main/res"
           test -s "$APP_RES/mipmap-xxxhdpi/ic_launcher.png"
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            test -s "$APP_RES/mipmap-$density/ic_launcher.png"
+            test -s "$APP_RES/mipmap-$density/ic_launcher_foreground.png"
+            test -s "$APP_RES/mipmap-$density/ic_launcher_background.png"
+          done
+          test -s "$APP_RES/mipmap-anydpi-v26/ic_launcher.xml"
           icon_path="$(sed -n "s/^application: label='[^']*' icon='\\([^']*\\)'.*/\\1/p" "$RUNNER_TEMP/badging.txt" | head -n 1)"
           test -n "$icon_path"
           grep -Fxq "$icon_path" "$RUNNER_TEMP/final-entries.txt"

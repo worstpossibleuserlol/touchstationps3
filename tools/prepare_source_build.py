@@ -13,7 +13,7 @@ import io
 import re
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
 DENSITIES = {
@@ -347,14 +347,57 @@ def patch_launcher_manifest(app_dir: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def write_launcher_icons(app_dir: Path, logo_b64: Path) -> None:
-    encoded = "".join(logo_b64.read_text(encoding="ascii").split())
-    encoded += "=" * (-len(encoded) % 4)
-    try:
-        raw = base64.b64decode(encoded, validate=True)
-        source = Image.open(io.BytesIO(raw)).convert("RGB")
-    except Exception as exc:
-        raise SystemExit(f"Could not decode the supplied TouchStation icon: {exc}") from exc
+def make_touchstation_logo() -> Image.Image:
+    """Create a crisp, monochrome square wordmark without external image files."""
+    size = 512
+    white = (255, 255, 255)
+    image = Image.new("RGB", (size, size), (0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    font_candidates = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+    )
+
+    def load_font(font_size: int):
+        for font_path in font_candidates:
+            try:
+                return ImageFont.truetype(font_path, font_size)
+            except OSError:
+                continue
+        return ImageFont.load_default()
+
+    # Minimal handheld-console outline and controls, all in pure white.
+    draw.rounded_rectangle((158, 64, 354, 224), radius=28, outline=white, width=9)
+    center_x, center_y = 218, 145
+    draw.line((center_x - 24, center_y, center_x + 24, center_y), fill=white, width=9)
+    draw.line((center_x, center_y - 24, center_x, center_y + 24), fill=white, width=9)
+    draw.ellipse((270, 116, 294, 140), outline=white, width=7)
+    draw.ellipse((302, 150, 326, 174), outline=white, width=7)
+
+    def centered_word(text: str, font, y: int) -> None:
+        bounds = draw.textbbox((0, 0), text, font=font)
+        text_width = bounds[2] - bounds[0]
+        draw.text(((size - text_width) / 2, y), text, font=font, fill=white)
+
+    centered_word("TOUCH", load_font(64), 276)
+    centered_word("STATION", load_font(48), 366)
+    return image
+
+
+def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
+    source = None
+    if logo_b64 is not None:
+        encoded = "".join(logo_b64.read_text(encoding="ascii").split())
+        encoded += "=" * (-len(encoded) % 4)
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+            source = Image.open(io.BytesIO(raw)).convert("RGB")
+        except Exception as exc:
+            print(f"WARNING: supplied logo could not be decoded ({exc}); using built-in artwork.")
+
+    if source is None:
+        source = make_touchstation_logo()
 
     # Crop the visible wordmark once, then render it larger on a black square.
     # The old blank top/bottom margins made legacy launcher icons look tiny.
@@ -386,9 +429,13 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path) -> None:
         ((512 - legacy_mark.width) // 2, (512 - legacy_mark.height) // 2),
     )
 
+    # Turn the white artwork into an alpha mask so the adaptive foreground
+    # stays transparent; Android composites it over the solid black background.
+    foreground_art = Image.new("RGBA", crop.size, (255, 255, 255, 0))
+    foreground_art.putalpha(ImageOps.grayscale(crop))
     foreground = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
     mark = ImageOps.contain(
-        crop,
+        foreground_art,
         (336, 336),
         method=Image.Resampling.LANCZOS,
     )
@@ -436,7 +483,7 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path, help="android/armsx3-ui source directory")
-    parser.add_argument("--logo-b64", required=True, type=Path)
+    parser.add_argument("--logo-b64", type=Path, help="Optional logo image in Base64; built-in monochrome artwork is used by default.")
     args = parser.parse_args()
 
     app_dir = args.source / "app"
