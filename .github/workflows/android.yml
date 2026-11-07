@@ -98,6 +98,13 @@ jobs:
           python tools/prepare_source_build.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
+          APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
+          grep -Fq 'add(MenuAction("Exit Game"' "$APP/src/main/java/com/armsx2/ui/emulation/EmulationMenuScreen.kt"
+          grep -Fq 'Exit Game' "$APP/src/main/java/com/armsx2/ui/xmb/XmbInGame.kt"
+          grep -Fq 'TouchStation Advanced Settings (26)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
+          grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
+
       - name: Build TouchStation 5.0.0
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
