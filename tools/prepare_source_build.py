@@ -592,12 +592,12 @@ def patch_app_wordmark(app_dir: Path) -> None:
     screenshots = app_dir / "src/main/java/com/armsx2/Screenshots.kt"
     text = screenshots.read_text(encoding="utf-8")
     text = replace_once(text, 'private const val ALBUM = "ARMSX3"', 'private const val ALBUM = "TouchStation"', "screenshot album name")
-    text = replace_once(text, '"ARMSX3_" + System.currentTimeMillis() + ".png"', '"TouchStation_" + System.currentTimeMillis() + ".png"', "screenshot file prefix")
+    text = replace_once(text, '"ARMSX3_', '"TouchStation_', "screenshot file prefix")
     screenshots.write_text(text, encoding="utf-8")
 
     backup = app_dir / "src/main/java/com/armsx2/BackupManager.kt"
     text = backup.read_text(encoding="utf-8")
-    text = replace_once(text, '"ARMSX2-backup-" + appVersion(context) + ".zip"', '"TouchStation-backup-" + appVersion(context) + ".zip"', "backup filename")
+    text = replace_once(text, '"ARMSX2-backup-', '"TouchStation-backup-', "backup filename")
     backup.write_text(text, encoding="utf-8")
 
     skins = app_dir / "src/main/java/com/armsx2/ControllerSkinStore.kt"
