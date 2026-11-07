@@ -376,76 +376,16 @@ def patch_launcher_manifest(app_dir: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def make_touchstation_logo() -> Image.Image:
-    """Create a crisp, monochrome square wordmark without external image files."""
-    size = 512
-    white = (255, 255, 255)
-    image = Image.new("RGB", (size, size), (0, 0, 0))
-    draw = ImageDraw.Draw(image)
-
-    font_candidates = (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-    )
-
-    def load_font(font_size: int):
-        for font_path in font_candidates:
-            try:
-                return ImageFont.truetype(font_path, font_size)
-            except OSError:
-                continue
-        return ImageFont.load_default()
-
-    # Minimal handheld-console outline and controls, all in pure white.
-    draw.rounded_rectangle((158, 64, 354, 224), radius=28, outline=white, width=9)
-    center_x, center_y = 218, 145
-    draw.line((center_x - 24, center_y, center_x + 24, center_y), fill=white, width=9)
-    draw.line((center_x, center_y - 24, center_x, center_y + 24), fill=white, width=9)
-    draw.ellipse((270, 116, 294, 140), outline=white, width=7)
-    draw.ellipse((302, 150, 326, 174), outline=white, width=7)
-
-    def centered_word(text: str, font, y: int) -> None:
-        bounds = draw.textbbox((0, 0), text, font=font)
-        text_width = bounds[2] - bounds[0]
-        draw.text(((size - text_width) / 2, y), text, font=font, fill=white)
-
-    centered_word("TOUCH", load_font(64), 276)
-    centered_word("STATION", load_font(48), 366)
-    return image
-
-
 def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
-    source = None
-    if logo_b64 is not None:
-        encoded = "".join(logo_b64.read_text(encoding="ascii").split())
-        encoded += "=" * (-len(encoded) % 4)
-        try:
-            raw = base64.b64decode(encoded, validate=True)
-            source = Image.open(io.BytesIO(raw)).convert("RGB")
-        except Exception as exc:
-            raise SystemExit(
-                f"Supplied TouchStation logo is invalid; refusing to use fallback artwork: {exc}"
-            )
-    else:
-        raise SystemExit(
-            "A supplied TouchStation logo file is required; fallback artwork is disabled."
-        )
-
-    # Preserve the supplied square artwork as-is. In particular, do not crop
-    # the large black margins around the horizontal wordmark: those margins
-    # are part of the user's requested launcher and splash composition.
-    if source.width != source.height:
-        raise SystemExit(
-            f"TouchStation logo must be square; received {source.width}x{source.height}"
-        )
-    source = ImageOps.fit(source, (512, 512), method=Image.Resampling.LANCZOS)
+    """Create the intentionally plain, solid-black TouchStation launcher icon."""
+    # The requested icon is a blank black screen: no wordmark, no symbols,
+    # no external image dependency, and no fallback artwork.
+    source = Image.new("RGB", (512, 512), (0, 0, 0))
     gray = ImageOps.grayscale(source)
     legacy = Image.merge("RGB", (gray, gray, gray))
 
-    # Keep the exact wordmark proportions for adaptive icons too. Black pixels
-    # become transparent and the white/anti-aliased lettering remains white.
+    # A fully black foreground/background produces a uniformly black adaptive icon.
     foreground = Image.new("RGBA", (512, 512), (255, 255, 255, 0))
-    foreground.putalpha(gray)
     background = Image.new("RGBA", (512, 512), (0, 0, 0, 255))
 
     res = app_dir / "src/main/res"
@@ -477,11 +417,10 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
     (adaptive_dir / "ic_launcher.xml").write_text(adaptive, encoding="utf-8")
     (adaptive_dir / "ic_launcher_round.xml").write_text(adaptive, encoding="utf-8")
 
-    # Reuse the exact supplied square logo for the in-app splash artwork.
+    # Use the same plain black image for the in-app splash mark.
     splash = res / "drawable/ic_armsx3_mark.png"
     splash.parent.mkdir(parents=True, exist_ok=True)
     legacy.save(splash, format="PNG", optimize=True)
-
 
 def patch_touch_controls(app_dir: Path) -> None:
     """Remove virtual touch layers entirely; retain native physical gamepad support."""
