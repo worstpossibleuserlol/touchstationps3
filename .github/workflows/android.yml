@@ -10,7 +10,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-solid-black-icon-v2
+  group: touchstation-wordmark-icon-v3
   cancel-in-progress: false
 
 jobs:
@@ -115,7 +115,7 @@ jobs:
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
           grep -F "versionName='5.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='501'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='502'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -149,12 +149,19 @@ jobs:
           apk_path, icon_path = sys.argv[1], sys.argv[2]
           with zipfile.ZipFile(apk_path) as package:
               image = Image.open(io.BytesIO(package.read(icon_path))).convert("RGB")
-          non_black = sum(1 for pixel in image.getdata() if pixel != (0, 0, 0))
-          if non_black:
+          pixels = list(image.getdata())
+          white = sum(1 for r, g, b in pixels if r > 180 and g > 180 and b > 180)
+          black = sum(1 for r, g, b in pixels if r < 30 and g < 30 and b < 30)
+          colored = sum(1 for r, g, b in pixels if not (r == g == b))
+          if white < 100 or black < len(pixels) // 2 or colored:
               raise SystemExit(
-                  f"Packaged manifest launcher icon has {non_black} non-black pixels; expected solid black."
+                  "Packaged launcher icon is not the expected black screen with white TOUCHSTATION text: "
+                  f"white_pixels={white}, black_pixels={black}, colored_pixels={colored}"
               )
-          print(f"Verified exact packaged manifest icon is solid black: {image.width}x{image.height}")
+          print(
+              f"Verified packaged manifest icon is black with white text only: "
+              f"{image.width}x{image.height}; white={white}; black={black}; colored={colored}"
+          )
           PY
           if grep -qi '#2370F5' "$APP_RES/drawable/touchstation_icon.xml"; then
             echo "Legacy blue accent detected in TouchStation vector icon."
@@ -185,6 +192,8 @@ jobs:
           files: ${{ runner.temp }}/TouchStation-v5.0.0-arm64.apk
           body: |
             TouchStation 5.0.0 Final for Android ARM64.
+
+- Launcher and splash artwork: white TOUCHSTATION wordmark only on a pure black background.
 
             - Removed the blue-accent icon resource and added a monochrome icon verification step.
             - Hid the in-game virtual touchscreen control overlay only; physical gamepad, keyboard and gyro input remain available.

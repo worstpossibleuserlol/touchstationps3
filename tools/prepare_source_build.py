@@ -254,7 +254,7 @@ def patch_gradle(app_dir: Path) -> None:
 
     text, code_count = re.subn(
         r"(?m)^(\s*)versionCode\s*=\s*\d+\s*$",
-        r"\g<1>versionCode = 501",
+        r"\g<1>versionCode = 502",
         text,
         count=1,
     )
@@ -377,26 +377,66 @@ def patch_launcher_manifest(app_dir: Path) -> None:
 
 
 def write_launcher_icons(app_dir: Path) -> None:
-    """Write plain black raster launcher icons and remove adaptive icon overrides."""
-    image = Image.new("RGB", (512, 512), (0, 0, 0))
-    res = app_dir / "src/main/res"
+    """Create a black launcher icon with only the white TOUCHSTATION wordmark."""
+    size = 512
+    image = Image.new("RGB", (size, size), (0, 0, 0))
+    draw = ImageDraw.Draw(image)
 
-    # Use only density-qualified PNGs. Removing anydpi-v26 adaptive XML prevents
-    # Android from selecting a stale foreground/background or renamed vector.
-    for folder, size in DENSITIES.items():
+    font_candidates = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+    )
+    font = None
+    font_size = 52
+    for font_path in font_candidates:
+        try:
+            font = ImageFont.truetype(font_path, font_size)
+            break
+        except OSError:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+
+    wordmark = "TOUCHSTATION"
+    tracking = 2.0
+    widths = [draw.textlength(char, font=font) for char in wordmark]
+    total_width = sum(widths) + tracking * (len(wordmark) - 1)
+    while total_width > 464 and font_size > 24:
+        font_size -= 2
+        for font_path in font_candidates:
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+                break
+            except OSError:
+                continue
+        widths = [draw.textlength(char, font=font) for char in wordmark]
+        total_width = sum(widths) + tracking * (len(wordmark) - 1)
+
+    bbox = draw.textbbox((0, 0), wordmark, font=font)
+    text_height = bbox[3] - bbox[1]
+    x = (size - total_width) / 2
+    y = (size - text_height) / 2 - bbox[1]
+    for char, char_width in zip(wordmark, widths):
+        draw.text((round(x), round(y)), char, font=font, fill=(255, 255, 255))
+        x += char_width + tracking
+
+    res = app_dir / "src/main/res"
+    for folder, density_size in DENSITIES.items():
         target = res / folder
         target.mkdir(parents=True, exist_ok=True)
-        icon = image.resize((size, size), Image.Resampling.NEAREST)
+        icon = image.resize((density_size, density_size), Image.Resampling.LANCZOS)
         icon.save(target / "ic_launcher.png", format="PNG", optimize=True)
         icon.save(target / "ic_launcher_round.png", format="PNG", optimize=True)
 
+    # Remove adaptive XML resources so Android cannot select stale artwork.
     adaptive_dir = res / "mipmap-anydpi-v26"
     for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
         adaptive = adaptive_dir / name
         if adaptive.exists():
             adaptive.unlink()
 
-    # Use the same plain black image for the in-app splash mark.
+    # The splash mark uses the same black-and-white wordmark artwork.
     splash = res / "drawable/ic_armsx3_mark.png"
     splash.parent.mkdir(parents=True, exist_ok=True)
     image.save(splash, format="PNG", optimize=True)
