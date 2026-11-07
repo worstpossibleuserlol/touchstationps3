@@ -230,6 +230,226 @@ PERFORMANCE_SECTION = r'''        CollapsibleSection("TouchStation chipset profi
 '''
 
 
+ADVANCED_SETTINGS_SECTION = r'''        CollapsibleSection("TouchStation Advanced Settings (26)", initiallyExpanded = false) {
+            ToggleRow(
+                label = "Multithreaded RSX",
+                value = s.ps3.multithreadedRsx,
+                description = "Run RSX graphics work across multiple threads. May improve some workloads, but can introduce timing issues in others.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(multithreadedRsx = it))) },
+                notDefault = s.notDefault { it.ps3.multithreadedRsx },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Disable ZCULL",
+                value = s.ps3.disableZcull,
+                description = "Disable the PS3 ZCULL visibility-query path. Use only for titles with a related rendering issue.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(disableZcull = it))) },
+                notDefault = s.notDefault { it.ps3.disableZcull },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Relaxed ZCULL synchronization",
+                value = s.ps3.relaxedZcull,
+                description = "Experimental synchronization behavior. It can cause missing or incorrect graphics in some games.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(relaxedZcull = it))) },
+                notDefault = s.notDefault { it.ps3.relaxedZcull },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "GPU texture scaling",
+                value = s.ps3.gpuTextureScaling,
+                description = "Allow the renderer to scale eligible textures on the GPU.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(gpuTextureScaling = it))) },
+                notDefault = s.notDefault { it.ps3.gpuTextureScaling },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Force CPU framebuffer blit",
+                value = s.ps3.forceCpuBlit,
+                description = "Use the CPU path for framebuffer blits. This is a compatibility diagnostic and may be slower.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(forceCpuBlit = it))) },
+                notDefault = s.notDefault { it.ps3.forceCpuBlit },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Strict rendering",
+                value = s.ps3.strictRendering,
+                description = "Use stricter RSX rendering behavior for games that need it; performance may decrease.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(strictRendering = it))) },
+                notDefault = s.notDefault { it.ps3.strictRendering },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Write color buffers",
+                value = s.ps3.writeColorBuffers,
+                description = "Enable color-buffer writeback for effects that depend on it.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(writeColorBuffers = it))) },
+                notDefault = s.notDefault { it.ps3.writeColorBuffers },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Write depth buffer",
+                value = s.ps3.writeDepthBuffer,
+                description = "Enable depth-buffer writeback for titles that require it.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(writeDepthBuffer = it))) },
+                notDefault = s.notDefault { it.ps3.writeDepthBuffer },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Read color buffers",
+                value = s.ps3.readColorBuffers,
+                description = "Allow the renderer to read color buffers back when a game needs that behavior.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(readColorBuffers = it))) },
+                notDefault = s.notDefault { it.ps3.readColorBuffers },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Read depth buffer",
+                value = s.ps3.readDepthBuffer,
+                description = "Allow depth-buffer readback for compatibility with affected titles.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(readDepthBuffer = it))) },
+                notDefault = s.notDefault { it.ps3.readDepthBuffer },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Disable swapchain pre-rotation",
+                value = s.ps3.disableSwapchainPrerotation,
+                description = "Change Android surface rotation handling for devices or games with a rotated image.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(disableSwapchainPrerotation = it))) },
+                notDefault = s.notDefault { it.ps3.disableSwapchainPrerotation },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Asynchronous texture streaming",
+                value = s.ps3.asyncTexStream,
+                description = "Stream eligible textures asynchronously. Results depend on game and storage speed.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(asyncTexStream = it))) },
+                notDefault = s.notDefault { it.ps3.asyncTexStream },
+            )
+            SettingsDivider()
+            IntSliderRow(
+                label = "Texture LOD bias",
+                value = s.ps3.textureLodBias.coerceIn(-16, 16),
+                min = -16,
+                max = 16,
+                description = "Adjust texture level-of-detail selection. Large changes can make textures blurrier or sharper than intended.",
+                valueFormatter = { it.toString() },
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(textureLodBias = it))) },
+                notDefault = s.notDefault { it.ps3.textureLodBias },
+            )
+            SettingsDivider()
+            IntSliderRow(
+                label = "VRAM allocation limit",
+                value = (s.ps3.vramLimitMb.coerceIn(256, 8192) / 256),
+                min = 1,
+                max = 32,
+                description = "Hard allocation ceiling for renderer memory, not a target or memory cleaner. Too low can make games fail to allocate resources.",
+                valueFormatter = { (it * 256).toString() + " MB" },
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(vramLimitMb = it * 256))) },
+                notDefault = s.notDefault { it.ps3.vramLimitMb },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Accurate SPU reservation",
+                value = s.ps3.accurateSpuRsv,
+                description = "Use the more accurate SPU reservation path. It can reduce performance.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(accurateSpuRsv = it))) },
+                notDefault = s.notDefault { it.ps3.accurateSpuRsv },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Accurate cache-line handling",
+                value = s.ps3.accurateCacheLine,
+                description = "Use stricter cache-line behavior for compatibility testing.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(accurateCacheLine = it))) },
+                notDefault = s.notDefault { it.ps3.accurateCacheLine },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Accurate RSX reservation",
+                value = s.ps3.accurateRsxRsv,
+                description = "Use the accurate RSX reservation path where a title depends on it.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(accurateRsxRsv = it))) },
+                notDefault = s.notDefault { it.ps3.accurateRsxRsv },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Prioritize PPU reservations",
+                value = s.ps3.ppuRsvPriority,
+                description = "Change reservation scheduling priority for compatibility testing.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(ppuRsvPriority = it))) },
+                notDefault = s.notDefault { it.ps3.ppuRsvPriority },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "SPU block verification",
+                value = s.ps3.spuVerification,
+                description = "Verify compiled SPU blocks before use. Keep enabled unless troubleshooting a specific issue.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(spuVerification = it))) },
+                notDefault = s.notDefault { it.ps3.spuVerification },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Precise SPU verification",
+                value = s.ps3.preciseSpuVerification,
+                description = "Use a more thorough SPU cache check. It can add CPU overhead.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(preciseSpuVerification = it))) },
+                notDefault = s.notDefault { it.ps3.preciseSpuVerification },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "PPU vector NaN handling",
+                value = s.ps3.ppuNanHandling,
+                description = "Apply the PPU vector NaN compatibility fix used by supported titles.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(ppuNanHandling = it))) },
+                notDefault = s.notDefault { it.ps3.ppuNanHandling },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Accurate DFMA",
+                value = s.ps3.accurateDfma,
+                description = "Use accurate fused multiply-add behavior. This may trade speed for precision.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(accurateDfma = it))) },
+                notDefault = s.notDefault { it.ps3.accurateDfma },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "DAZ / FTZ floating-point mode",
+                value = s.ps3.setDazFtz,
+                description = "Control denormals-are-zero and flush-to-zero behavior for compatibility testing.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(setDazFtz = it))) },
+                notDefault = s.notDefault { it.ps3.setDazFtz },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "HLE lightweight mutex",
+                value = s.ps3.hleLwmutex,
+                description = "Use the high-level lightweight mutex implementation where supported.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(hleLwmutex = it))) },
+                notDefault = s.notDefault { it.ps3.hleLwmutex },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Debug console mode",
+                value = s.ps3.debugConsoleMode,
+                description = "Enable extra console diagnostics. This may generate additional log output.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(debugConsoleMode = it))) },
+                notDefault = s.notDefault { it.ps3.debugConsoleMode },
+            )
+            SettingsDivider()
+            SegmentedGridRow(
+                label = "MSAA mode",
+                options = listOf("Off", "Auto"),
+                selectedIndex = s.ps3.msaaMode.coerceIn(0, 1),
+                columns = 2,
+                description = "Use multisample anti-aliasing when the graphics driver supports the required features. Off is safest on mobile.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(msaaMode = it))) },
+                notDefault = s.notDefault { it.ps3.msaaMode },
+            )
+        }
+        SettingsDivider()
+'''
+
 def replace_once(text: str, old: str, new: str, description: str) -> str:
     count = text.count(old)
     if count != 1:
@@ -334,7 +554,7 @@ def patch_performance_tab(app_dir: Path) -> None:
     text = replace_once(
         text,
         section_marker,
-        PERFORMANCE_SECTION + "\n" + section_marker,
+        PERFORMANCE_SECTION + "\n" + ADVANCED_SETTINGS_SECTION + "\n" + section_marker,
         "PerformanceTab column content",
     )
     path.write_text(text, encoding="utf-8")
@@ -585,6 +805,90 @@ def patch_launcher_vector(app_dir: Path) -> None:
     path.write_text(vector, encoding="utf-8")
 
 
+
+def patch_pause_menu_exit(app_dir: Path) -> None:
+    """Make the existing pause-menu close action explicitly read Exit Game."""
+    menu_path = app_dir / "src/main/java/com/armsx2/ui/emulation/EmulationMenuScreen.kt"
+    xmb_path = app_dir / "src/main/java/com/armsx2/ui/xmb/XmbInGame.kt"
+    if not menu_path.is_file() or not xmb_path.is_file():
+        raise SystemExit("Missing expected in-game pause menu source files")
+
+    menu = menu_path.read_text(encoding="utf-8")
+    old = 'add(MenuAction(str("action.close"), MainActivityRuntime.currentGame.value?.title.orEmpty(), "■", Danger) {'
+    new = 'add(MenuAction("Exit Game", MainActivityRuntime.currentGame.value?.title.orEmpty(), "■", Danger) {'
+    menu = replace_once(menu, old, new, "pause-menu Exit Game action")
+    menu_path.write_text(menu, encoding="utf-8")
+
+    xmb = xmb_path.read_text(encoding="utf-8")
+    old = 'val quit = fw("impose_plugin", "msg_game_quit2", "xmb.quitGame")'
+    new = 'val quit = fw("impose_plugin", "msg_game_quit2", "Exit Game")'
+    xmb = replace_once(xmb, old, new, "XMB Exit Game label")
+    xmb_path.write_text(xmb, encoding="utf-8")
+
+
+def patch_boot_splash_branding(app_dir: Path) -> None:
+    """Show the TouchStation wordmark on the built-in splash instead of upstream branding."""
+    layout = app_dir / "src/main/res/layout/activity_boot_splash.xml"
+    layout_text = layout.read_text(encoding="utf-8")
+    marker = "</FrameLayout>"
+    image = '''    <ImageView
+        android:id="@+id/boot_splash_logo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:contentDescription="@string/app_name"
+        android:padding="48dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_armsx3_mark"
+        android:visibility="gone" />
+
+'''
+    layout_text = replace_once(layout_text, marker, image + marker, "TouchStation splash image")
+    layout.write_text(layout_text, encoding="utf-8")
+
+    activity = app_dir / "src/main/java/com/armsx2/BootSplashActivity.kt"
+    source = activity.read_text(encoding="utf-8")
+    old = '''        setContentView(R.layout.activity_boot_splash)
+        rootView = findViewById(R.id.boot_splash_root)
+        val textureView = findViewById<TextureView?>(R.id.boot_splash_video)
+        rootView?.apply {
+            setOnClickListener { leave() }
+            postDelayed(timeoutRunnable, HARD_TIMEOUT_MS)
+        }
+        if (textureView == null) {
+            leave()
+            return
+        }
+'''
+    new = '''        setContentView(R.layout.activity_boot_splash)
+        rootView = findViewById(R.id.boot_splash_root)
+        val textureView = findViewById<TextureView?>(R.id.boot_splash_video)
+        val splashLogo = findViewById<android.widget.ImageView?>(R.id.boot_splash_logo)
+        val customIntro = BootIntro.installed(this)
+        if (customIntro == null) {
+            textureView?.visibility = View.GONE
+            splashLogo?.visibility = View.VISIBLE
+            rootView?.apply {
+                setOnClickListener { leave() }
+                postDelayed(timeoutRunnable, 1800L)
+            }
+            return
+        }
+        splashLogo?.visibility = View.GONE
+        rootView?.apply {
+            setOnClickListener { leave() }
+            postDelayed(timeoutRunnable, HARD_TIMEOUT_MS)
+        }
+        if (textureView == null) {
+            leave()
+            return
+        }
+'''
+    source = replace_once(source, old, new, "default TouchStation splash behavior")
+    activity.write_text(source, encoding="utf-8")
+
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path, help="android/armsx3-ui source directory")
@@ -606,6 +910,8 @@ def main() -> None:
     patch_launcher_vector(app_dir)
     patch_touch_controls(app_dir)
     patch_in_game_settings_button(app_dir)
+    patch_pause_menu_exit(app_dir)
+    patch_boot_splash_branding(app_dir)
     write_launcher_icons(app_dir)
 
     print("TouchStation source preparation complete.")
@@ -614,6 +920,9 @@ def main() -> None:
     print("Virtual gameplay controls: hidden; physical PlayStation/gamepad input remains dedicated to the game.")
     print("In-game settings access: one white, touch-only gear at the top-right; it cannot take controller focus.")
     print("Extra shader controls: compiler threads and shader/SPU compile notifications.")
+    print("TouchStation advanced settings: 26 additional live-applied RSX, SPU, VRAM, and compatibility controls.")
+    print("Pause menu: explicit Exit Game action in classic and XMB menus.")
+    print("Built-in splash: TouchStation wordmark; custom user intro videos remain supported.")
     print("Chipset profiles: Auto detect, Dimensity, Snapdragon, Exynos")
     print("Auto applies a supported chipset profile when Performance settings are opened.")
     print("Native PPU/SPU/RSX libraries: supplied unchanged from the pinned upstream APK.")
