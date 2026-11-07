@@ -93,7 +93,7 @@ jobs:
           test -s "$APP/src/main/jniLibs/arm64-v8a/libGLESv2_angle.so"
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
-      - name: Apply TouchStation branding, controls and chipset settings
+      - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
           python tools/prepare_source_build.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
@@ -193,12 +193,11 @@ jobs:
           body: |
             TouchStation 5.0.0 Final for Android ARM64.
 
-            - Launcher and splash artwork: white TOUCHSTATION wordmark only on a pure black background.
-
-            - Removed the blue-accent icon resource and added a monochrome icon verification step.
-            - Hid the in-game virtual touchscreen control overlay only; physical gamepad, keyboard and gyro input remain available.
-            - Added one white, touch-only Settings gear at the top-right during gameplay; it opens settings without remapping or consuming PlayStation controller buttons.
-            - Added shader compiler thread control and shader/SPU compile notification options.
-            - Retained chipset profiles for Dimensity, Snapdragon and Exynos.
+            - TouchStation branding on the launcher, app header, default boot splash, screenshot album, backup filename and default controller-skin display name.
+            - Added an explicit Exit Game action to both the classic pause menu and the XMB in-game menu.
+            - Added 26 live-applied advanced emulator settings covering RSX rendering, VRAM, texture handling, SPU verification and CPU compatibility.
+            - Retained shader compiler controls and shader/SPU compile notifications.
+            - Retained automatic and manual chipset profiles for Dimensity, Snapdragon and Exynos.
+            - Removed the in-game virtual touchscreen overlay; physical controller input remains supported.
             
-            Users must supply firmware and game files they are legally entitled to use.
+            The app version remains 5.0.0. Users must supply firmware and game files they are legally entitled to use.
