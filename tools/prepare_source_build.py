@@ -423,7 +423,8 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
             raw = base64.b64decode(encoded, validate=True)
             source = Image.open(io.BytesIO(raw)).convert("RGB")
         except Exception as exc:
-            raise SystemExit(f"Supplied TouchStation logo could not be decoded: {exc}")
+            print(f"WARNING: supplied logo is invalid ({exc}); using built-in monochrome fallback.")
+            source = None
 
     if source is None:
         source = make_touchstation_logo()
