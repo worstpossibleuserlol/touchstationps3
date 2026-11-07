@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a pinned ARMSX3 Android source tree for the TouchStation 4.0.0 build.
+"""Prepare a pinned ARMSX3 Android source tree for the TouchStation 5.0.0 build.
 
 This preserves the upstream emulator core and Android application, adds a
 small chipset-profile section to its existing Performance settings, and applies
@@ -198,6 +198,35 @@ PERFORMANCE_SECTION = r'''        CollapsibleSection("TouchStation chipset profi
             )
         }
         SettingsDivider()
+        CollapsibleSection("TouchStation shader controls") {
+            IntSliderRow(
+                label = "Shader compiler threads",
+                value = s.ps3.shaderCompThreads.coerceIn(0, 16),
+                min = 0,
+                max = 16,
+                description = "Number of parallel Vulkan shader compiler workers. Auto lets RPCS3 choose from the device. This setting matters only with asynchronous shader compilation; more workers can use more memory.",
+                valueFormatter = { if (it == 0) "Auto" else "$it" },
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(shaderCompThreads = it))) },
+                notDefault = s.notDefault { it.ps3.shaderCompThreads },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Show shader compile notifications",
+                value = s.ps3.showShaderCompileHint,
+                description = "Show the emulator's on-screen notice while a game shader is compiling.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(showShaderCompileHint = it))) },
+                notDefault = s.notDefault { it.ps3.showShaderCompileHint },
+            )
+            SettingsDivider()
+            ToggleRow(
+                label = "Show SPU compile notifications",
+                value = s.ps3.showSpuCompileHint,
+                description = "Show the emulator's on-screen notice while SPU code is compiling.",
+                onChange = { apply(s.copy(ps3 = s.ps3.copy(showSpuCompileHint = it))) },
+                notDefault = s.notDefault { it.ps3.showSpuCompileHint },
+            )
+        }
+        SettingsDivider()
 '''
 
 
@@ -225,13 +254,13 @@ def patch_gradle(app_dir: Path) -> None:
 
     text, code_count = re.subn(
         r"(?m)^(\s*)versionCode\s*=\s*\d+\s*$",
-        r"\g<1>versionCode = 400",
+        r"\g<1>versionCode = 500",
         text,
         count=1,
     )
     text, name_count = re.subn(
         r'(?m)^(\s*)versionName\s*=\s*"[^"]+"\s*$',
-        r'\g<1>versionName = "4.0.0"',
+        r'\g<1>versionName = "5.0.0"',
         text,
         count=1,
     )
@@ -480,6 +509,54 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
     legacy.save(splash, format="PNG", optimize=True)
 
 
+
+def patch_touch_controls(app_dir: Path) -> None:
+    """Hide only the in-game virtual buttons; preserve gyro and physical input."""
+    path = app_dir / "src/main/java/com/armsx2/ui/touch/TouchControlsOverlay.kt"
+    text = path.read_text(encoding="utf-8")
+    helper = "private fun touchstationOnScreenControlsEnabled(): Boolean = false\n\n"
+    composable = "@Composable\nfun TouchControlsOverlay() {"
+    marker = (
+        "    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_START) "
+        "{ gyro.setInSight(true) }\n"
+    )
+    if "touchstationOnScreenControlsEnabled" in text:
+        raise SystemExit("TouchStation on-screen control patch is already present")
+    text = replace_once(text, composable, helper + composable, "touch overlay entry point")
+    text = replace_once(
+        text,
+        marker,
+        marker
+        + "\n    // TouchStation 5.0.0: hide virtual touchscreen controls. "
+          "Gamepad, keyboard and gyro input remain active.\n"
+          "    if (!touchstationOnScreenControlsEnabled()) return\n",
+        "touch overlay render gate",
+    )
+    path.write_text(text, encoding="utf-8")
+
+
+def patch_launcher_vector(app_dir: Path) -> None:
+    """Replace the legacy blue-accent vector with a black-and-white mark."""
+    path = app_dir / "src/main/res/drawable/touchstation_icon.xml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    vector = """<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#000000" android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M18,25h23c7,0 9,2 9,8v3c0,6 -2,8 -9,8h-6c-7,0 -9,2 -9,8v8 M58,25h22 M69,25v27c0,6 -3,9 -10,9h-9 M86,25h15 M86,39h13 M86,59h15" />
+</vector>
+"""
+    path.write_text(vector, encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path, help="android/armsx3-ui source directory")
@@ -499,11 +576,15 @@ def main() -> None:
     patch_performance_tab(app_dir)
     patch_app_name(app_dir)
     patch_launcher_manifest(app_dir)
+    patch_launcher_vector(app_dir)
+    patch_touch_controls(app_dir)
     write_launcher_icons(app_dir, args.logo_b64)
 
     print("TouchStation source preparation complete.")
     print("App label: TouchStation")
-    print("Version: 4.0.0 / versionCode 400")
+    print("Version: 5.0.0 / versionCode 500")
+    print("Virtual touchscreen controls: hidden; physical gamepad, keyboard and gyro input preserved.")
+    print("Extra shader controls: compiler threads and shader/SPU compile notifications.")
     print("Chipset profiles: Auto detect, Dimensity, Snapdragon, Exynos")
     print("Auto applies a supported chipset profile when Performance settings are opened.")
     print("Native PPU/SPU/RSX libraries: supplied unchanged from the pinned upstream APK.")

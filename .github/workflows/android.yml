@@ -1,4 +1,4 @@
-name: TouchStation 4.0.0 Final
+name: TouchStation 5.0.0 Final
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 # Do not cancel an active release build just because another commit was pushed.
 concurrency:
-  group: touchstation-4-final
+  group: touchstation-5-final
   cancel-in-progress: false
 
 jobs:
@@ -93,12 +93,12 @@ jobs:
           test -s "$APP/src/main/jniLibs/arm64-v8a/libGLESv2_angle.so"
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
-      - name: Apply TouchStation branding and chipset settings
+      - name: Apply TouchStation branding, controls and chipset settings
         run: |
           python tools/prepare_source_build.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
-      - name: Build TouchStation 4.0.0
+      - name: Build TouchStation 5.0.0
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
@@ -114,8 +114,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='4.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='400'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='5.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='500'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -136,16 +136,58 @@ jobs:
           icon_path="$(sed -n "s/^application: label='[^']*' icon='\\([^']*\\)'.*/\\1/p" "$RUNNER_TEMP/badging.txt" | head -n 1)"
           test -n "$icon_path"
           grep -Fxq "$icon_path" "$RUNNER_TEMP/final-entries.txt"
+          python - "$APK" "$icon_path" <<'PY'
+          import io
+          import sys
+          import zipfile
+          from PIL import Image
+
+          apk_path, icon_path = sys.argv[1], sys.argv[2]
+          with zipfile.ZipFile(apk_path) as package:
+              image = Image.open(io.BytesIO(package.read(icon_path))).convert("RGBA")
+          chromatic = [
+              pixel for pixel in image.getdata()
+              if pixel[3] > 0 and (pixel[0] != pixel[1] or pixel[1] != pixel[2])
+          ]
+          if chromatic:
+              raise SystemExit(
+                  f"Launcher icon has {len(chromatic)} colored pixels; expected grayscale only."
+              )
+          print(f"Verified monochrome launcher image: {icon_path} ({image.width}x{image.height})")
+          PY
+          if grep -qi '#2370F5' "$APP_RES/drawable/touchstation_icon.xml"; then
+            echo "Legacy blue accent detected in TouchStation vector icon."
+            exit 1
+          fi
 
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-v4.0.0-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-v5.0.0-arm64.apk"
 
       - name: Upload TouchStation 4.0.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-v4.0.0-arm64
+          name: TouchStation-v5.0.0-arm64
           path: ${{ runner.temp }}/TouchStation-v4.0.0-arm64.apk
           if-no-files-found: error
           retention-days: 90
+
+      - name: Publish TouchStation 5.0.0 Final
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v5.0.0
+          name: TouchStation 5.0.0 Final
+          make_latest: true
+          prerelease: false
+          overwrite_files: true
+          files: ${{ runner.temp }}/TouchStation-v5.0.0-arm64.apk
+          body: |
+            TouchStation 5.0.0 Final for Android ARM64.
+
+            - Removed the blue-accent icon resource and added a monochrome icon verification step.
+            - Hid the in-game virtual touchscreen control overlay only; physical gamepad, keyboard and gyro input remain available.
+            - Added shader compiler thread control and shader/SPU compile notification options.
+            - Retained chipset profiles for Dimensity, Snapdragon and Exynos.
+            
+            Users must supply firmware and game files they are legally entitled to use.
