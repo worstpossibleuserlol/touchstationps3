@@ -13,7 +13,7 @@ import io
 import re
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageOps
 
 
 DENSITIES = {
@@ -376,7 +376,7 @@ def patch_launcher_manifest(app_dir: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
+def write_launcher_icons(app_dir: Path) -> None:
     """Create the intentionally plain, solid-black TouchStation launcher icon."""
     # The requested icon is a blank black screen: no wordmark, no symbols,
     # no external image dependency, and no fallback artwork.
@@ -598,7 +598,6 @@ def patch_launcher_vector(app_dir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path, help="android/armsx3-ui source directory")
-    parser.add_argument("--logo-b64", type=Path, help="Optional logo image in Base64; built-in monochrome artwork is used by default.")
     args = parser.parse_args()
 
     app_dir = args.source / "app"
@@ -617,7 +616,7 @@ def main() -> None:
     patch_launcher_vector(app_dir)
     patch_touch_controls(app_dir)
     patch_in_game_settings_button(app_dir)
-    write_launcher_icons(app_dir, args.logo_b64)
+    write_launcher_icons(app_dir)
 
     print("TouchStation source preparation complete.")
     print("App label: TouchStation")

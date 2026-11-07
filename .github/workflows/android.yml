@@ -10,7 +10,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-5-final
+  group: touchstation-solid-black-icon
   cancel-in-progress: false
 
 jobs:
@@ -96,8 +96,7 @@ jobs:
       - name: Apply TouchStation branding, controls and chipset settings
         run: |
           python tools/prepare_source_build.py \
-            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui" \
-            --logo-b64 tools/assets/touchstation-logo.png.b64
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
       - name: Build TouchStation 5.0.0
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
@@ -159,15 +158,15 @@ jobs:
                       pass
                   image = Image.open(source_icon_path).convert("RGBA")
                   print(f"Manifest icon is an adaptive/resource XML: {icon_path}")
-          chromatic = [
+          non_black = [
               pixel for pixel in image.getdata()
-              if pixel[3] > 0 and (pixel[0] != pixel[1] or pixel[1] != pixel[2])
+              if pixel[:3] != (0, 0, 0)
           ]
-          if chromatic:
+          if non_black:
               raise SystemExit(
-                  f"Launcher icon has {len(chromatic)} colored pixels; expected grayscale only."
+                  f"Launcher icon has {len(non_black)} non-black pixels; expected a solid black screen."
               )
-          print(f"Verified monochrome launcher artwork: {image.width}x{image.height}")
+          print(f"Verified solid-black launcher artwork: {image.width}x{image.height}")
           PY
           if grep -qi '#2370F5' "$APP_RES/drawable/touchstation_icon.xml"; then
             echo "Legacy blue accent detected in TouchStation vector icon."
