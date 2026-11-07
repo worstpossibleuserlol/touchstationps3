@@ -10,7 +10,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-solid-black-icon
+  group: touchstation-solid-black-icon-v2
   cancel-in-progress: false
 
 jobs:
@@ -115,7 +115,7 @@ jobs:
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
           grep -F "versionName='5.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='500'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='501'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -129,44 +129,32 @@ jobs:
           test -s "$APP_RES/mipmap-xxxhdpi/ic_launcher.png"
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             test -s "$APP_RES/mipmap-$density/ic_launcher.png"
-            test -s "$APP_RES/mipmap-$density/ic_launcher_foreground.png"
-            test -s "$APP_RES/mipmap-$density/ic_launcher_background.png"
+            test -s "$APP_RES/mipmap-$density/ic_launcher_round.png"
           done
-          test -s "$APP_RES/mipmap-anydpi-v26/ic_launcher.xml"
+          test ! -e "$APP_RES/mipmap-anydpi-v26/ic_launcher.xml"
+          test ! -e "$APP_RES/mipmap-anydpi-v26/ic_launcher_round.xml"
           icon_path="$(sed -n "s/^application: label='[^']*' icon='\\([^']*\\)'.*/\\1/p" "$RUNNER_TEMP/badging.txt" | head -n 1)"
           test -n "$icon_path"
+          case "$icon_path" in
+            *.png) ;;
+            *) echo "Launcher manifest did not resolve to a raster PNG: $icon_path"; exit 1 ;;
+          esac
           grep -Fxq "$icon_path" "$RUNNER_TEMP/final-entries.txt"
-          python - "$APK" "$icon_path" "$APP_RES/mipmap-xxxhdpi/ic_launcher.png" <<'PY'
+          python - "$APK" "$icon_path" <<'PY'
           import io
           import sys
           import zipfile
           from PIL import Image
 
-          apk_path, icon_path, source_icon_path = sys.argv[1], sys.argv[2], sys.argv[3]
+          apk_path, icon_path = sys.argv[1], sys.argv[2]
           with zipfile.ZipFile(apk_path) as package:
-              packaged_icon = package.read(icon_path)
-              # Android may report the adaptive launcher resource as compiled XML
-              # (for example res/BW.xml), not as a raster image. In that case,
-              # inspect the exact launcher PNG that was compiled into its layers.
-              if icon_path.lower().endswith((".png", ".webp", ".jpg", ".jpeg")):
-                  image = Image.open(io.BytesIO(packaged_icon)).convert("RGBA")
-              else:
-                  if not packaged_icon.startswith(b"<?xml") and b"adaptive-icon" not in packaged_icon:
-                      # AAPT's compiled binary XML is not expected to contain plain text.
-                      # The build-time adaptive-icon XML and referenced raster layer are
-                      # validated below instead of passing binary XML into Pillow.
-                      pass
-                  image = Image.open(source_icon_path).convert("RGBA")
-                  print(f"Manifest icon is an adaptive/resource XML: {icon_path}")
-          non_black = [
-              pixel for pixel in image.getdata()
-              if pixel[:3] != (0, 0, 0)
-          ]
+              image = Image.open(io.BytesIO(package.read(icon_path))).convert("RGB")
+          non_black = sum(1 for pixel in image.getdata() if pixel != (0, 0, 0))
           if non_black:
               raise SystemExit(
-                  f"Launcher icon has {len(non_black)} non-black pixels; expected a solid black screen."
+                  f"Packaged manifest launcher icon has {non_black} non-black pixels; expected solid black."
               )
-          print(f"Verified solid-black launcher artwork: {image.width}x{image.height}")
+          print(f"Verified exact packaged manifest icon is solid black: {image.width}x{image.height}")
           PY
           if grep -qi '#2370F5' "$APP_RES/drawable/touchstation_icon.xml"; then
             echo "Legacy blue accent detected in TouchStation vector icon."

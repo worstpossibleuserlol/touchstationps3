@@ -254,7 +254,7 @@ def patch_gradle(app_dir: Path) -> None:
 
     text, code_count = re.subn(
         r"(?m)^(\s*)versionCode\s*=\s*\d+\s*$",
-        r"\g<1>versionCode = 500",
+        r"\g<1>versionCode = 501",
         text,
         count=1,
     )
@@ -377,50 +377,29 @@ def patch_launcher_manifest(app_dir: Path) -> None:
 
 
 def write_launcher_icons(app_dir: Path) -> None:
-    """Create the intentionally plain, solid-black TouchStation launcher icon."""
-    # The requested icon is a blank black screen: no wordmark, no symbols,
-    # no external image dependency, and no fallback artwork.
-    source = Image.new("RGB", (512, 512), (0, 0, 0))
-    gray = ImageOps.grayscale(source)
-    legacy = Image.merge("RGB", (gray, gray, gray))
-
-    # A fully black foreground/background produces a uniformly black adaptive icon.
-    foreground = Image.new("RGBA", (512, 512), (255, 255, 255, 0))
-    background = Image.new("RGBA", (512, 512), (0, 0, 0, 255))
-
+    """Write plain black raster launcher icons and remove adaptive icon overrides."""
+    image = Image.new("RGB", (512, 512), (0, 0, 0))
     res = app_dir / "src/main/res"
+
+    # Use only density-qualified PNGs. Removing anydpi-v26 adaptive XML prevents
+    # Android from selecting a stale foreground/background or renamed vector.
     for folder, size in DENSITIES.items():
         target = res / folder
         target.mkdir(parents=True, exist_ok=True)
-        legacy.resize((size, size), Image.Resampling.LANCZOS).save(
-            target / "ic_launcher.png", format="PNG", optimize=True
-        )
-        legacy.resize((size, size), Image.Resampling.LANCZOS).save(
-            target / "ic_launcher_round.png", format="PNG", optimize=True
-        )
-        foreground.resize((size, size), Image.Resampling.LANCZOS).save(
-            target / "ic_launcher_foreground.png", format="PNG", optimize=True
-        )
-        background.resize((size, size), Image.Resampling.LANCZOS).save(
-            target / "ic_launcher_background.png", format="PNG", optimize=True
-        )
+        icon = image.resize((size, size), Image.Resampling.NEAREST)
+        icon.save(target / "ic_launcher.png", format="PNG", optimize=True)
+        icon.save(target / "ic_launcher_round.png", format="PNG", optimize=True)
 
-    adaptive = (
-        '<?xml version="1.0" encoding="utf-8"?>' + chr(10)
-        + '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">' + chr(10)
-        + '    <background android:drawable="@mipmap/ic_launcher_background" />' + chr(10)
-        + '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />' + chr(10)
-        + '</adaptive-icon>' + chr(10)
-    )
     adaptive_dir = res / "mipmap-anydpi-v26"
-    adaptive_dir.mkdir(parents=True, exist_ok=True)
-    (adaptive_dir / "ic_launcher.xml").write_text(adaptive, encoding="utf-8")
-    (adaptive_dir / "ic_launcher_round.xml").write_text(adaptive, encoding="utf-8")
+    for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
+        adaptive = adaptive_dir / name
+        if adaptive.exists():
+            adaptive.unlink()
 
     # Use the same plain black image for the in-app splash mark.
     splash = res / "drawable/ic_armsx3_mark.png"
     splash.parent.mkdir(parents=True, exist_ok=True)
-    legacy.save(splash, format="PNG", optimize=True)
+    image.save(splash, format="PNG", optimize=True)
 
 def patch_touch_controls(app_dir: Path) -> None:
     """Remove virtual touch layers entirely; retain native physical gamepad support."""
@@ -574,7 +553,7 @@ def patch_in_game_settings_button(app_dir: Path) -> None:
 
 
 def patch_launcher_vector(app_dir: Path) -> None:
-    """Replace the legacy blue-accent vector with a black-and-white mark."""
+    """Replace the legacy launcher vector with a plain black square."""
     path = app_dir / "src/main/res/drawable/touchstation_icon.xml"
     path.parent.mkdir(parents=True, exist_ok=True)
     vector = """<vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -583,13 +562,6 @@ def patch_launcher_vector(app_dir: Path) -> None:
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path android:fillColor="#000000" android:pathData="M0,0h108v108h-108z" />
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="6"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="@android:color/transparent"
-        android:pathData="M18,25h23c7,0 9,2 9,8v3c0,6 -2,8 -9,8h-6c-7,0 -9,2 -9,8v8 M58,25h22 M69,25v27c0,6 -3,9 -10,9h-9 M86,25h15 M86,39h13 M86,59h15" />
 </vector>
 """
     path.write_text(vector, encoding="utf-8")
