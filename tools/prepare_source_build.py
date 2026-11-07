@@ -330,6 +330,23 @@ def patch_app_name(app_dir: Path) -> None:
         raise SystemExit("Could not find app_name in Android string resources")
 
 
+
+def patch_launcher_manifest(app_dir: Path) -> None:
+    path = app_dir / "src/main/AndroidManifest.xml"
+    text = path.read_text(encoding="utf-8")
+
+    replacements = (
+        (r'android:label="[^"]+"', 'android:label="@string/app_name"', "app label"),
+        (r'android:icon="[^"]+"', 'android:icon="@mipmap/ic_launcher"', "launcher icon"),
+        (r'android:roundIcon="[^"]+"', 'android:roundIcon="@mipmap/ic_launcher_round"', "round launcher icon"),
+    )
+    for pattern, replacement, description in replacements:
+        text, count = re.subn(pattern, replacement, text, count=1)
+        if count != 1:
+            raise SystemExit(f"Could not set Android manifest {description}")
+    path.write_text(text, encoding="utf-8")
+
+
 def write_launcher_icons(app_dir: Path, logo_b64: Path) -> None:
     encoded = "".join(logo_b64.read_text(encoding="ascii").split())
     encoded += "=" * (-len(encoded) % 4)
@@ -434,6 +451,7 @@ def main() -> None:
     patch_gradle(app_dir)
     patch_performance_tab(app_dir)
     patch_app_name(app_dir)
+    patch_launcher_manifest(app_dir)
     write_launcher_icons(app_dir, args.logo_b64)
 
     print("TouchStation source preparation complete.")
