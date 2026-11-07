@@ -13,7 +13,7 @@ import io
 import re
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
 DENSITIES = {
