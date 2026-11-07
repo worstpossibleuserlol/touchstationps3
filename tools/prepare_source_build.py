@@ -944,42 +944,112 @@ def patch_pause_menu_exit(app_dir: Path) -> None:
 
 
 def patch_in_game_settings_exit(app_dir: Path) -> None:
-    """Add a visible, controller-focusable Exit Game action to the in-game gear Settings page."""
+    """Add safe, controller-focusable session controls to the in-game gear Settings page."""
     path = app_dir / "src/main/java/com/armsx2/ui/settingshub/SettingsScreen.kt"
     if not path.is_file():
         raise SystemExit(f"Missing expected in-game Settings screen source: {path}")
     text = path.read_text(encoding="utf-8")
 
     if "settings.action.exitGame" in text:
-        raise SystemExit("TouchStation in-game Settings Exit Game patch is already present")
+        raise SystemExit("TouchStation in-game session controls patch is already present")
+
+    state_anchor = '''    var showReset by remember { mutableStateOf(false) }
+'''
+    state_replacement = state_anchor + '''    var pendingSessionAction by remember { mutableStateOf<String?>(null) }
+'''
+    text = replace_once(
+        text,
+        state_anchor,
+        state_replacement,
+        "in-game session confirmation state",
+    )
 
     marker = '''                if (scopeContext != null) {
                     // Global ↔ Per-Game switch. Re-load()s the ViewModel for the chosen scope, which'''
-    replacement = '''                // TouchStation: the side-gear Settings screen must offer a direct way
-                // to stop the current game without returning to the separate pause menu.
+    replacement = '''                // TouchStation game-session actions appear only while a title is open.
+                // Every destructive action asks for confirmation before touching the VM.
                 if (scopeGame != null) {
-                    val exitGame = {
-                        com.armsx2.ui.WindowImpl.inGameScreen.value = null
-                        com.armsx2.runtime.MainActivityRuntime.closeGame()
-                    }
-                    Box(
+                    Column(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .controllerFocusable(
-                                "settings.action.exitGame",
-                                RoundedCornerShape(12.dp),
-                                onConfirm = exitGame,
-                            ),
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
-                        TextButton(
-                            onClick = exitGame,
-                            modifier = Modifier.fillMaxWidth(),
+                        Text(
+                            "GAME SESSION",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Control the game currently running behind this Settings screen.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.height(8.dp))
+
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .controllerFocusable(
+                                    "settings.action.resumeGame",
+                                    RoundedCornerShape(12.dp),
+                                    onConfirm = onBack,
+                                ),
                         ) {
-                            Text(
-                                "■  Exit Game",
-                                color = MaterialTheme.colorScheme.error,
-                            )
+                            TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                                Text("↩  Resume Game")
+                            }
+                        }
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .controllerFocusable(
+                                    "settings.action.restartGame",
+                                    RoundedCornerShape(12.dp),
+                                    onConfirm = { pendingSessionAction = "restart" },
+                                ),
+                        ) {
+                            TextButton(
+                                onClick = { pendingSessionAction = "restart" },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("↻  Restart Game")
+                            }
+                        }
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .controllerFocusable(
+                                    "settings.action.saveAndExit",
+                                    RoundedCornerShape(12.dp),
+                                    onConfirm = { pendingSessionAction = "save_and_exit" },
+                                ),
+                        ) {
+                            TextButton(
+                                onClick = { pendingSessionAction = "save_and_exit" },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("▣  Save State & Exit")
+                            }
+                        }
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .controllerFocusable(
+                                    "settings.action.exitGame",
+                                    RoundedCornerShape(12.dp),
+                                    onConfirm = { pendingSessionAction = "exit" },
+                                ),
+                        ) {
+                            TextButton(
+                                onClick = { pendingSessionAction = "exit" },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    "■  Exit Game",
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
                     }
                 }
@@ -990,10 +1060,65 @@ def patch_in_game_settings_exit(app_dir: Path) -> None:
         text,
         marker,
         replacement,
-        "in-game gear Settings Exit Game action",
+        "in-game gear Settings session controls",
+    )
+
+    dialog_marker = '''            onDismiss = { showReset = false },
+        )
+    }
+}
+
+/** Floating "back to top" affordance'''
+    dialog_replacement = '''            onDismiss = { showReset = false },
+        )
+    }
+
+    pendingSessionAction?.let { action ->
+        val details = when (action) {
+            "restart" -> Triple(
+                "Restart Game?",
+                "The current game will restart. Progress since your last in-game save may be lost.",
+                "Restart Game",
+            )
+            "save_and_exit" -> Triple(
+                "Save State & Exit?",
+                "TouchStation will write an autosave state, then close the current game and return to the library.",
+                "Save State & Exit",
+            )
+            else -> Triple(
+                "Exit Game?",
+                "The current game will close and return to the library. Progress since your last in-game save may be lost.",
+                "Exit Game",
+            )
+        }
+        com.armsx2.ui.common.ConfirmOverlay(
+            title = details.first,
+            message = details.second,
+            confirmLabel = details.third,
+            destructive = true,
+            idPrefix = "touchstation-session-$action",
+            onConfirm = {
+                pendingSessionAction = null
+                com.armsx2.ui.WindowImpl.inGameScreen.value = null
+                when (action) {
+                    "restart" -> com.armsx2.runtime.MainActivityRuntime.restart()
+                    "save_and_exit" -> com.armsx2.runtime.MainActivityRuntime.closeGame(saveAutosave = true)
+                    else -> com.armsx2.runtime.MainActivityRuntime.closeGame()
+                }
+            },
+            onDismiss = { pendingSessionAction = null },
+        )
+    }
+}
+
+/** Floating "back to top" affordance'''
+    text = replace_once(
+        text,
+        dialog_marker,
+        dialog_replacement,
+        "in-game session action confirmation dialogs",
     )
     path.write_text(text, encoding="utf-8")
-
 
 def patch_boot_splash_branding(app_dir: Path) -> None:
     """Show the TouchStation wordmark on the built-in splash instead of upstream branding."""
