@@ -1,15 +1,15 @@
-# TouchStation 5.0.0
+# TouchStation 5.0.0 Final
 
 TouchStation is an Android ARM64 distribution of the ARMSX3 Android PS3 emulator, based on its RPCS3-derived native engine.
 
-## TouchStation 5.0.0
+## 5.0.0 Final
 
-- **Monochrome branding:** launcher artwork is black and white, with a build-time check that rejects coloured launcher pixels and the old blue vector accent.
-- **No on-screen virtual controller:** the in-game touchscreen button overlay is hidden. Physical gamepad, keyboard and gyro input remain available.
-- **Additional shader controls:** choose automatic or manual shader compiler thread counts and toggle shader/SPU compile notifications.
-- **Chipset tuning:** retains the Auto detect, Dimensity, Snapdragon and Exynos profiles, with Balanced, Performance and Compatibility targets.
+- **Exact supplied launcher artwork:** the supplied square TouchStation wordmark is used for the launcher, adaptive/round launcher assets and splash mark. The build converts it to grayscale to remove JPEG colour artefacts and verifies that the packaged launcher contains no coloured pixels.
+- **Controller-only gameplay:** the in-game virtual touchscreen overlay is not composed. Physical USB and Bluetooth game controllers remain the intended gameplay input. No virtual buttons or motion-control overlay are rendered.
+- **20+ real performance and compatibility controls:** output resolution scale, screen-resolution override, sustained-performance mode, Android Performance Hint Manager (ADPF), Adreno GPU Turbo, log suppression, thread scheduler mode, PPU decoder, SPU decoder, SPU block size, preferred SPU thread count, LLVM thread count, SPURS thread limit, clock scale, SPU cache, LLVM precompilation, SPU loop detection, accurate SPU DMA, savestate-compatible mode, accurate SPU RSV, accurate cache-line mode, SPU XFloat precision, frame-generation options and compiled-code cache management.
+- **TouchStation additions:** automatic chipset detection and Dimensity, Snapdragon and Exynos profiles; Balanced, Performance and Compatibility targets; shader compiler thread control; shader and SPU compile notifications.
 
-The chipset profiles adjust supported emulator settings only. They do not overclock the device, alter voltage, or replace GPU drivers. Actual performance and compatibility depend on the SoC generation, Vulkan driver, memory, thermals and game.
+Chipset profiles only adjust supported emulator settings. They do not overclock the phone, change voltage, or replace graphics drivers. Performance depends on SoC generation, Vulkan driver, memory, thermals and the game being run. Some options are device- or game-dependent.
 
 ## Emulator engine
 
@@ -21,7 +21,7 @@ Users provide their own official PS3 system update package (PUP) and game files.
 
 ## Release build
 
-The GitHub Actions workflow builds the ARM64 APK, checks the app name and version, verifies native libraries, verifies the launcher icon is monochrome, aligns and signs the APK, and publishes the 5.0.0 Final release when all checks pass.
+The GitHub Actions workflow builds the ARM64 APK, checks app name and version, verifies native libraries, validates the monochrome launcher icon, checks APK alignment and signature, uploads the correctly named artifact, and publishes the 5.0.0 Final release when all checks pass.
 
 ## License and credits
 
