@@ -423,11 +423,13 @@ def write_launcher_icons(app_dir: Path, logo_b64: Path | None = None) -> None:
             raw = base64.b64decode(encoded, validate=True)
             source = Image.open(io.BytesIO(raw)).convert("RGB")
         except Exception as exc:
-            print(f"WARNING: supplied logo is invalid ({exc}); using built-in monochrome fallback.")
-            source = None
-
-    if source is None:
-        source = make_touchstation_logo()
+            raise SystemExit(
+                f"Supplied TouchStation logo is invalid; refusing to use fallback artwork: {exc}"
+            )
+    else:
+        raise SystemExit(
+            "A supplied TouchStation logo file is required; fallback artwork is disabled."
+        )
 
     # Preserve the supplied square artwork as-is. In particular, do not crop
     # the large black margins around the horizontal wordmark: those margins
