@@ -198,7 +198,7 @@ jobs:
           HOME_VM="$APP/src/main/java/com/armsx2/ui/home/HomeViewModel.kt"
           grep -Fq 'StatusChip("PC: $status")' "$HOME"
           grep -Fq 'TouchStationFinaleCompatibilityStore.loadCache(context)' "$HOME"
-          grep -Fq 'TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: it.compatibility' "$HOME_VM"
+          grep -Fq 'TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: -1' "$HOME_VM"
           grep -Fq 'LaunchedEffect(compatibilityRevision, state.sort)' "$HOME"
           grep -Fq 'Update official compatibility database' "$FINALE_SUITE"
           grep -Fq 'Full library compatibility index' "$FINALE_SUITE"
