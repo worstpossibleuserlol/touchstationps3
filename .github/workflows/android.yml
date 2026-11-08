@@ -137,6 +137,9 @@ jobs:
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
+          set -Eeuo pipefail
+          trap 'status=$?; echo "::error::TouchStation source validation failed at workflow shell line ${LINENO} (exit ${status})"; exit "$status"' ERR
+          set -x
           python tools/prepare_source_build.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_control_center.py \
