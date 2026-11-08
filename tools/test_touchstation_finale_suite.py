@@ -192,6 +192,12 @@ class HomeViewModel {
             "MediaStore.Downloads.EXTERNAL_CONTENT_URI",
             "logcat",
             "GPU fences",
+            "Core@@RSX FIFO Fetch Accuracy",
+            "Video@@Driver Wake-Up Delay",
+            "Ordered & Atomic",
+            "touchStationFinaleApplyFifoRecoveryProfile",
+            "CoreSettingOverrides.record",
+            "fullMessage = error.trim().take(4_000)",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
@@ -248,7 +254,8 @@ fun GameErrorBanner() {
             )
             FINALE.patch_game_error_banner(app)
             result = banner.read_text(encoding="utf-8")
-            self.assertIn("TouchStationFinaleErrorHistory.record(line)", result)
+            self.assertIn("TouchStationFinaleErrorHistory.record(fullMessage)", result)
+            self.assertIn("reason.value = fullMessage", result)
             self.assertIn("detectVerticalDragGestures", result)
             self.assertIn("verticalDrag.value <= -72f", result)
             self.assertIn("Critical error recorded", result)
@@ -261,6 +268,9 @@ fun GameErrorBanner() {
         self.assertIn("cannot safely reset or repair a stalled native queue", source)
         self.assertIn("TouchStation.log", source)
         self.assertIn("MediaStore.Downloads.EXTERNAL_CONTENT_URI", source)
+        self.assertIn('JSONObject.quote("Ordered & Atomic")', source)
+        self.assertIn('val delayValue = "20"', source)
+        self.assertIn("SettingsScope.Game", source)
 
     def test_native_metrics_are_not_fabricated(self) -> None:
         source = FINALE.KOTLIN_SOURCE
