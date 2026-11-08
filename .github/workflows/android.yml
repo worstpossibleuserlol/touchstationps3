@@ -180,6 +180,8 @@ jobs:
           grep -Fq 'Shader Cache Manager' "$V9_SUITE"
           grep -Fq 'Crash Recovery / Safe Mode' "$V9_SUITE"
           grep -Fq 'Hardware Benchmark & Recommendation' "$V9_SUITE"
+          grep -Fq 'getHistoricalProcessExitReasons' "$V9_SUITE"
+          grep -Fq 'ApplicationExitInfo.REASON_CRASH_NATIVE' "$V9_SUITE"
           SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation8MonitoringSuite.kt"
           ! grep -Fq 'import androidx.compose.foundation.layout.weight' "$PPU_MONITOR"
           ! grep -Fq 'padCount.intValue' "$SUITE"
