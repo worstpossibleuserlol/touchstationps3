@@ -189,6 +189,17 @@ class HomeViewModel {
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
 
+    def test_compatibility_cache_reader_is_defined_and_bounded(self) -> None:
+        source = FINALE.KOTLIN_SOURCE
+        self.assertIn(
+            "private fun touchStationFinaleReadCache(context: Context): JSONObject?",
+            source,
+        )
+        self.assertIn("cacheFile.length() !in 1L..(32L * 1024L * 1024L)", source)
+        self.assertIn('payload.optInt("return_code", -1) != 0', source)
+        self.assertIn('payload.optJSONObject("results") == null', source)
+        self.assertIn("cacheFile.readText(Charsets.UTF_8)", source)
+
     def test_native_metrics_are_not_fabricated(self) -> None:
         source = FINALE.KOTLIN_SOURCE
         self.assertIn("GPU utilization and exact Vulkan extensions remain N/A", source)
