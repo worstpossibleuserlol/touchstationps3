@@ -1740,7 +1740,8 @@ def main() -> None:
         for marker in reliability_markers
         if marker not in RELIABILITY_KOTLIN_SOURCE
     )
-    if "TouchStationFinaleReliability.install(this)" not in s:
+    application_source = (app_dir / "src/main/java/com/armsx2/Pasx2Application.kt").read_text(encoding="utf-8")
+    if "TouchStationFinaleReliability.install(this)" not in application_source:
         missing.append("Application reliability initialization")
     # The URL and some explanatory copy intentionally live in different parts
     # of the template, so test the exact API route and title-ID matching separately.
