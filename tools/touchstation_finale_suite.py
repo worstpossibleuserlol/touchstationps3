@@ -47,6 +47,7 @@ import com.armsx2.config.Settings
 import com.armsx2.config.SettingsScope
 import com.armsx2.config.CoreSettingOverrides
 import com.armsx2.runtime.MainActivityRuntime
+import com.armsx2.reliability.TouchStationFinaleReliability
 import com.armsx2.ui.InGameOverlay
 import com.armsx3.HttpClient
 import com.armsx3.core.ARMSX3
@@ -148,6 +149,11 @@ object TouchStationFinaleErrorHistory {
         MainActivityRuntime.prefs.edit()
             .putString(TOUCHSTATION_FINALE_ERROR_HISTORY_KEY, next.toString())
             .apply()
+        runCatching {
+            TouchStationFinaleReliability.recordEvent(
+                com.armsx2.Pasx2Application.appContext, "game-error", message,
+            )
+        }
     }
 
     fun latestMessage(): String {
@@ -199,6 +205,48 @@ object TouchStationFinaleErrorHistory {
             else ->
                 "Export TouchStation.log and include the game title, title ID and the steps that led to the error."
         }
+    }
+}
+
+
+private const val TOUCHSTATION_FINALE_SETTINGS_CHECKPOINT_KEY = "touchstation.finale.settingsCheckpoint"
+
+/** User-controlled rollback point scoped to one settings tier and one game identity. */
+object TouchStationFinaleSettingsRollback {
+    fun save(settings: Settings, scope: SettingsScope, serial: String?): Pair<Boolean, String> {
+        if (scope == SettingsScope.Game && serial.isNullOrBlank()) {
+            return false to "A game title ID is required for a per-game checkpoint."
+        }
+        return runCatching {
+            val payload = JSONObject()
+                .put("scope", scope.name)
+                .put("serial", serial.orEmpty())
+                .put("createdAt", System.currentTimeMillis())
+                .put("settings", settings.toJson())
+            MainActivityRuntime.prefs.edit()
+                .putString(TOUCHSTATION_FINALE_SETTINGS_CHECKPOINT_KEY, payload.toString())
+                .apply()
+            true to ("Checkpoint saved for " + scope.name + " scope.")
+        }.getOrElse { false to ("Checkpoint failed: " + (it.message ?: "unknown error")) }
+    }
+
+    fun restore(scope: SettingsScope, serial: String?): Settings? = runCatching {
+        val raw = MainActivityRuntime.prefs.getString(TOUCHSTATION_FINALE_SETTINGS_CHECKPOINT_KEY, null)
+            ?: return null
+        val payload = JSONObject(raw)
+        if (payload.optString("scope") != scope.name) return null
+        if (payload.optString("serial") != serial.orEmpty()) return null
+        Settings.fromJson(payload.getJSONObject("settings"))
+    }.getOrNull()
+
+    fun description(): String {
+        val raw = MainActivityRuntime.prefs.getString(TOUCHSTATION_FINALE_SETTINGS_CHECKPOINT_KEY, null)
+            ?: return "No settings checkpoint saved."
+        return runCatching {
+            val payload = JSONObject(raw)
+            "Saved checkpoint: " + payload.optString("scope", "Unknown") + " / " +
+                payload.optString("serial", "").ifBlank { "global" }
+        }.getOrDefault("Checkpoint is unreadable.")
     }
 }
 
@@ -446,6 +494,27 @@ private suspend fun touchStationFinaleCollectLog(context: Context, diagnosticRep
             appendLine("=== Android app-process logcat ===")
             appendLine(capture)
             appendLine()
+            val sessionLog = File(context.getExternalFilesDir(null) ?: context.filesDir, "logs/session.log")
+            appendLine("=== Existing native stdout/stderr session log ===")
+            appendLine(
+                if (sessionLog.isFile && sessionLog.canRead()) {
+                    runCatching { sessionLog.readText(Charsets.UTF_8).takeLast(2_000_000) }
+                        .getOrElse { "Session log read failed: " + (it.message ?: "unknown error") }
+                } else "No existing session.log was found.",
+            )
+            appendLine()
+            appendLine("=== TouchStation Finale reliability events ===")
+            val reliabilityLog = File(context.filesDir, "touchstation-finale-diagnostics/events.log")
+            appendLine(
+                if (reliabilityLog.isFile && reliabilityLog.canRead()) {
+                    runCatching { reliabilityLog.readText(Charsets.UTF_8).takeLast(500_000) }
+                        .getOrElse { "Reliability log read failed: " + (it.message ?: "unknown error") }
+                } else "No reliability event log was found.",
+            )
+            appendLine()
+            appendLine("=== Most recent Java/Kotlin crash report ===")
+            appendLine(TouchStationFinaleReliability.latestCrashReport(context))
+            appendLine()
             appendLine("=== TouchStation diagnostic snapshot ===")
             append(diagnosticReport)
         }.also {
@@ -552,6 +621,12 @@ fun TouchStationFinaleSuite(
     val logBusy = remember { mutableStateOf(false) }
     val logContents = remember { mutableStateOf("") }
     val logMessage = remember { mutableStateOf("No TouchStation.log has been exported in this session.") }
+    val safeMode = remember(context) { mutableStateOf(TouchStationFinaleReliability.isSafeMode(context)) }
+    val reliabilitySnapshot = remember { mutableStateOf("Reliability diagnostics have not been refreshed yet.") }
+    val gameSourceStatus = remember { mutableStateOf("Game source has not been checked yet.") }
+    val gameHashStatus = remember { mutableStateOf("SHA-256 has not been calculated.") }
+    val integrityBusy = remember { mutableStateOf(false) }
+    val rollbackMessage = remember { mutableStateOf(TouchStationFinaleSettingsRollback.description()) }
     val game: GameInfo? = MainActivityRuntime.currentGame.value
     val gameTitle = game?.title?.takeIf { it.isNotBlank() } ?: "No game selected"
     val serial = game?.serial?.takeIf { it.isNotBlank() }
@@ -574,7 +649,11 @@ fun TouchStationFinaleSuite(
     val nativeReady = MainActivityRuntime.nativeReady.value
 
     LaunchedEffect(context) {
+        TouchStationFinaleReliability.recordEvent(context, "finale-ui", "Finale diagnostics opened")
         device.value = withContext(Dispatchers.IO) { touchStationFinaleDeviceSnapshot(context) }
+        reliabilitySnapshot.value = withContext(Dispatchers.IO) {
+            TouchStationFinaleReliability.snapshot(context)
+        }
         database.value = withContext(Dispatchers.IO) { touchStationFinaleReadCache(context) }
         TouchStationFinaleCompatibilityStore.replace(database.value)
         libraryGames.value = withContext(Dispatchers.IO) {
@@ -587,8 +666,21 @@ fun TouchStationFinaleSuite(
         }
     }
 
+    LaunchedEffect(context, game?.uri) {
+        gameSourceStatus.value = withContext(Dispatchers.IO) {
+            game?.let { TouchStationFinaleReliability.inspectGameUri(context, it.uri) }
+                ?: "No game selected."
+        }
+    }
+
+    val settingsValidation = TouchStationFinaleReliability.validateSettings(settings)
     val report = buildString {
         appendLine("TouchStation Version Finale diagnostic report")
+        appendLine("Safe mode: " + safeMode.value)
+        appendLine("Settings validation: " + settingsValidation.joinToString().ifBlank { "PASS" })
+        appendLine("Game source: " + gameSourceStatus.value)
+        appendLine(reliabilitySnapshot.value)
+        appendLine("Latest Java crash report: " + TouchStationFinaleReliability.latestCrashSummary(context))
         appendLine("Device: " + (deviceSnapshot?.device ?: "N/A"))
         appendLine("SoC: " + (deviceSnapshot?.soc ?: "N/A"))
         appendLine("Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")")
@@ -810,6 +902,55 @@ fun TouchStationFinaleSuite(
             TouchStationFinaleSection("04 · GTA IV compatibility profile") {
                 TouchStationFinaleRow("Game detected", if (isGtaIv) "Grand Theft Auto IV" else "Not the selected game")
                 TouchStationFinaleRow("Settings scope", if (settingsArePerGame) "Per-game" else "Global")
+                TouchStationFinaleRow("Finale safe mode", if (safeMode.value) "Enabled" else "Disabled")
+                OutlinedButton(
+                    onClick = {
+                        TouchStationFinaleReliability.setSafeMode(context, !safeMode.value)
+                        safeMode.value = !safeMode.value
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (safeMode.value) "Disable safe mode" else "Enable safe mode")
+                }
+                OutlinedButton(
+                    onClick = {
+                        val activeScope = if (settingsArePerGame) SettingsScope.Game else SettingsScope.Global
+                        val saved = TouchStationFinaleSettingsRollback.save(settings, activeScope, serial)
+                        rollbackMessage.value = saved.second
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Save settings rollback point")
+                }
+                OutlinedButton(
+                    onClick = {
+                        val activeScope = if (settingsArePerGame) SettingsScope.Game else SettingsScope.Global
+                        val saved = TouchStationFinaleSettingsRollback.restore(activeScope, serial)
+                        if (saved == null) {
+                            rollbackMessage.value = "No matching checkpoint exists for this scope and game."
+                        } else {
+                            val warnings = TouchStationFinaleReliability.validateSettings(saved)
+                            if (warnings.isNotEmpty()) {
+                                rollbackMessage.value = "Checkpoint rejected: " + warnings.joinToString()
+                            } else {
+                                val applied = runCatching { onApply(saved) }.getOrDefault(false)
+                                rollbackMessage.value = if (applied) {
+                                    "Checkpoint restored and settings read-back succeeded."
+                                } else {
+                                    "Checkpoint loaded, but the existing apply callback did not verify it."
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Restore saved settings")
+                }
+                Text(
+                    rollbackMessage.value + " " + TouchStationFinaleSettingsRollback.description(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     "The profile selects safe SPU block mode, accurate SPU XFloat, asynchronous shaders, MSAA off, SPU cache, LLVM precompile and restrained PPU/LLVM threads. It also applies RSX FIFO Fetch Accuracy = Ordered & Atomic and Driver Wake-Up Delay = 20 µs to this game only. Ordered & Atomic can reduce performance; this is a targeted stability test, not a GTA IV guarantee.",
                     style = MaterialTheme.typography.bodySmall,
@@ -843,19 +984,76 @@ fun TouchStationFinaleSuite(
                             else -> "The standard GTA IV profile was saved, but FIFO settings were not fully verified: " + fifoResult.second
                         }
                     },
-                    enabled = isGtaIv && settingsArePerGame && game != null,
+                    enabled = isGtaIv && settingsArePerGame && game != null && !safeMode.value,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Apply GTA IV per-game profile")
                 }
                 Text(
-                    "This button is enabled only for a detected GTA IV title while the per-game settings scope is active. It changes existing supported settings only and leaves your global profile untouched.",
+                    "This button is enabled only for a detected GTA IV title while per-game scope is active and safe mode is off. It changes supported settings only and leaves global settings untouched.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            TouchStationFinaleSection("05 · Device readiness and system checks") {
+            TouchStationFinaleSection("05 · Reliability, recovery and preflight") {
+                TouchStationFinaleRow("Application lifecycle", TouchStationFinaleReliability.lifecycleStatus())
+                TouchStationFinaleRow("Memory trend", TouchStationFinaleReliability.memoryTrend(context))
+                TouchStationFinaleRow("Crash report", TouchStationFinaleReliability.latestCrashSummary(context))
+                TouchStationFinaleRow("App cache inventory", TouchStationFinaleReliability.inspectDirectory(context.cacheDir))
+                TouchStationFinaleRow("Game source", gameSourceStatus.value)
+                TouchStationFinaleRow("Settings validation", if (settingsValidation.isEmpty()) "PASS" else settingsValidation.joinToString())
+                Text(
+                    "Native PPU/SPU counters, RSX queue depth, GPU fences and shader-cache internals remain unavailable unless the native bridge exposes them. Missing telemetry is never shown as zero.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Button(
+                    onClick = {
+                        if (!integrityBusy.value && game != null) {
+                            scope.launch {
+                                integrityBusy.value = true
+                                gameSourceStatus.value = withContext(Dispatchers.IO) {
+                                    TouchStationFinaleReliability.inspectGameUri(context, game.uri)
+                                }
+                                gameHashStatus.value = withContext(Dispatchers.IO) {
+                                    TouchStationFinaleReliability.sha256GameUri(
+                                        context, game.uri, 256L * 1024L * 1024L,
+                                    )
+                                }
+                                integrityBusy.value = false
+                            }
+                        }
+                    },
+                    enabled = game != null && !integrityBusy.value,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (integrityBusy.value) "Checking game source…" else "Validate game source and calculate SHA-256")
+                }
+                Text(
+                    gameHashStatus.value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            reliabilitySnapshot.value = withContext(Dispatchers.IO) {
+                                TouchStationFinaleReliability.snapshot(context)
+                            }
+                            gameSourceStatus.value = withContext(Dispatchers.IO) {
+                                game?.let { TouchStationFinaleReliability.inspectGameUri(context, it.uri) }
+                                    ?: "No game selected."
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Refresh reliability diagnostics")
+                }
+            }
+
+            TouchStationFinaleSection("06 · Device readiness and system checks") {
                 TouchStationFinaleRow("Device", deviceSnapshot?.device ?: "Scanning…")
                 TouchStationFinaleRow("SoC", deviceSnapshot?.soc ?: "Scanning…")
                 TouchStationFinaleRow("Android / ABI", Build.VERSION.RELEASE + " / " + (deviceSnapshot?.abi ?: "N/A"))
@@ -874,7 +1072,7 @@ fun TouchStationFinaleSuite(
                 )
             }
 
-            TouchStationFinaleSection("06 · PS3 core configuration snapshot") {
+            TouchStationFinaleSection("07 · PS3 core configuration snapshot") {
                 TouchStationFinaleRow("PPU decoder / threads", settings.ps3.ppuDecoder.toString() + " / " + settings.ps3.ppuThreads)
                 TouchStationFinaleRow("LLVM threads / precompile", settings.ps3.llvmThreads.toString() + " / " + settings.ps3.llvmPrecompile)
                 TouchStationFinaleRow("SPU decoder / block size", settings.ps3.spuDecoder.toString() + " / " + settings.ps3.spuBlockSize)
@@ -886,7 +1084,7 @@ fun TouchStationFinaleSuite(
                 TouchStationFinaleRow("Driver Wake-Up Delay", touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH) + " µs")
             }
 
-            TouchStationFinaleSection("07 · Error history and FIFO diagnostics") {
+            TouchStationFinaleSection("08 · Error history and FIFO diagnostics") {
                 TouchStationFinaleRow("Recorded game errors", TouchStationFinaleErrorHistory.eventCount().toString())
                 TouchStationFinaleRow("Recorded FIFO failures", TouchStationFinaleErrorHistory.fifoFailureCount().toString())
                 TouchStationFinaleRow("Latest error", TouchStationFinaleErrorHistory.latestMessage().take(160))
@@ -1522,16 +1720,28 @@ def main() -> None:
         "Ordered & Atomic",
         "touchStationFinaleApplyFifoRecoveryProfile",
         "TouchStationFinaleErrorHistory.fifoFailureCount()",
-        "TouchStationFinaleReliability.install(this)",
-        "validateSettings(settings: Settings)",
-        "sha256GameUri",
-        "inspectGameUri",
-        "MAX_LOG_BYTES",
+        "Download TouchStation.log",
         "Physical controllers",
         "Engine initialized",
         "GPU utilization",
     ]
     missing = [marker for marker in required_markers if marker not in KOTLIN_SOURCE]
+    reliability_markers = [
+        "registerActivityLifecycleCallbacks",
+        "setDefaultUncaughtExceptionHandler",
+        "MAX_LOG_BYTES",
+        "inspectGameUri",
+        "sha256GameUri",
+        "validateSettings",
+        "memoryTrend",
+    ]
+    missing.extend(
+        "reliability module: " + marker
+        for marker in reliability_markers
+        if marker not in RELIABILITY_KOTLIN_SOURCE
+    )
+    if "TouchStationFinaleReliability.install(this)" not in s:
+        missing.append("Application reliability initialization")
     # The URL and some explanatory copy intentionally live in different parts
     # of the template, so test the exact API route and title-ID matching separately.
     if "https://rpcs3.net/compatibility/?api=v1&export" not in KOTLIN_SOURCE:
