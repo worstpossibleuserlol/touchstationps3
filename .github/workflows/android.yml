@@ -97,8 +97,10 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/add_gpl_modification_notices.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/add_gpl_modification_notices.py
 
+      - name: Run TouchStation Finale patcher regression tests
+        run: python3 tools/test_touchstation_finale_suite.py
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
           python tools/prepare_source_build.py \
@@ -138,6 +140,7 @@ jobs:
           grep -Fq "armsx3-source/touchstation-build/tools/add_gpl_modification_notices.py" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/THIRD_PARTY_NOTICES.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/SOURCE_DISTRIBUTION.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/docs/FINALE_FEATURES.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStation11ReliabilitySuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStationFinaleSuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
 
