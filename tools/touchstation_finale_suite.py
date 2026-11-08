@@ -678,7 +678,7 @@ def patch_performance_tab(app_dir: Path) -> None:
 
 
 def patch_library_compatibility(app_dir: Path) -> None:
-    """Show exact-ID desktop compatibility on library cards once the local cache exists."""
+    """Show exact-ID desktop compatibility on library cards and use it for compatibility sorting."""
     home = app_dir / "src/main/java/com/armsx2/ui/home/HomeScreen.kt"
     text = home.read_text(encoding="utf-8")
     import_anchor = "import com.armsx2.GameInfo\n"
@@ -695,14 +695,20 @@ def patch_library_compatibility(app_dir: Path) -> None:
     anchor_index = text.find(home_anchor, home_start)
     if anchor_index < 0:
         raise SystemExit("HomeScreen context anchor not found")
-    text = text[:anchor_index] + text[anchor_index:].replace(
-        home_anchor,
-        home_anchor + """    LaunchedEffect(context) {
+    load_cache = """    LaunchedEffect(context) {
         TouchStationFinaleCompatibilityStore.loadCache(context)
     }
-""",
-        1,
-    )
+"""
+    text = text[:anchor_index] + text[anchor_index:].replace(home_anchor, home_anchor + load_cache, 1)
+    revision_anchor = "    val nativeReady = MainActivityRuntime.nativeReady.value\n"
+    revision = """    val compatibilityRevision = TouchStationFinaleCompatibilityStore.revision.intValue
+    LaunchedEffect(compatibilityRevision, state.sort) {
+        if (compatibilityRevision > 0 && state.sort == HomeSort.Compatibility) {
+            viewModel.setSort(HomeSort.Compatibility)
+        }
+    }
+"""
+    text = replace_once(text, revision_anchor, revision_anchor + revision, "library compatibility sort observer")
     metadata_anchor = """        game.regionFlag?.let { Text(it, fontSize = 13.sp) }
         if (game.compatibility > 0) {"""
     metadata_replacement = """        game.regionFlag?.let { Text(it, fontSize = 13.sp) }
@@ -710,13 +716,29 @@ def patch_library_compatibility(app_dir: Path) -> None:
             StatusChip("PC: $status")
         }
         if (game.compatibility > 0) {"""
-    text = replace_once(
-        text,
-        metadata_anchor,
-        metadata_replacement,
-        "library desktop compatibility badge",
-    )
+    text = replace_once(text, metadata_anchor, metadata_replacement, "library desktop compatibility badge")
     home.write_text(text, encoding="utf-8")
+
+    view_model = app_dir / "src/main/java/com/armsx2/ui/home/HomeViewModel.kt"
+    vm_text = view_model.read_text(encoding="utf-8")
+    vm_import = "import com.armsx2.GameInfo\n"
+    vm_text = replace_once(
+        vm_text,
+        vm_import,
+        vm_import + "import com.armsx2.ui.settings.TouchStationFinaleCompatibilityStore\n",
+        "compatibility sorter store import",
+    )
+    sorter_old = """            HomeSort.Compatibility -> filtered.sortedWith(
+                compareByDescending<GameInfo> { it.compatibility }
+                    .thenBy { it.sortKey(forceEn).lowercase() },
+            )"""
+    sorter_new = """            HomeSort.Compatibility -> filtered.sortedWith(
+                compareByDescending<GameInfo> {
+                    TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: it.compatibility
+                }.thenBy { it.sortKey(forceEn).lowercase() },
+            )"""
+    vm_text = replace_once(vm_text, sorter_old, sorter_new, "official compatibility sort comparator")
+    view_model.write_text(vm_text, encoding="utf-8")
 
 
 def main() -> None:
