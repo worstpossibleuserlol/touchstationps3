@@ -441,6 +441,23 @@ fun TouchStationFinaleSuite(
                     singleLine = true,
                     label = { Text("Search PS3 library") },
                 )
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            libraryGames.value = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    GameLibraryRepository(context).loadCached().games
+                                        .filter { it.platform == GamePlatform.PS3 && !it.serial.isNullOrBlank() }
+                                        .distinctBy { touchStationFinaleNormaliseId(it.serial.orEmpty()) }
+                                        .sortedBy { it.title.lowercase(Locale.ROOT) }
+                                }.getOrDefault(emptyList())
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Reload cached library index")
+                }
                 val query = librarySearch.value.trim().lowercase(Locale.ROOT)
                 val matches = libraryGames.value.filter { item ->
                     query.isBlank() ||
