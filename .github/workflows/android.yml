@@ -182,6 +182,7 @@ jobs:
           grep -Fq 'Third-party notices & licenses' "$ABOUT"
           ! grep -Fq 'repository = "ARMSX2/ARMSX3"' "$ABOUT"
           ! grep -Fq 'title = "Upstream emulator base"' "$ABOUT"
+          grep -Fq "PS3 emulation, game library and controller tools for Android ARM64." "$ABOUT"
           grep -Fq 'TouchStation is the product-facing app identity.' "$ABOUT"
           grep -Fq 'controllerId = "about.back"' "$ABOUT"
           grep -Fq '"about.project.$repository"' "$ABOUT"
@@ -382,6 +383,10 @@ jobs:
             - Added PPU cache validation and conservative PPU thread recommendations. Live PPU compilation job counters and structured native recompiler exceptions remain N/A when the pinned bridge does not export them.
             - Added SPU configuration/workload diagnostics and read-only PPU, SPU and shader cache inventory.
             - Added a game boot timeline, Android process-exit / launch evidence analyzer and exportable crash/launch report. Detailed native loader and FIFO traces remain unavailable unless exported by the core.
+            - Added on-demand official desktop compatibility database sync, exact PS3 title-ID matching, a searchable cached PS3 library index, test dates and update metadata.
+            - Added a separate per-handset test record and a conservative GTA IV per-game settings preset. Neither official desktop status nor the preset guarantees Android game compatibility.
+            - Added a device-readiness panel and report with SoC/ABI, CPU cores, available RAM, app PSS, free app storage, Android thermal severity and physical controller detection.
+            - The complete 50-point feature map is distributed in docs/FINALE_FEATURES.md.
             - Added local user-recorded compatibility notes per game; these are not universal compatibility ratings.
             - Added a safe frontend relaunch control that is enabled only when the emulator reports STOPPED.
             - Reused the native in-game FPS and frametime graphs; Android-side UI does not fabricate per-frame values. Added RAM history, thermal warnings and memory pressure readings.
