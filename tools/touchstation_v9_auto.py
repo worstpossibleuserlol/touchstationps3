@@ -19,6 +19,7 @@ import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.os.Build
+import android.app.ApplicationExitInfo
 import android.os.Debug
 import android.os.PowerManager
 import android.os.StatFs
@@ -73,6 +74,7 @@ private data class TouchStation9DeviceSnapshot(
     val gpuVendor: String,
     val glVersion: String,
     val vulkanFeature: String,
+    val previousExitSummary: String,
 )
 
 private data class TouchStation9Recommendation(
@@ -212,6 +214,28 @@ private fun readTouchStation9DeviceSnapshot(context: Context): TouchStation9Devi
         else -> "Not reported by Android"
     }
     val gl = readTouchStation9GlInfo()
+    val previousExit = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        runCatching {
+            activityManager?.getHistoricalProcessExitReasons(context.packageName, 0, 5)
+                ?.firstOrNull()?.let { exit ->
+                    val reason = when (exit.reason) {
+                        ApplicationExitInfo.REASON_CRASH -> "Java crash"
+                        ApplicationExitInfo.REASON_CRASH_NATIVE -> "Native crash"
+                        ApplicationExitInfo.REASON_ANR -> "Application not responding"
+                        ApplicationExitInfo.REASON_LOW_MEMORY -> "Low-memory termination"
+                        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "Excessive resource use"
+                        else -> "Android exit reason " + exit.reason
+                    }
+                    val description = exit.description?.takeIf { it.isNotBlank() }?.let { " · " + it }
+                        .orEmpty()
+                    reason + " · " +
+                        android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", exit.timestamp) +
+                        description
+                }
+        }.getOrNull() ?: "No recent process exit history reported"
+    } else {
+        "Requires Android 11+ exit history"
+    }
 
     return TouchStation9DeviceSnapshot(
         device = Build.MANUFACTURER + " " + Build.MODEL,
@@ -230,6 +254,7 @@ private fun readTouchStation9DeviceSnapshot(context: Context): TouchStation9Devi
         gpuVendor = gl.second,
         glVersion = gl.third,
         vulkanFeature = vulkan,
+        previousExitSummary = previousExit,
     )
 }
 
@@ -373,6 +398,7 @@ private fun touchStation9DiagnosticReport(
     appendLine("App PSS: " + (snapshot.appPssMb?.toString() ?: "N/A") + " MB")
     appendLine("Free storage: " + (snapshot.freeStorageMb?.toString() ?: "N/A") + " MB")
     appendLine("Thermal status: " + touchStation9ThermalLabel(snapshot.thermalStatus))
+    appendLine("Previous process exit: " + snapshot.previousExitSummary)
     appendLine("Game: " + gameTitle)
     appendLine("Game serial: " + gameSerial)
     appendLine("PPU threads: " + settings.ps3.ppuThreads)
@@ -461,6 +487,7 @@ fun TouchStation9AutoOptimizationSuite(
                     TouchStation9Row("Available RAM", detected.availableRamMb?.let { it.toString() + " MB" } ?: "N/A")
                     TouchStation9Row("Free app storage", detected.freeStorageMb?.let { it.toString() + " MB" } ?: "N/A")
                     TouchStation9Row("Thermal status", touchStation9ThermalLabel(detected.thermalStatus))
+                TouchStation9Row("Previous app exit", detected.previousExitSummary)
                 }
             }
 
@@ -599,6 +626,7 @@ fun TouchStation9AutoOptimizationSuite(
 
             TouchStation9Section("9. Crash Recovery / Safe Mode") {
                 TouchStation9Row("CPU compatibility warning", Rpcs3Bridge.unsupportedCpuMessage ?: "No unsupported-CPU warning")
+                TouchStation9Row("Previous app exit", detected?.previousExitSummary ?: "N/A")
                 OutlinedButton(
                     onClick = {
                         val cores = detected?.cpuCores ?: Runtime.getRuntime().availableProcessors()
@@ -642,7 +670,7 @@ fun TouchStation9AutoOptimizationSuite(
                     Text("Export Recovery Diagnostic")
                 }
                 Text(
-                    "Safe Mode restores conservative emulator settings and provides a diagnostic report. It does not claim to intercept native process crashes or recover deleted game data.",
+                    "Android historical exit information can identify a previous Java/native crash, ANR or low-memory termination where supported. Safe Mode provides conservative settings and diagnostics; it cannot prevent every native crash or recover deleted game data.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
