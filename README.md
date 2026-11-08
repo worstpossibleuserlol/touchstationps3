@@ -10,7 +10,7 @@
 - **Compatibility Checker 2.0:** shows native CPU compatibility warnings, ABI and GPU information alongside upstream game metadata. Device-specific compatibility remains unknown until a real device/driver/game test.
 - **Performance overlay integration:** reuses the v8 native in-game FPS, frame-time and guest PPU/SPU/RSX overlay. Physical GPU utilization remains N/A when the Android driver does not expose counters.
 - **Shader Cache Manager:** clears only known compiled Vulkan/OpenGL cache files; does not touch games, firmware, saves or settings.
-- **Crash recovery / Safe Mode:** applies conservative settings and exports diagnostics. It does not claim to intercept a native process crash or recover deleted user data.
+- **Crash recovery / Safe Mode:** reads Android's historical process-exit records (Android 11+) for previous Java/native crashes, ANRs and low-memory terminations; offers conservative settings and a diagnostic report. It cannot catch every native failure or recover deleted user data.
 - **Hardware check:** provides a short bounded CPU smoke test, not a GPU or PS3 game benchmark.
 
 
