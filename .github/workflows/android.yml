@@ -1,4 +1,4 @@
-name: TouchStation 6.0.0 Release
+name: TouchStation 7.0.0 Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-6-0-release
+  group: touchstation-7-0-release
   cancel-in-progress: true
 
 jobs:
@@ -94,13 +94,15 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
           python tools/prepare_source_build.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_control_center.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_v7_performance.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
@@ -153,13 +155,20 @@ jobs:
           grep -Fq 'TouchStation Advanced Settings (26)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           grep -Fq 'TouchStationPerformanceMonitor()' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           grep -Fq 'TouchStationControlCenter()' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          PPU_MONITOR="$APP/src/main/java/com/armsx2/ui/settings/TouchStationPpuMonitor.kt"
+          grep -Fq 'TouchStation PPU Monitor' "$PPU_MONITOR"
+          grep -Fq 'In-game performance overlay' "$PPU_MONITOR"
+          grep -Fq 'setOverlayPosition(0)' "$PPU_MONITOR"
+          grep -Fq 'setOsdMode(OsdMode.Full)' "$APP/src/main/java/com/armsx2/ui/InGameOverlay.kt"
+          grep -Fq 'touchstation.v7.performanceOverlay.migrated' "$APP/src/main/java/com/armsx2/ui/InGameOverlay.kt"
+          grep -Fq 'TouchStationPpuMonitor(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           CONTROL_CENTER="$APP/src/main/java/com/armsx2/ui/settings/TouchStationControlCenter.kt"
           grep -Fq 'TouchStation Control Center' "$CONTROL_CENTER"
           grep -Fq 'currentThermalStatus' "$CONTROL_CENTER"
           grep -Fq 'Export diagnostic report' "$CONTROL_CENTER"
           grep -Fq 'android.hardware.vulkan.level' "$CONTROL_CENTER"
           grep -Fq 'TouchStation Performance Monitor' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationPerformanceMonitor.kt"
-          grep -Fq 'Game FPS is unavailable because the pinned RPCS3 bridge currently returns no FPS reading.' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationPerformanceMonitor.kt"
+          grep -Fq 'The Android FPS tile has no direct bridge sample; use the native in-game overlay for live FPS and frame graphs.' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationPerformanceMonitor.kt"
           grep -Fq 'TouchStationControllerConnectionPanel()' "$APP/src/main/java/com/armsx2/ui/controls/ControllerManagerScreen.kt"
           grep -Fq 'TouchStationControllerWarning' "$APP/src/main/java/com/armsx2/ui/WindowImpl.kt"
           grep -Fq 'Controller disconnected' "$APP/src/main/java/com/armsx2/ui/controls/TouchStationControllerMonitor.kt"
@@ -167,7 +176,7 @@ jobs:
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
           grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
 
-      - name: Build TouchStation 6.0.0 Release
+      - name: Build TouchStation 7.0.0 Release
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
@@ -183,8 +192,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='6.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='600'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='7.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='700'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -240,27 +249,27 @@ jobs:
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-v6.0.0-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-v7.0.0-arm64.apk"
 
-      - name: Upload TouchStation 6.0.0 APK
+      - name: Upload TouchStation 7.0.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-v6.0.0-arm64
-          path: ${{ runner.temp }}/TouchStation-v6.0.0-arm64.apk
+          name: TouchStation-v7.0.0-arm64
+          path: ${{ runner.temp }}/TouchStation-v7.0.0-arm64.apk
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish TouchStation 6.0.0 Release
+      - name: Publish TouchStation 7.0.0 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v6.0.0
-          name: TouchStation 6.0.0 Release
+          tag_name: v7.0.0
+          name: TouchStation 7.0.0 Release
           make_latest: true
           prerelease: false
           overwrite_files: true
-          files: ${{ runner.temp }}/TouchStation-v6.0.0-arm64.apk
+          files: ${{ runner.temp }}/TouchStation-v7.0.0-arm64.apk
           body: |
-            TouchStation 6.0.0 Release for Android ARM64.
+            TouchStation 7.0.0 Release for Android ARM64.
 
             - TouchStation branding on the launcher, app header, default boot splash, screenshot album, backup filename and default controller-skin display name.
             - Added an explicit Exit Game action to both the classic pause menu and the XMB in-game menu.
