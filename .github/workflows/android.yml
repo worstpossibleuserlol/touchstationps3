@@ -179,8 +179,10 @@ jobs:
           fi
           grep -Fq 'title = "About TouchStation"' "$ABOUT"
           grep -Fq 'TouchStation project' "$ABOUT"
-          grep -Fq 'Upstream emulator base' "$ABOUT"
-          grep -Fq 'TouchStation is an independent downstream project.' "$ABOUT"
+          grep -Fq 'Third-party notices & licenses' "$ABOUT"
+          ! grep -Fq 'repository = "ARMSX2/ARMSX3"' "$ABOUT"
+          ! grep -Fq 'title = "Upstream emulator base"' "$ABOUT"
+          grep -Fq 'TouchStation is the product-facing app identity.' "$ABOUT"
           grep -Fq 'controllerId = "about.back"' "$ABOUT"
           grep -Fq '"about.project.$repository"' "$ABOUT"
           XMB="$APP/src/main/java/com/armsx2/ui/xmb/XmbHome.kt"
