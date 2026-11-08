@@ -98,7 +98,7 @@ private fun touchStation11Measure(directory: File): TouchStation11CacheEntry {
             if (file.isFile) {
                 files += 1
                 bytes += file.length().coerceAtLeast(0L)
-                if (!file.canRead()) unreadable += 1
+                if (!file.canRead() || file.length() <= 0L) unreadable += 1
             }
         }
     }
@@ -332,7 +332,7 @@ fun TouchStation11ReliabilitySuite(
                 TouchStation11Row("PPU compilation progress", "N/A — live job counters are not exported by the pinned native bridge")
                 TouchStation11Row("PPU cache validation", snapshot.value?.let {
                     it.ppu.files.toString() + " files · " + touchStation11Bytes(it.ppu.bytes) +
-                        " · unreadable " + it.ppu.unreadable
+                        " · unreadable/empty " + it.ppu.unreadable
                 } ?: "Scanning…")
                 TouchStation11Row("PPU threads", settings.ps3.ppuThreads.toString() + " configured · " + suggestedPpuThreads + " suggested")
                 TouchStation11Row("LLVM compile threads", settings.ps3.llvmThreads.toString())
