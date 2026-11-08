@@ -13,7 +13,7 @@ permissions:
 # Never cancel a native Android build just because another commit arrives.
 # Runs for this release lane queue and finish in order.
 concurrency:
-  group: touchstation-finale-release
+  group: touchstation-finale-release-mirrors
   cancel-in-progress: false
 
 jobs:
