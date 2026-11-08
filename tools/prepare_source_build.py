@@ -679,8 +679,8 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
 
     text = replace_once(
         text,
-        "import com.armsx2.ui.common.RoundAction\\n",
-        "import com.armsx2.ui.common.RoundAction\\nimport com.armsx2.ui.settings.controllerFocusable\\n",
+        'import com.armsx2.ui.common.RoundAction\n',
+        'import com.armsx2.ui.common.RoundAction\nimport com.armsx2.ui.settings.controllerFocusable\n',
         "About controller-focus import",
     )
     text = replace_once(
@@ -691,13 +691,13 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
     )
     text = replace_once(
         text,
-        "        modifier = modifier.fillMaxWidth(),\\n        shape = RoundedCornerShape(20.dp),",
-        "        modifier = modifier.fillMaxWidth().controllerFocusable(\\n"
-        "            \\"about.project.$repository\\",\\n"
-        "            RoundedCornerShape(20.dp),\\n"
-        "            onConfirm = onOpen,\\n"
-        "        ),\\n"
-        "        shape = RoundedCornerShape(20.dp),",
+        '        modifier = modifier.fillMaxWidth(),\n        shape = RoundedCornerShape(20.dp),',
+        '        modifier = modifier.fillMaxWidth().controllerFocusable(\n'
+        '            "about.project.$repository",\n'
+        '            RoundedCornerShape(20.dp),\n'
+        '            onConfirm = onOpen,\n'
+        '        ),\n'
+        '        shape = RoundedCornerShape(20.dp),',
         "About project-card controller focus",
     )
 
