@@ -287,6 +287,28 @@ private fun TouchStationFinaleRow(label: String, value: String) {
 }
 
 @Composable
+private fun TouchStationFinaleDashboardCard(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+        }
+    }
+}
+
+@Composable
 private fun TouchStationFinaleSection(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium)
@@ -389,6 +411,33 @@ fun TouchStationFinaleSuite(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            TouchStationFinaleSection("Finale dashboard") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TouchStationFinaleDashboardCard(
+                        "Compatibility",
+                        if (database.value == null) "PC database not downloaded" else "PC: " + officialStatus,
+                        Modifier.weight(1f),
+                    )
+                    TouchStationFinaleDashboardCard(
+                        "Device readiness",
+                        (deviceSnapshot?.soc ?: "SoC scanning") + " · " + touchStationFinaleMemory(deviceSnapshot?.availableRamMb) + " RAM",
+                        Modifier.weight(1f),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TouchStationFinaleDashboardCard(
+                        "GTA IV profile",
+                        if (isGtaIv && settingsArePerGame) "Ready to apply per-game settings" else "Select GTA IV and Game scope",
+                        Modifier.weight(1f),
+                    )
+                    TouchStationFinaleDashboardCard(
+                        "PS3 runtime",
+                        if (engineReady && nativeReady) "Engine and native runtime ready" else "Engine/runtime not ready",
+                        Modifier.weight(1f),
+                    )
+                }
+            }
 
             TouchStationFinaleSection("01 · Official game compatibility") {
                 TouchStationFinaleRow("Current game", gameTitle)
