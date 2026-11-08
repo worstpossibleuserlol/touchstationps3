@@ -1,4 +1,19 @@
-# TouchStation 8.0.0 Release
+# TouchStation 9.0.0 Release
+
+## 9.0.0 Auto Optimization Update
+
+- **Automatic device detection:** reports SoC, available CPU cores, supported ABIs, Android version, RAM, storage, display refresh rate, OpenGL ES renderer/vendor/version and Android-reported Vulkan feature information.
+- **Auto configuration engine:** offers Performance, Balanced and Quality starting profiles, with conservative PPU/LLVM thread recommendations, Safe SPU block size, MSAA Off and a detected GPU profile when the driver identifies one. Users can keep editing every setting manually.
+- **Adaptive output scaling:** recommends Screen, 720p or 540p output using Android thermal severity and available memory. This changes the Android presentation surface; it does not change the PS3 game's internal RSX resolution.
+- **Thermal and memory monitor:** refreshes thermal severity, available RAM, app PSS and free storage.
+- **Game-specific profiles:** applies the recommendation through the existing global/per-game settings store. Apply while a game's settings scope is active to save a per-game override.
+- **Compatibility Checker 2.0:** shows native CPU compatibility warnings, ABI and GPU information alongside upstream game metadata. Device-specific compatibility remains unknown until a real device/driver/game test.
+- **Performance overlay integration:** reuses the v8 native in-game FPS, frame-time and guest PPU/SPU/RSX overlay. Physical GPU utilization remains N/A when the Android driver does not expose counters.
+- **Shader Cache Manager:** clears only known compiled Vulkan/OpenGL cache files; does not touch games, firmware, saves or settings.
+- **Crash recovery / Safe Mode:** applies conservative settings and exports diagnostics. It does not claim to intercept a native process crash or recover deleted user data.
+- **Hardware check:** provides a short bounded CPU smoke test, not a GPU or PS3 game benchmark.
+
+
 
 TouchStation is an Android ARM64 distribution built from the ARMSX3 Android PS3 emulator application. Its native emulator core is provided by the pinned upstream ARMSX3 release, which is derived from RPCS3. TouchStation is a downstream project, not a PS3 emulator core written from scratch.
 
@@ -10,7 +25,7 @@ TouchStation is an Android ARM64 distribution built from the ARMSX3 Android PS3 
 - **Advanced overlay controls:** show/hide, position, opacity, text size, framerate graph and frametime graph controls.
 - **One-press pause-menu overlay toggle:** the in-game pause menu includes a Performance Overlay action. Select it to hide the overlay; select it again to show the full overlay. No Settings navigation is required.
 - **Per-game overlay mode:** overlay Full/Off preference is stored per game when a title is active. The global setting is the fallback. Position, opacity, size and graph preferences use the existing global/per-game settings store.
-- **TouchStation 8.0 Monitoring Suite:** combines PPU, SPU and RSX configuration diagnostics, connected physical controller count, current-game identity, settings scope, compatibility metadata availability, and support shortcuts.
+- **TouchStation 8.0 Monitoring Suite and 9.0 Auto Optimization Suite:** combines PPU, SPU and RSX configuration diagnostics, connected physical controller count, current-game identity, settings scope, compatibility metadata availability, and support shortcuts.
 - **Controller Center integration:** retains the upstream Controller Manager's button mapping, player assignment, hotkeys, vibration option and saved controller profiles. The monitoring suite also reports the connected physical controller count.
 - **Game compatibility and profiles:** retains upstream library compatibility metadata and per-game emulator settings. Device-specific compatibility ratings are not invented; they require an actual game/device test.
 - **Crash and diagnostics integration:** retains the TouchStation Control Center's exportable device diagnostic report and structured bug-report entry point.
@@ -69,7 +84,7 @@ The GitHub Actions workflow:
 3. Applies TouchStation branding, controller-only gameplay, advanced settings, monitoring, Control Center, PPU/SPU/RSX suite and pause-menu overlay controls.
 4. Builds the ARM64 release APK.
 5. Verifies app version, native libraries, launcher artwork, APK signature and alignment.
-6. Uploads the APK artifact and publishes the `v8.0.0` GitHub release when all checks pass.
+6. Uploads the APK artifact and publishes the `v9.0.0` GitHub release when all checks pass.
 
 The release workflow is the authoritative APK build path. The upstream source revision and native library release are intentionally pinned for reproducibility.
 
