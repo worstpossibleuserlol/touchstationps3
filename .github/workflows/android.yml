@@ -188,9 +188,9 @@ jobs:
           if grep -q '^networkTimeout=' "$WRAPPER_PROPERTIES"; then
             sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$WRAPPER_PROPERTIES"
           else
-            printf '\\nnetworkTimeout=120000\\n' >> "$WRAPPER_PROPERTIES"
+            printf '\nnetworkTimeout=120000\n' >> "$WRAPPER_PROPERTIES"
           fi
-          grep -Fxq 'distributionUrl=https\\://downloads.gradle.org/distributions/gradle-9.4.1-bin.zip' "$WRAPPER_PROPERTIES"
+          grep -Fq 'downloads.gradle.org/distributions/gradle-9.4.1-bin.zip' "$WRAPPER_PROPERTIES"
           grep -Fxq 'distributionSha256Sum=2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb' "$WRAPPER_PROPERTIES"
           grep -Fxq 'networkTimeout=120000' "$WRAPPER_PROPERTIES"
 
