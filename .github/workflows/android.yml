@@ -1,10 +1,10 @@
-name: TouchStation 10.0.0 Release
+name: TouchStation 11.0.0 Release
 
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feature/touchstation-10.0.0]
   workflow_dispatch:
 
 permissions:
@@ -12,7 +12,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-10-0-release
+  group: touchstation-11-0-release
   cancel-in-progress: true
 
 jobs:
@@ -97,7 +97,7 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/add_gpl_modification_notices.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/add_gpl_modification_notices.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
@@ -113,6 +113,8 @@ jobs:
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_v10_suite.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_v11_suite.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/add_gpl_modification_notices.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
@@ -123,23 +125,32 @@ jobs:
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
           tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
-            -czf "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz" \
+            -czf "$RUNNER_TEMP/TouchStation-v11.0.0-corresponding-source.tar.gz" \
             -C "$RUNNER_TEMP" armsx3-source
-          sha256sum "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz" \
-            > "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz.sha256"
-          test -s "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz"
-          tar -tzf "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz" \
+          sha256sum "$RUNNER_TEMP/TouchStation-v11.0.0-corresponding-source.tar.gz" \
+            > "$RUNNER_TEMP/TouchStation-v11.0.0-corresponding-source.tar.gz.sha256"
+          test -s "$RUNNER_TEMP/TouchStation-v11.0.0-corresponding-source.tar.gz"
+          tar -tzf "$RUNNER_TEMP/TouchStation-v11.0.0-corresponding-source.tar.gz" \
             > "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/TOUCHSTATION_MODIFICATIONS.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/tools/add_gpl_modification_notices.py" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/THIRD_PARTY_NOTICES.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/SOURCE_DISTRIBUTION.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStation11ReliabilitySuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
           DRAWER="$APP/src/main/java/com/armsx2/navigation/NavigationDrawer.kt"
           ABOUT="$APP/src/main/java/com/armsx2/ui/about/AboutScreen.kt"
           EMULATION_MENU="$APP/src/main/java/com/armsx2/ui/emulation/EmulationMenuScreen.kt"
           RUNTIME="$APP/src/main/java/com/armsx2/runtime/MainActivityRuntime.kt"
+          V11_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation11ReliabilitySuite.kt"
+          PERF_TAB="$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          test -s "$V11_SUITE"
+          grep -Fq 'TouchStation11ReliabilitySuite(' "$PERF_TAB"
+          grep -Fq 'PPU compilation progress' "$V11_SUITE"
+          grep -Fq 'Auto Settings 3.0' "$V11_SUITE"
+          grep -Fq 'Back Up Active Game Profile' "$V11_SUITE"
+          grep -Fq 'Restore Last Known Settings' "$V11_SUITE"
 
           # Verify TouchStation-owned drawer links and About branding in the generated source.
           grep -Fq 'internal const val GithubUrl = "https://github.com/worstpossibleuserlol/touchstationps3"' "$DRAWER"
@@ -240,7 +251,7 @@ jobs:
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
           grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
 
-      - name: Build TouchStation 10.0.0 Release
+      - name: Build TouchStation 11.0.0 Release
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
@@ -256,8 +267,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='10.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='1000'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='11.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='1100'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -313,49 +324,58 @@ jobs:
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-v10.0.0-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-v11.0.0-arm64.apk"
 
-      - name: Upload TouchStation 10.0.0 APK and corresponding source
+      - name: Upload TouchStation 11.0.0 APK and checksum (small download)
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-v10.0.0-arm64
+          name: TouchStation-v11.0.0-arm64
           path: |
-            ${{ runner.temp }}/TouchStation-v10.0.0-arm64.apk
-            ${{ runner.temp }}/TouchStation-v10.0.0-corresponding-source.tar.gz
-            ${{ runner.temp }}/TouchStation-v10.0.0-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-v11.0.0-arm64.apk
+            ${{ runner.temp }}/TouchStation-v11.0.0-corresponding-source.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish TouchStation 10.0.0 Release
+      - name: Upload corresponding source as a separate download
+        uses: actions/upload-artifact@v4
+        with:
+          name: TouchStation-v11.0.0-corresponding-source
+          path: |
+            ${{ runner.temp }}/TouchStation-v11.0.0-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-v11.0.0-corresponding-source.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish TouchStation 11.0.0 Release
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v10.0.0
-          name: TouchStation 10.0.0 Release
+          tag_name: v11.0.0
+          name: TouchStation 11.0.0 Release
           make_latest: true
           prerelease: false
           overwrite_files: true
           files: |
-            ${{ runner.temp }}/TouchStation-v10.0.0-arm64.apk
-            ${{ runner.temp }}/TouchStation-v10.0.0-corresponding-source.tar.gz
-            ${{ runner.temp }}/TouchStation-v10.0.0-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-v11.0.0-arm64.apk
+            ${{ runner.temp }}/TouchStation-v11.0.0-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-v11.0.0-corresponding-source.tar.gz.sha256
           body: |
-            TouchStation 10.0.0 Release for Android ARM64.
+            TouchStation 11.0.0 Release for Android ARM64.
 
-            - Added device detection for SoC, CPU cores, ABI, Android version, RAM, storage, display refresh rate, OpenGL ES renderer/vendor and Android-reported Vulkan feature level.
-            - Added one-tap Performance, Balanced and Quality automatic configurations. PPU and LLVM compile threads are selected conservatively; Safe SPU block size and MSAA Off are used as starting settings.
-            - Added an adaptive output-scaling guard based on Android thermal severity and available RAM. This changes the Android output surface, not the game's internal RSX resolution; the pinned native bridge does not expose a closed-loop frame-time callback.
-            - Added live thermal severity, available RAM, app PSS and free-storage diagnostics.
-            - Added per-game profile application through the upstream global/per-game settings system.
-            - Added a compatibility advisor for CPU requirement warnings, ABI, GPU/driver identification and existing upstream game metadata. Device-specific game compatibility remains Unknown until tested.
-            - Reused the existing native in-game FPS, frame-time and PPU/SPU/guest-RSX overlay. Physical GPU utilization and unsupported native counters remain N/A.
-            - Added a shader cache manager that removes only known compiled Vulkan/OpenGL cache files; it does not remove games, firmware, saves or configuration.
-            - Added a conservative Safe Recovery profile and shareable diagnostic report. It does not claim to intercept native process crashes.
-            - Added a bounded CPU smoke test; it is not presented as a GPU or PS3 game benchmark.
-            - Gameplay remains physical-controller-only. No on-screen gameplay controls are added; touch remains available for menus/settings.
+            - Added PPU cache validation and conservative PPU thread recommendations. Live PPU compilation job counters and structured native recompiler exceptions remain N/A when the pinned bridge does not export them.
+            - Added SPU configuration/workload diagnostics and read-only PPU, SPU and shader cache inventory.
+            - Added a game boot timeline, Android process-exit / launch evidence analyzer and exportable crash/launch report. Detailed native loader and FIFO traces remain unavailable unless exported by the core.
+            - Added local user-recorded compatibility notes per game; these are not universal compatibility ratings.
+            - Added a safe frontend relaunch control that is enabled only when the emulator reports STOPPED.
+            - Reused the native in-game FPS and frametime graphs; Android-side UI does not fabricate per-frame values. Added RAM history, thermal warnings and memory pressure readings.
+            - Added Android-reported Vulkan feature information while leaving physical-device extension queries and physical GPU utilization N/A when not exposed by the driver/bridge.
+            - Added Auto Settings 3.0 with save/read-back verification, per-game settings backup/restore, controller device detection, storage inventory and a last-known settings recovery point.
+            - Diagnostic and cache inspection is read-only for game saves and firmware. Gameplay remains physical-controller-only; no on-screen gameplay controls are added.
 
-            Corresponding source: download TouchStation-v10.0.0-corresponding-source.tar.gz and verify it with the accompanying .sha256 file. The archive contains the exact pinned upstream source tree, submodules, TouchStation modifications, patch scripts and build workflow for this APK.
+            Download size: the APK artifact is separate from the 525 MB corresponding-source archive. The APK artifact keeps the small 139-byte source SHA-256 file; the matching source archive and its checksum are available in a separate download.
 
-            Licensing: TouchStation's downstream work is distributed under GPL-2.0-only. Upstream notices and independent third-party licenses are retained. See THIRD_PARTY_NOTICES.md and SOURCE_DISTRIBUTION.md in the source archive.
+            Corresponding source: download TouchStation-v11.0.0-corresponding-source.tar.gz from the separate source artifact or release asset and verify it with the accompanying .sha256 file.
+
+            Licensing: TouchStation's downstream work is distributed under GPL-2.0-only. The matching corresponding source remains available separately from the APK artifact. Upstream notices and independent third-party licenses are retained. See THIRD_PARTY_NOTICES.md and SOURCE_DISTRIBUTION.md in the source archive.
 
             Users must supply official firmware and game files they are legally entitled to use. The native engine remains the pinned upstream ARMSX3 build; this release adds TouchStation Android-side tools and does not claim a from-scratch PS3 core.
