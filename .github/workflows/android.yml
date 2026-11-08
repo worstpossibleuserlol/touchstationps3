@@ -142,6 +142,10 @@ jobs:
           set -x
           python tools/prepare_source_build.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          SETTINGS="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/settings.gradle.kts"
+          grep -Fq 'name = "kotlinCompilerEmbeddableMirror"' "$SETTINGS"
+          grep -Fq 'includeModule("org.jetbrains.kotlin", "kotlin-compiler-embeddable")' "$SETTINGS"
+          grep -Fq 'maven.wso2.org/nexus/content/repositories/central/' "$SETTINGS"
           python tools/touchstation_control_center.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_v7_performance.py \
@@ -350,7 +354,34 @@ jobs:
             exit 1
           fi
 
-          ./gradlew --no-daemon --stacktrace :app:assembleGithubRelease
+          # Retry only transient network failures from remote dependency repositories.
+          # A real compiler/source error is reported immediately and is never hidden.
+          build_succeeded=0
+          for attempt in 1 2 3; do
+            log_file="$RUNNER_TEMP/touchstation-gradle-build-$attempt.log"
+            echo "Android build attempt $attempt/3"
+            set +e
+            ./gradlew --no-daemon --stacktrace --console=plain :app:assembleGithubRelease >"$log_file" 2>&1
+            build_status=$?
+            set -e
+            cat "$log_file"
+            if [ "$build_status" -eq 0 ]; then
+              build_succeeded=1
+              break
+            fi
+            if ! grep -Eqi 'Received status code 5[0-9][0-9]|Gateway Time[- ]out|Read timed out|Connection reset|Temporary failure in name resolution' "$log_file"; then
+              echo "Gradle failed for a non-transient reason; not retrying." >&2
+              exit "$build_status"
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Gradle dependency downloads still fail after 3 attempts." >&2
+              exit "$build_status"
+            fi
+            delay=$((attempt * 20))
+            echo "Transient repository/network error; retrying in ${delay}s."
+            sleep "$delay"
+          done
+          test "$build_succeeded" -eq 1
 
       - name: Verify package, branding, icon, and native engine
         shell: bash
