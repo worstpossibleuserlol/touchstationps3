@@ -700,7 +700,6 @@ def patch_library_compatibility(app_dir: Path) -> None:
     }
 """
     text = text[:anchor_index] + text[anchor_index:].replace(home_anchor, home_anchor + load_cache, 1)
-    revision_anchor = "    val nativeReady = MainActivityRuntime.nativeReady.value\n"
     revision = """    val compatibilityRevision = TouchStationFinaleCompatibilityStore.revision.intValue
     LaunchedEffect(compatibilityRevision, state.sort) {
         if (compatibilityRevision > 0 && state.sort == HomeSort.Compatibility) {
@@ -708,7 +707,12 @@ def patch_library_compatibility(app_dir: Path) -> None:
         }
     }
 """
-    text = replace_once(text, revision_anchor, revision_anchor + revision, "library compatibility sort observer")
+    text = replace_once(
+        text,
+        load_cache,
+        load_cache + revision,
+        "library compatibility sort observer",
+    )
     metadata_anchor = """        game.regionFlag?.let { Text(it, fontSize = 13.sp) }
         if (game.compatibility > 0) {"""
     metadata_replacement = """        game.regionFlag?.let { Text(it, fontSize = 13.sp) }
