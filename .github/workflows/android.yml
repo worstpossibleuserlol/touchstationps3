@@ -159,7 +159,7 @@ jobs:
           grep -Fq 'TouchStationControlCenter()' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           PPU_MONITOR="$APP/src/main/java/com/armsx2/ui/settings/TouchStationPpuMonitor.kt"
           grep -Fq 'TouchStation PPU Monitor' "$PPU_MONITOR"
-          grep -Fq 'In-game performance overlay' "$PPU_MONITOR"
+          grep -Fq 'Show in-game performance overlay' "$PPU_MONITOR"
           grep -Fq 'Overlay position' "$PPU_MONITOR"
           grep -Fq 'Framerate graph' "$PPU_MONITOR"
           grep -Fq 'Frametime graph' "$PPU_MONITOR"
