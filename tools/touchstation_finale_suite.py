@@ -650,7 +650,7 @@ def main() -> None:
         "Stable session (10+ min)",
         "GTA IV per-game profile",
         "SPU XFloat",
-        "Safe SPU block mode",
+        "safe SPU block mode",
         "Export Finale diagnostic report",
         "Physical controllers",
         "Engine initialized",
