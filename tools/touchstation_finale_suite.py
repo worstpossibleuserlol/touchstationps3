@@ -62,7 +62,7 @@ private const val TOUCHSTATION_FINALE_COMPAT_SYNC_KEY = "touchstation.finale.com
  * Shared exact-ID compatibility cache used by the settings centre and game-library tiles.
  * The displayed statuses are desktop RPCS3 references, not device-specific results.
  */
-private data class TouchStationFinaleCompatibilityEntry(
+internal data class TouchStationFinaleCompatibilityEntry(
     val status: String,
     val date: String,
     val update: String,
@@ -92,7 +92,7 @@ object TouchStationFinaleCompatibilityStore {
         revision.intValue++
     }
 
-    fun entryFor(serial: String?): TouchStationFinaleCompatibilityEntry? {
+    internal fun entryFor(serial: String?): TouchStationFinaleCompatibilityEntry? {
         revision.intValue
         if (serial.isNullOrBlank()) return null
         return entriesById.value[touchStationFinaleNormaliseId(serial)]
