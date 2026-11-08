@@ -1,10 +1,13 @@
-# TouchStation 6.0.0 Release
+# TouchStation 7.0.0 Release
 
 TouchStation is an Android ARM64 distribution built from the ARMSX3 Android PS3 emulator application. Its native emulator core is provided by the pinned upstream ARMSX3 release, which is derived from RPCS3. TouchStation is a downstream project, not a PS3 emulator core written from scratch.
 
-## 6.0.0 Release
+## 7.0.0 Release
 
 - **TouchStation Control Center:** a consolidated device diagnostics panel inside Performance settings.
+- **Native in-game performance OSD:** automatically enabled for existing installations on first 7.0.0 game launch, displayed in the top-left corner, and configurable from the new PPU Monitor panel.
+- **Live in-game metrics:** native FPS, host CPU utilization, guest PPU/SPU/RSX utilization, PPU/SPU thread counts, RSX load, framerate graph and frametime graph. The native OSD reads these values from the emulator core rather than the Android bridge's unimplemented FPS getter.
+- **Dedicated PPU Monitor:** shows the selected PPU decoder, configured PPU threads, LLVM compile-thread limit, LLVM precompilation state, native compile notifications, and controls the in-game overlay.
 - **Live performance monitoring:** rolling CPU, GPU and FPS graphs, plus app memory. CPU readings are device-wide; GPU readings depend on counters exposed by the Android driver; FPS is shown only when the native bridge returns a real reading.
 - **Thermal and battery information:** Android thermal-severity status, battery level and battery-sensor temperature. Battery temperature is not the SoC temperature. Android thermal status is a severity level, not a temperature measurement.
 - **Device and graphics information:** SoC/hardware identity, Android version, RAM, app PSS, free internal storage, and Vulkan feature information reported by Android.
@@ -13,7 +16,7 @@ TouchStation is an Android ARM64 distribution built from the ARMSX3 Android PS3 
 - **Controller-only gameplay:** virtual touchscreen gameplay controls remain disabled. Touch input is retained for menus and settings.
 - **Existing upstream management features are retained:** game-folder scanning, game search, cover art, recent games, favourites and categories, per-game settings, firmware installation/management, and the upstream game compatibility metadata.
 
-Unsupported device or core metrics remain **N/A**; TouchStation does not estimate or invent FPS, GPU utilization, PPU/SPU activity, or SoC temperature.
+Unsupported Android/driver metrics remain **N/A**; TouchStation does not invent host-GPU utilization, PPU activity, or SoC temperature. The Android FPS tile remains N/A because the pinned Java bridge has no direct getter, but the native in-game OSD obtains FPS from the emulator's own frame counter.
 
 ## Control Center location
 
@@ -25,7 +28,13 @@ The existing performance monitor reports:
 - FPS only when the pinned native bridge supplies a valid frame-rate reading.
 - TouchStation process memory and rolling 60-second graphs.
 
-Some Android devices restrict GPU utilization counters and thermal information. These fields correctly show N/A when unavailable.
+Some Android devices restrict GPU utilization counters and thermal information. These fields correctly show N/A when unavailable. The native in-game OSD separately reports the emulated PS3 RSX workload; RSX load is not the phone's Mali/Adreno utilization.
+
+## PPU Monitor and in-game performance overlay
+
+Open **Settings → Performance → TouchStation PPU Monitor**. The overlay switch enables the native RPCS3 high-detail OSD and places it at the top-left while a game is running. It displays FPS, host CPU utilization, guest PPU/SPU/RSX utilization, PPU/SPU thread counts, RSX load, and both framerate and frametime graphs. The first 7.0.0 game launch migrates existing installs to the new enabled default; the user's subsequent Full/Off choice is saved across launches.
+
+The PPU panel also shows the selected PPU decoder, configured PPU thread count, LLVM compile-thread limit and precompilation state. Active PPU/SPU thread counts and guest utilization come from the native in-game OSD. Separate PPU instruction and exception counters are not exposed by the pinned Android bridge and are labelled N/A rather than fabricated. Host GPU utilization remains dependent on readable Android driver counters in the separate Performance Monitor.
 
 ## Emulator engine and firmware
 
