@@ -673,19 +673,27 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
         "About TouchStation description",
     )
 
-    old_station_card = """                            title = str("about.repository.title"),
-                            repository = "ARMSX2/ARMSX3",
-                            description = str("about.repository.description"),
-                            glyph = "⌘","""
-    new_station_card = """                            title = "TouchStation project",
-                            repository = "worstpossibleuserlol/touchstationps3",
-                            description = "Source code, releases, build workflows and bug reports.",
-                            glyph = "TS","""
-    if text.count(old_station_card) != 2:
+    station_pattern = re.compile(
+        r'(?m)^([ \t]*)title = str\("about.repository.title"\),\n'
+        r'[ \t]*repository = "ARMSX2/ARMSX3",\n'
+        r'[ \t]*description = str\("about.repository.description"\),\n'
+        r'[ \t]*glyph = "⌘",'
+    )
+
+    def station_card(match: re.Match[str]) -> str:
+        indent = match.group(1)
+        return "\n".join((
+            indent + 'title = "TouchStation project",',
+            indent + 'repository = "worstpossibleuserlol/touchstationps3",',
+            indent + 'description = "Source code, releases, build workflows and bug reports.",',
+            indent + 'glyph = "TS",',
+        ))
+
+    text, station_count = station_pattern.subn(station_card, text)
+    if station_count != 2:
         raise SystemExit(
-            f"Expected two TouchStation repository cards in About screen; found {text.count(old_station_card)}"
+            f"Expected two TouchStation repository cards in About screen; found {station_count}"
         )
-    text = text.replace(old_station_card, new_station_card)
     if text.count("uriHandler.openUri(RepositoryUrl)") != 2:
         raise SystemExit("Expected two original About repository card actions")
     text = text.replace(
@@ -693,19 +701,27 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
         "uriHandler.openUri(TouchStationRepositoryUrl)",
     )
 
-    old_upstream_card = """                            title = str("about.rpcs3.title"),
-                            repository = "RPCS3/rpcs3",
-                            description = str("about.rpcs3.description"),
-                            glyph = "PS3","""
-    new_upstream_card = """                            title = "Upstream emulator base",
-                            repository = "ARMSX2/ARMSX3",
-                            description = "Android frontend and ARM64 engine distribution used by TouchStation.",
-                            glyph = "PS3","""
-    if text.count(old_upstream_card) != 2:
+    upstream_pattern = re.compile(
+        r'(?m)^([ \t]*)title = str\("about.rpcs3.title"\),\n'
+        r'[ \t]*repository = "RPCS3/rpcs3",\n'
+        r'[ \t]*description = str\("about.rpcs3.description"\),\n'
+        r'[ \t]*glyph = "PS3",'
+    )
+
+    def upstream_card(match: re.Match[str]) -> str:
+        indent = match.group(1)
+        return "\n".join((
+            indent + 'title = "Upstream emulator base",',
+            indent + 'repository = "ARMSX2/ARMSX3",',
+            indent + 'description = "Android frontend and ARM64 engine distribution used by TouchStation.",',
+            indent + 'glyph = "PS3",',
+        ))
+
+    text, upstream_count = upstream_pattern.subn(upstream_card, text)
+    if upstream_count != 2:
         raise SystemExit(
-            f"Expected two upstream About cards; found {text.count(old_upstream_card)}"
+            f"Expected two upstream About cards; found {upstream_count}"
         )
-    text = text.replace(old_upstream_card, new_upstream_card)
     if text.count("uriHandler.openUri(Rpcs3RepositoryUrl)") != 2:
         raise SystemExit("Expected two original upstream card actions")
     text = text.replace(
