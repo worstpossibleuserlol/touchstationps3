@@ -99,6 +99,32 @@ jobs:
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
+          DRAWER="$APP/src/main/java/com/armsx2/navigation/NavigationDrawer.kt"
+          ABOUT="$APP/src/main/java/com/armsx2/ui/about/AboutScreen.kt"
+          EMULATION_MENU="$APP/src/main/java/com/armsx2/ui/emulation/EmulationMenuScreen.kt"
+          RUNTIME="$APP/src/main/java/com/armsx2/runtime/MainActivityRuntime.kt"
+
+          # Verify TouchStation-owned drawer links and About branding in the generated source.
+          grep -Fq 'internal const val GithubUrl = "https://github.com/worstpossibleuserlol/touchstationps3"' "$DRAWER"
+          grep -Fq 'internal const val ReportBugUrl = "https://github.com/worstpossibleuserlol/touchstationps3/issues/new?template=bug_report.yml"' "$DRAWER"
+          grep -Fq 'displayTitle = "GitHub"' "$DRAWER"
+          grep -Fq 'displayTitle = "Report a Bug"' "$DRAWER"
+          grep -Fq 'displayTitle = "About TouchStation"' "$DRAWER"
+          if grep -Eq 'discord.gg/|armsx2.net/armsx3' "$DRAWER"; then
+            echo "Upstream Discord or website link remains in the TouchStation drawer."
+            exit 1
+          fi
+          grep -Fq 'title = "About TouchStation"' "$ABOUT"
+          grep -Fq 'TouchStation project' "$ABOUT"
+          grep -Fq 'Upstream emulator base' "$ABOUT"
+          grep -Fq 'TouchStation is an independent downstream project.' "$ABOUT"
+
+          # Regression checks for controller-only navigation paths; no gameplay button is rebound.
+          grep -Fq 'controllerFocusable(controllerId' "$DRAWER"
+          grep -Fq 'modifier = modifier.controllerFocusable("pause.compact.$title", onConfirm = onClick)' "$EMULATION_MENU"
+          grep -Fq 'CompactAction(str("action.allSettings"), "⚙", Modifier.fillMaxWidth(), viewModel::openFullSettings)' "$EMULATION_MENU"
+          grep -Fq 'KeyEvent.KEYCODE_BUTTON_Y -> { if (down) emu.open(com.armsx2.ui.emulation.EmulationMenuTab.Options); true }' "$RUNTIME"
+
           grep -Fq 'add(MenuAction("Exit Game"' "$APP/src/main/java/com/armsx2/ui/emulation/EmulationMenuScreen.kt"
           grep -Fq 'settings.action.resumeGame' "$APP/src/main/java/com/armsx2/ui/settingshub/SettingsScreen.kt"
           grep -Fq 'settings.action.restartGame' "$APP/src/main/java/com/armsx2/ui/settingshub/SettingsScreen.kt"
