@@ -1,4 +1,4 @@
-name: TouchStation 5.0.0 Final
+name: TouchStation 6.0.0 Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-wordmark-icon-v3
+  group: touchstation-6-0-release
   cancel-in-progress: true
 
 jobs:
@@ -94,11 +94,13 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
           python tools/prepare_source_build.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_control_center.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
@@ -150,6 +152,12 @@ jobs:
           grep -Fq 'Exit Game' "$APP/src/main/java/com/armsx2/ui/xmb/XmbInGame.kt"
           grep -Fq 'TouchStation Advanced Settings (26)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           grep -Fq 'TouchStationPerformanceMonitor()' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          grep -Fq 'TouchStationControlCenter()' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          CONTROL_CENTER="$APP/src/main/java/com/armsx2/ui/settings/TouchStationControlCenter.kt"
+          grep -Fq 'TouchStation Control Center' "$CONTROL_CENTER"
+          grep -Fq 'currentThermalStatus' "$CONTROL_CENTER"
+          grep -Fq 'Export diagnostic report' "$CONTROL_CENTER"
+          grep -Fq 'android.hardware.vulkan.level' "$CONTROL_CENTER"
           grep -Fq 'TouchStation Performance Monitor' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationPerformanceMonitor.kt"
           grep -Fq 'Game FPS is unavailable because the pinned RPCS3 bridge currently returns no FPS reading.' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationPerformanceMonitor.kt"
           grep -Fq 'TouchStationControllerConnectionPanel()' "$APP/src/main/java/com/armsx2/ui/controls/ControllerManagerScreen.kt"
@@ -159,7 +167,7 @@ jobs:
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
           grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
 
-      - name: Build TouchStation 5.0.0
+      - name: Build TouchStation 6.0.0 Release
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
@@ -175,8 +183,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='5.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='502'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='6.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='600'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -232,27 +240,27 @@ jobs:
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-v5.0.0-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-v6.0.0-arm64.apk"
 
-      - name: Upload TouchStation 5.0.0 APK
+      - name: Upload TouchStation 6.0.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-v5.0.0-arm64
+          name: TouchStation-v6.0.0-arm64
           path: ${{ runner.temp }}/TouchStation-v5.0.0-arm64.apk
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish TouchStation 5.0.0 Final
+      - name: Publish TouchStation 6.0.0 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v5.0.0
-          name: TouchStation 5.0.0 Final
+          tag_name: v6.0.0
+          name: TouchStation 6.0.0 Release
           make_latest: true
           prerelease: false
           overwrite_files: true
           files: ${{ runner.temp }}/TouchStation-v5.0.0-arm64.apk
           body: |
-            TouchStation 5.0.0 Final for Android ARM64.
+            TouchStation 6.0.0 Release for Android ARM64.
 
             - TouchStation branding on the launcher, app header, default boot splash, screenshot album, backup filename and default controller-skin display name.
             - Added an explicit Exit Game action to both the classic pause menu and the XMB in-game menu.
@@ -260,9 +268,12 @@ jobs:
             - Added a live Performance settings monitor with device CPU load, driver-reported GPU utilization, app RAM and rolling graphs.
             - Added physical-controller hot-plug detection, a controller status panel, and an in-game disconnect warning.
             - Added the controller-only gameplay and touchscreen menu/settings notice to About TouchStation.
-            - The FPS graph reports only real core readings; the current pinned upstream bridge does not expose game FPS yet.
-            - Retained shader compiler controls and shader/SPU compile notifications.
-            - Retained automatic and manual chipset profiles for Dimensity, Snapdragon and Exynos.
-            - Removed the in-game virtual touchscreen overlay; physical controller input remains supported.
+            - Added the TouchStation Control Center to Performance settings: Android thermal severity, battery level and battery-sensor temperature, SoC/hardware identity, RAM, app PSS, free internal storage, Vulkan feature reporting, native-core state and current-game details.
+            - Added one-tap diagnostic report sharing with device, system, controller, thermal and memory information, plus a direct structured bug-report action.
+            - Kept live CPU/GPU/FPS tiles and rolling graphs. Driver/core values remain N/A when the device or pinned bridge does not expose a real counter; PPU/SPU activity is not fabricated.
+            - Retained the upstream game library and management flows, including scanning, search, covers, favourites/categories, recent games and per-game settings.
+            - Retained upstream PS3 firmware installation/management and game compatibility metadata.
+            - Retained shader compiler controls, shader/SPU compile notifications, chipset profiles and controller hot-plug warnings.
+            - Gameplay remains physical-controller-only. No on-screen gameplay controls are added; touch remains available for menus/settings.
             
-            The app version remains 5.0.0. Users must supply firmware and game files they are legally entitled to use.
+            Users must supply official firmware and game files they are legally entitled to use. The native engine remains the pinned upstream ARMSX3 build; this release adds TouchStation Android-side tools and does not claim a from-scratch PS3 core.
