@@ -419,19 +419,17 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
     } finally {
         if (batchStarted) runCatching { ARMSX3.instance.settingsEndBatch() }
     }
-    if (accuracyApplied) {
-        runCatching {
-            CoreSettingOverrides.record(
-                SettingsScope.Game, serial, TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue,
-            )
-        }
+    // Match the upstream Core Settings screen: record the scoped override even when
+    // the native setting is non-dynamic and declines an immediate in-game write.
+    runCatching {
+        CoreSettingOverrides.record(
+            SettingsScope.Game, serial, TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue,
+        )
     }
-    if (delayApplied) {
-        runCatching {
-            CoreSettingOverrides.record(
-                SettingsScope.Game, serial, TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH, delayValue,
-            )
-        }
+    runCatching {
+        CoreSettingOverrides.record(
+            SettingsScope.Game, serial, TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH, delayValue,
+        )
     }
     val accuracyReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH)
     val delayReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH)
@@ -439,10 +437,13 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
         .getOrDefault(emptyMap())
     val accuracyPersisted = storedOverrides[TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH] == accuracyValue
     val delayPersisted = storedOverrides[TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH] == delayValue
-    val verified = accuracyApplied && delayApplied && accuracyPersisted && delayPersisted &&
-        accuracyReadback == "Ordered & Atomic" && delayReadback == delayValue
+    val accuracyAvailable = accuracyReadback != "N/A"
+    val delayAvailable = delayReadback != "N/A"
+    val persisted = accuracyPersisted && delayPersisted && accuracyAvailable && delayAvailable
+    val activeNow = accuracyReadback == "Ordered & Atomic" && delayReadback == delayValue
     val detail = "RSX FIFO Fetch Accuracy: $accuracyReadback; Driver Wake-Up Delay: $delayReadback µs; " +
-        "per-game overrides persisted: " + (accuracyPersisted && delayPersisted) + "."
+        "per-game overrides persisted: " + (accuracyPersisted && delayPersisted) + "; " +
+        (if (activeNow) "both values are active now." else "saved for the next game launch; restart the game to apply non-dynamic settings.")
     return verified to detail
 }
 
@@ -958,7 +959,7 @@ fun TouchStationFinaleSuite(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "The profile selects safe SPU block mode, accurate SPU XFloat, asynchronous shaders, MSAA off, SPU cache, LLVM precompile and restrained PPU/LLVM threads. It also applies RSX FIFO Fetch Accuracy = Ordered & Atomic and Driver Wake-Up Delay = 20 µs to this game only. Ordered & Atomic can reduce performance; this is a targeted stability test, not a GTA IV guarantee.",
+                    "The profile selects safe SPU block mode, accurate SPU XFloat, asynchronous shaders, MSAA off, SPU cache, LLVM precompile and restrained PPU/LLVM threads. It saves RSX FIFO Fetch Accuracy = Ordered & Atomic and Driver Wake-Up Delay = 20 µs to this game only. Non-dynamic values may require a game restart. Ordered & Atomic can reduce performance; this is a targeted stability test, not a GTA IV guarantee.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -986,7 +987,7 @@ fun TouchStationFinaleSuite(
                         }
                         message.value = when {
                             !saved -> "Settings could not be verified. No successful profile application is claimed."
-                            fifoResult.first -> "GTA IV profile and FIFO recovery settings were saved and read back. " + fifoResult.second
+                            fifoResult.first -> "GTA IV profile and FIFO recovery settings were saved. " + fifoResult.second
                             else -> "The standard GTA IV profile was saved, but FIFO settings were not fully verified: " + fifoResult.second
                         }
                     },
