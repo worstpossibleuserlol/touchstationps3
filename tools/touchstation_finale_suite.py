@@ -62,32 +62,43 @@ private const val TOUCHSTATION_FINALE_COMPAT_SYNC_KEY = "touchstation.finale.com
  * Shared exact-ID compatibility cache used by the settings centre and game-library tiles.
  * The displayed statuses are desktop RPCS3 references, not device-specific results.
  */
+private data class TouchStationFinaleCompatibilityEntry(
+    val status: String,
+    val date: String,
+    val update: String,
+)
+
 object TouchStationFinaleCompatibilityStore {
     val revision = mutableIntStateOf(0)
-    private val statusById = mutableStateOf<Map<String, String>>(emptyMap())
+    private val entriesById = mutableStateOf<Map<String, TouchStationFinaleCompatibilityEntry>>(emptyMap())
 
     fun replace(database: JSONObject?) {
-        val next = LinkedHashMap<String, String>()
+        val next = LinkedHashMap<String, TouchStationFinaleCompatibilityEntry>()
         val results = database?.optJSONObject("results")
         if (results != null) {
             val keys = results.keys()
             while (keys.hasNext()) {
                 val id = keys.next()
-                val status = results.optJSONObject(id)?.optString("status")?.takeIf { it.isNotBlank() }
-                if (status != null) {
-                    next[touchStationFinaleNormaliseId(id)] = status
-                }
+                val item = results.optJSONObject(id) ?: continue
+                val status = item.optString("status").takeIf { it.isNotBlank() } ?: continue
+                next[touchStationFinaleNormaliseId(id)] = TouchStationFinaleCompatibilityEntry(
+                    status = status,
+                    date = item.optString("date").takeIf { it.isNotBlank() } ?: "N/A",
+                    update = item.optString("update").takeIf { it.isNotBlank() } ?: "N/A",
+                )
             }
         }
-        statusById.value = next
+        entriesById.value = next
         revision.intValue++
     }
 
-    fun statusFor(serial: String?): String? {
+    fun entryFor(serial: String?): TouchStationFinaleCompatibilityEntry? {
         revision.intValue
         if (serial.isNullOrBlank()) return null
-        return statusById.value[touchStationFinaleNormaliseId(serial)]
+        return entriesById.value[touchStationFinaleNormaliseId(serial)]
     }
+
+    fun statusFor(serial: String?): String? = entryFor(serial)?.status
 
     fun rankFor(serial: String?): Int? = when (statusFor(serial)?.lowercase(Locale.ROOT)) {
         "playable" -> 5
@@ -118,34 +129,6 @@ private data class TouchStationFinaleDevice(
 
 private fun touchStationFinaleNormaliseId(value: String): String =
     value.filter { it.isLetterOrDigit() }.uppercase(Locale.ROOT)
-
-private fun touchStationFinaleOfficialEntry(
-    database: JSONObject?,
-    serial: String?,
-): JSONObject? {
-    if (database == null || serial.isNullOrBlank()) return null
-    val results = database.optJSONObject("results") ?: return null
-    val wanted = touchStationFinaleNormaliseId(serial)
-    if (wanted.isBlank()) return null
-    val keys = results.keys()
-    while (keys.hasNext()) {
-        val key = keys.next()
-        if (touchStationFinaleNormaliseId(key) == wanted) {
-            return results.optJSONObject(key)
-        }
-    }
-    return null
-}
-
-private fun touchStationFinaleReadCache(context: Context): JSONObject? =
-    runCatching {
-        val file = File(context.filesDir, TOUCHSTATION_FINALE_COMPAT_FILE)
-        if (!file.isFile || file.length() <= 0L || file.length() > 32L * 1024L * 1024L) {
-            null
-        } else {
-            JSONObject(file.readText(Charsets.UTF_8)).takeIf { it.optInt("return_code", -1) == 0 }
-        }
-    }.getOrNull()
 
 private suspend fun touchStationFinaleFetchCompatibility(context: Context): Pair<JSONObject?, String> =
     withContext(Dispatchers.IO) {
@@ -335,10 +318,10 @@ fun TouchStationFinaleSuite(
         ?: game?.settingsKey?.takeIf { it.isNotBlank() }
     val settingsArePerGame = InGameOverlay.settingsScope.value == SettingsScope.Game
     val isGtaIv = touchStationFinaleGtaIv(gameTitle)
-    val officialEntry = touchStationFinaleOfficialEntry(database.value, serial)
-    val officialStatus = officialEntry?.optString("status")?.takeIf { it.isNotBlank() } ?: "Not found in cached official database"
-    val officialDate = officialEntry?.optString("date")?.takeIf { it.isNotBlank() } ?: "N/A"
-    val officialUpdate = officialEntry?.optString("update")?.takeIf { it.isNotBlank() } ?: "N/A"
+    val officialEntry = TouchStationFinaleCompatibilityStore.entryFor(serial)
+    val officialStatus = officialEntry?.status ?: "Not found in cached official database"
+    val officialDate = officialEntry?.date ?: "N/A"
+    val officialUpdate = officialEntry?.update ?: "N/A"
     val prefs = MainActivityRuntime.prefs
     val deviceSnapshot = device.value
     val syncTime = prefs.getLong(TOUCHSTATION_FINALE_COMPAT_SYNC_KEY, 0L)
@@ -522,11 +505,11 @@ fun TouchStationFinaleSuite(
                     )
                 } else {
                     matches.forEach { item ->
-                        val entry = touchStationFinaleOfficialEntry(database.value, item.serial)
+                        val entry = TouchStationFinaleCompatibilityStore.entryFor(item.serial)
                         TouchStationFinaleRow(
                             item.title,
                             (item.serial ?: "No title ID") + " · " +
-                                (entry?.optString("status")?.takeIf { it.isNotBlank() } ?: "No official entry"),
+                                (entry?.status ?: "No official entry"),
                         )
                     }
                 }
