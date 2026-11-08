@@ -1084,7 +1084,7 @@ internal const val ReportBugUrl = "https://github.com/worstpossibleuserlol/touch
 
 
 def patch_touchstation_about(app_dir: Path) -> None:
-    """Brand About with TouchStation details and correctly attribute the upstream engine."""
+    """Brand About as TouchStation and route third-party acknowledgements to legal notices."""
     path = app_dir / "src/main/java/com/armsx2/ui/about/AboutScreen.kt"
     text = path.read_text(encoding="utf-8")
 
@@ -1111,7 +1111,7 @@ private const val ThirdPartyNoticesUrl = "https://github.com/worstpossibleuserlo
     text = replace_once(
         text,
         'str("about.tagline"),',
-        '"A downstream Android ARM64 distribution of ARMSX3, using its RPCS3-derived PS3 emulation engine.",',
+        '"PS3 emulation, game library and controller tools for Android ARM64.",',
         "About TouchStation description",
     )
 
