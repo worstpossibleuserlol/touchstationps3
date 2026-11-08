@@ -408,7 +408,7 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
     val delayValue = "20"
     var accuracyApplied = false
     var delayApplied = false
-    runCatching { ARMSX3.instance.settingsBeginBatch() }
+    val batchStarted = runCatching { ARMSX3.instance.settingsBeginBatch() }.isSuccess
     try {
         accuracyApplied = runCatching {
             ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue)
@@ -417,7 +417,7 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
             ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH, delayValue)
         }.getOrDefault(false)
     } finally {
-        runCatching { ARMSX3.instance.settingsEndBatch() }
+        if (batchStarted) runCatching { ARMSX3.instance.settingsEndBatch() }
     }
     if (accuracyApplied) {
         runCatching {
@@ -435,9 +435,14 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
     }
     val accuracyReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH)
     val delayReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH)
-    val verified = accuracyApplied && delayApplied &&
+    val storedOverrides = runCatching { CoreSettingOverrides.load(SettingsScope.Game, serial) }
+        .getOrDefault(emptyMap())
+    val accuracyPersisted = storedOverrides[TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH] == accuracyValue
+    val delayPersisted = storedOverrides[TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH] == delayValue
+    val verified = accuracyApplied && delayApplied && accuracyPersisted && delayPersisted &&
         accuracyReadback == "Ordered & Atomic" && delayReadback == delayValue
-    val detail = "RSX FIFO Fetch Accuracy: $accuracyReadback; Driver Wake-Up Delay: $delayReadback µs."
+    val detail = "RSX FIFO Fetch Accuracy: $accuracyReadback; Driver Wake-Up Delay: $delayReadback µs; " +
+        "per-game overrides persisted: " + (accuracyPersisted && delayPersisted) + "."
     return verified to detail
 }
 
