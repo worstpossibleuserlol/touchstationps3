@@ -69,7 +69,7 @@ dependencyResolutionManagement {
             FINALE.patch_version(app)
             result = gradle.read_text(encoding="utf-8")
             self.assertIn("versionCode = 1200", result)
-            self.assertIn('versionName = "Finale"', result)
+            self.assertIn('versionName = "TouchStation Finale"', result)
             self.assertNotIn("versionCode = 1100", result)
 
     def test_version_promotion_rejects_unexpected_input(self) -> None:
@@ -185,6 +185,13 @@ class HomeViewModel {
             "shaderMode = 1",
             "msaaMode = 0",
             "Export Finale diagnostic report",
+            "Download TouchStation.log",
+            "Share TouchStation.log",
+            "TouchStationFinaleErrorHistory",
+            "Recorded FIFO errors",
+            "MediaStore.Downloads.EXTERNAL_CONTENT_URI",
+            "logcat",
+            "GPU fences",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
@@ -199,6 +206,61 @@ class HomeViewModel {
         self.assertIn('payload.optInt("return_code", -1) != 0', source)
         self.assertIn('payload.optJSONObject("results") == null', source)
         self.assertIn("cacheFile.readText(Charsets.UTF_8)", source)
+
+    def test_error_banner_records_events_and_supports_upward_swipe(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary)
+            banner = app / "src/main/java/com/armsx2/ui/emulation/GameErrorBanner.kt"
+            banner.parent.mkdir(parents=True)
+            banner.write_text(
+                """package com.armsx2.ui.emulation
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateOf
+import com.armsx2.i18n.str
+object GameErrorNotice {
+    val reason = mutableStateOf<String?>(null)
+    fun show(error: String) {
+        val line = error.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: return
+        reason.value = line
+    }
+    fun clear() {
+        reason.value = null
+    }
+}
+@Composable
+fun GameErrorBanner() {
+    val reason by GameErrorNotice.reason
+    AnimatedVisibility(visible = reason != null) {
+        val shown = remember(reason) { reason }.orEmpty()
+        Surface(
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                .clickable { GameErrorNotice.clear() },
+        ) {
+            Column {
+                Text(shown, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+""",
+                encoding="utf-8",
+            )
+            FINALE.patch_game_error_banner(app)
+            result = banner.read_text(encoding="utf-8")
+            self.assertIn("TouchStationFinaleErrorHistory.record(line)", result)
+            self.assertIn("detectVerticalDragGestures", result)
+            self.assertIn("verticalDrag.value <= -72f", result)
+            self.assertIn("Critical error recorded", result)
+            with self.assertRaises(SystemExit):
+                FINALE.patch_game_error_banner(app)
+
+    def test_native_fifo_limits_are_explicit_not_faked(self) -> None:
+        source = FINALE.KOTLIN_SOURCE
+        self.assertIn("does not expose live FIFO queue depth", source)
+        self.assertIn("cannot safely reset or repair a stalled native queue", source)
+        self.assertIn("TouchStation.log", source)
+        self.assertIn("MediaStore.Downloads.EXTERNAL_CONTENT_URI", source)
 
     def test_native_metrics_are_not_fabricated(self) -> None:
         source = FINALE.KOTLIN_SOURCE
