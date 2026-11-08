@@ -956,6 +956,267 @@ fun TouchStationFinaleSuite(
 }
 '''
 
+RELIABILITY_KOTLIN_SOURCE = r'''
+package com.armsx2.reliability
+
+import android.app.Activity
+import android.app.ActivityManager
+import android.app.Application
+import android.content.Context
+import android.net.Uri
+import android.os.Build
+import android.os.Debug
+import android.os.PowerManager
+import android.os.StatFs
+import android.provider.OpenableColumns
+import android.view.InputDevice
+import com.armsx2.config.Settings
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.security.MessageDigest
+import java.util.Collections
+import java.util.WeakHashMap
+import java.util.concurrent.atomic.AtomicInteger
+
+/** Bounded Android reliability services. Native PPU/SPU/RSX internals are not fabricated here. */
+object TouchStationFinaleReliability {
+    private const val PREFS = "touchstation-finale-reliability"
+    private const val SAFE_MODE_KEY = "safeMode"
+    private const val MEMORY_KEY = "pssSamples"
+    private const val MAX_LOG_BYTES = 512L * 1024L
+    private val lock = Any()
+    private val started = Collections.newSetFromMap(WeakHashMap<Activity, Boolean>())
+    private val foreground = AtomicInteger(0)
+    @Volatile private var installed = false
+
+    fun install(application: Application) {
+        synchronized(lock) {
+            if (installed) return
+            installed = true
+        }
+        val directory = diagnosticsDir(application)
+        val marker = File(directory, "uncaught.marker")
+        if (marker.isFile) {
+            recordEvent(application, "crash-recovery", "A previous Java/Kotlin uncaught exception was recorded.")
+            marker.delete()
+        }
+        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(a: Activity, state: android.os.Bundle?) = Unit
+            override fun onActivityStarted(a: Activity) {
+                synchronized(lock) { if (started.add(a)) foreground.incrementAndGet() }
+                recordEvent(application, "lifecycle", "Started " + a.javaClass.simpleName)
+            }
+            override fun onActivityResumed(a: Activity) {
+                recordEvent(application, "lifecycle", "Resumed " + a.javaClass.simpleName)
+            }
+            override fun onActivityPaused(a: Activity) = Unit
+            override fun onActivityStopped(a: Activity) {
+                synchronized(lock) { if (started.remove(a)) foreground.updateAndGet { (it - 1).coerceAtLeast(0) } }
+            }
+            override fun onActivitySaveInstanceState(a: Activity, state: android.os.Bundle) = Unit
+            override fun onActivityDestroyed(a: Activity) {
+                synchronized(lock) { if (started.remove(a)) foreground.updateAndGet { (it - 1).coerceAtLeast(0) } }
+            }
+        })
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                directory.mkdirs()
+                File(directory, "uncaught.marker").writeText(System.currentTimeMillis().toString())
+                File(directory, "crash-" + System.currentTimeMillis() + ".txt").writeText(
+                    "TouchStation Finale crash\nThread: " + thread.name +
+                        "\nDevice: " + Build.MANUFACTURER + " " + Build.MODEL +
+                        "\nAndroid: " + Build.VERSION.RELEASE +
+                        "\n\n" + android.util.Log.getStackTraceString(error),
+                )
+                pruneCrashes(directory)
+                recordEvent(application, "uncaught-exception", error.javaClass.name + ": " + (error.message ?: ""))
+            }
+            previous?.uncaughtException(thread, error)
+        }
+        recordEvent(application, "startup", "Reliability services initialized.")
+    }
+
+    private fun diagnosticsDir(context: Context) = File(context.filesDir, "touchstation-finale-diagnostics")
+
+    fun recordEvent(context: Context, component: String, message: String) {
+        val line = System.currentTimeMillis().toString() + " [" +
+            component.replace('\n', ' ').replace('\r', ' ').take(80) + "] " +
+            message.replace('\n', ' ').replace('\r', ' ').take(1_800)
+        runCatching {
+            val dir = diagnosticsDir(context)
+            if (!dir.exists() && !dir.mkdirs()) return
+            val log = File(dir, "events.log")
+            synchronized(lock) {
+                if (log.length() > MAX_LOG_BYTES) {
+                    val old = File(dir, "events.previous.log")
+                    old.delete()
+                    log.renameTo(old)
+                }
+                FileOutputStream(log, true).bufferedWriter(Charsets.UTF_8).use { it.appendLine(line) }
+            }
+        }
+        android.util.Log.i("TouchStationFinale", line)
+    }
+
+    fun <T> guarded(context: Context, component: String, fallback: T, action: () -> T): T =
+        try { action() } catch (error: Exception) {
+            recordEvent(context, component, error.javaClass.simpleName + ": " + (error.message ?: "failed"))
+            fallback
+        }
+
+    fun isSafeMode(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(SAFE_MODE_KEY, false)
+
+    fun setSafeMode(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(SAFE_MODE_KEY, enabled).apply()
+        recordEvent(context, "safe-mode", if (enabled) "Enabled" else "Disabled")
+    }
+
+    fun lifecycleStatus() = "Foreground activities: " + foreground.get().coerceAtLeast(0)
+
+    fun snapshot(context: Context): String {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val memory = ActivityManager.MemoryInfo()
+        manager?.getMemoryInfo(memory)
+        val pss = runCatching { Debug.getPss() / 1024L }.getOrNull()
+        val free = runCatching { StatFs(context.filesDir.absolutePath).availableBytes / (1024L * 1024L) }.getOrNull()
+        val thermal = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.currentThermalStatus?.toString() ?: "N/A"
+            } else "Unsupported"
+        }.getOrDefault("N/A")
+        val pads = InputDevice.getDeviceIds().mapNotNull { id ->
+            runCatching {
+                val device = InputDevice.getDevice(id) ?: return@runCatching null
+                if (device.isVirtual) null else device.name + " (" + id + ")"
+            }.getOrNull()
+        }
+        recordPss(context, pss)
+        return "Lifecycle: " + lifecycleStatus() +
+            "\nAvailable RAM: " + memory.availMem / (1024L * 1024L) + " MB" +
+            "\nLow memory: " + memory.lowMemory +
+            "\nApp PSS: " + (pss?.toString() ?: "N/A") + " MB" +
+            "\nFree app storage: " + (free?.toString() ?: "N/A") + " MB" +
+            "\nThermal status: " + thermal +
+            "\nPhysical controllers: " + pads.joinToString().ifBlank { "None detected" } +
+            "\nMemory trend: " + memoryTrend(context) +
+            "\nNative PPU/SPU counters, RSX FIFO depth, GPU fences and GPU utilization: unavailable from current bridge."
+    }
+
+    private fun recordPss(context: Context, current: Long?) {
+        if (current == null || current < 0) return
+        runCatching {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val previous = prefs.getString(MEMORY_KEY, "").orEmpty()
+            val samples = previous.split(',').mapNotNull { it.toLongOrNull() }.takeLast(7) + current
+            prefs.edit().putString(MEMORY_KEY, samples.joinToString(",")).apply()
+        }
+    }
+
+    fun memoryTrend(context: Context): String {
+        val samples = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(MEMORY_KEY, "").orEmpty().split(',').mapNotNull { it.toLongOrNull() }
+        if (samples.size < 2) return "Collecting samples"
+        val delta = samples.last() - samples.first()
+        return (if (delta >= 0) "PSS rose by " else "PSS fell by ") +
+            kotlin.math.abs(delta) + " MB across samples (trend only; not proof of a leak)"
+    }
+
+    fun latestCrashSummary(context: Context): String {
+        val file = latestCrash(context) ?: return "No Java/Kotlin crash report recorded."
+        return file.name + " · " + file.length() + " bytes"
+    }
+
+    fun latestCrashReport(context: Context): String {
+        val file = latestCrash(context) ?: return "No Java/Kotlin crash report recorded."
+        return runCatching { file.readText(Charsets.UTF_8).takeLast(120_000) }
+            .getOrElse { "Crash report read failed: " + (it.message ?: "unknown") }
+    }
+
+    private fun latestCrash(context: Context): File? =
+        diagnosticsDir(context).listFiles()
+            ?.filter { it.isFile && it.name.startsWith("crash-") && it.extension == "txt" }
+            ?.maxByOrNull { it.lastModified() }
+
+    private fun pruneCrashes(directory: File) {
+        directory.listFiles()?.filter { it.isFile && it.name.startsWith("crash-") && it.extension == "txt" }
+            ?.sortedByDescending { it.lastModified() }?.drop(5)?.forEach { it.delete() }
+    }
+
+    fun inspectDirectory(directory: File): String {
+        if (!directory.exists()) return "Directory does not exist"
+        if (!directory.isDirectory || !directory.canRead()) return "Directory is not readable"
+        val all = directory.listFiles() ?: return "Directory listing unavailable"
+        val checked = all.take(2_000)
+        val empty = checked.count { it.isFile && it.length() == 0L }
+        val unreadable = checked.count { it.isFile && !it.canRead() }
+        return checked.size.toString() + " entries; " + empty + " empty; " + unreadable +
+            " unreadable; scan cap 2,000. No files changed."
+    }
+
+    fun inspectGameUri(context: Context, uri: Uri): String = runCatching {
+        var name = uri.lastPathSegment ?: "game source"
+        var size = -1L
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val ni = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val si = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (ni >= 0) name = cursor.getString(ni) ?: name
+                    if (si >= 0 && !cursor.isNull(si)) size = cursor.getLong(si)
+                }
+            }
+        val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
+            ?: error("Content provider did not return a readable descriptor")
+        val descriptorSize = descriptor.use { it.statSize }
+        when {
+            descriptorSize == 0L -> "Source is empty: " + name
+            size > 0L -> "Readable source: " + name + " · " + size / (1024L * 1024L) + " MB"
+            descriptorSize > 0L -> "Readable source: " + name + " · " + descriptorSize / (1024L * 1024L) + " MB"
+            else -> "Descriptor opened: " + name + " · size unavailable"
+        }
+    }.getOrElse { "Source check failed: " + (it.message ?: "provider error") }
+
+    fun sha256GameUri(context: Context, uri: Uri, maxBytes: Long): String = runCatching {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val stream = context.contentResolver.openInputStream(uri) ?: error("Source stream unavailable")
+        var total = 0L
+        stream.use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                total += count
+                if (total > maxBytes) return "Hash skipped: source exceeds " + maxBytes / (1024L * 1024L) + " MB limit"
+                digest.update(buffer, 0, count)
+            }
+        }
+        "SHA-256 (" + total + " bytes): " + digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }.getOrElse { "SHA-256 failed: " + (it.message ?: "source error") }
+
+    fun validateSettings(settings: Settings): List<String> {
+        val issues = mutableListOf<String>()
+        val json = runCatching { settings.toJson() }.getOrElse {
+            return listOf("Settings serialization failed: " + (it.message ?: "unknown"))
+        }
+        val decoded = runCatching { Settings.fromJson(JSONObject(json.toString())) }.getOrElse {
+            return listOf("Settings read-back failed: " + (it.message ?: "unknown"))
+        }
+        val roundTrip = runCatching { decoded.toJson() }.getOrNull()
+        if (roundTrip == null || !roundTrip.has("ps3PpuThreads") || !roundTrip.has("ps3SpuBlockSize")) {
+            issues.add("PS3 settings did not survive JSON round-trip validation")
+        }
+        if (settings.ps3.ppuThreads !in 1..16) issues.add("PPU threads outside validation range 1–16")
+        if (settings.ps3.llvmThreads !in 0..32) issues.add("LLVM threads outside validation range 0–32")
+        if (settings.ps3.spuBlockSize !in 0..2) issues.add("SPU block size must be Safe, Mega or Giga")
+        if (settings.ps3.shaderMode !in 0..3) issues.add("Shader mode outside known enum range")
+        return issues
+    }
+}
+'''
+
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
     if count != 1:
@@ -1107,6 +1368,28 @@ def patch_library_compatibility(app_dir: Path) -> None:
 
 
 
+
+def patch_application_reliability(app_dir: Path) -> None:
+    """Initialize Finale lifecycle and crash diagnostics from Application.onCreate."""
+    path = app_dir / "src/main/java/com/armsx2/Pasx2Application.kt"
+    text = path.read_text(encoding="utf-8")
+    import_anchor = "import android.os.Build\n"
+    text = replace_once(
+        text,
+        import_anchor,
+        import_anchor + "import com.armsx2.reliability.TouchStationFinaleReliability\n",
+        "Application reliability import",
+    )
+    text = replace_once(
+        text,
+        "installCrashLogging()\n",
+        "installCrashLogging()\n\t\tTouchStationFinaleReliability.install(this)\n",
+        "Application reliability initialization",
+    )
+    path.write_text(text, encoding="utf-8")
+
+
+
 def patch_game_error_banner(app_dir: Path) -> None:
     """Record game errors and make the banner dismissible with an upward swipe."""
     path = app_dir / "src/main/java/com/armsx2/ui/emulation/GameErrorBanner.kt"
@@ -1216,6 +1499,13 @@ def main() -> None:
     patch_performance_tab(app_dir)
     patch_library_compatibility(app_dir)
     patch_game_error_banner(app_dir)
+    reliability_dir = app_dir / "src/main/java/com/armsx2/reliability"
+    reliability_dir.mkdir(parents=True, exist_ok=True)
+    reliability_path = reliability_dir / "TouchStationFinaleReliability.kt"
+    if reliability_path.exists():
+        raise SystemExit("TouchStation Finale reliability module already exists; refusing to overwrite")
+    reliability_path.write_text(RELIABILITY_KOTLIN_SOURCE, encoding="utf-8")
+    patch_application_reliability(app_dir)
 
     required_markers = [
         "Update official compatibility database",
@@ -1232,6 +1522,11 @@ def main() -> None:
         "Ordered & Atomic",
         "touchStationFinaleApplyFifoRecoveryProfile",
         "TouchStationFinaleErrorHistory.fifoFailureCount()",
+        "TouchStationFinaleReliability.install(this)",
+        "validateSettings(settings: Settings)",
+        "sha256GameUri",
+        "inspectGameUri",
+        "MAX_LOG_BYTES",
         "Physical controllers",
         "Engine initialized",
         "GPU utilization",
@@ -1245,7 +1540,7 @@ def main() -> None:
         missing.append("Exact title-ID normalizer")
     if missing:
         raise SystemExit("Missing Finale source markers: " + ", ".join(missing))
-    print("Applied TouchStation Finale suite, downloadable app logs, persistent error history, swipe-dismiss diagnostics and GTA IV settings profile.")
+    print("Applied TouchStation Finale suite, modular crash/lifecycle diagnostics, bounded logs, and file/settings validation.")
 
 
 if __name__ == "__main__":
