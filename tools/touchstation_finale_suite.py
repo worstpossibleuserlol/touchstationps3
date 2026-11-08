@@ -677,6 +677,48 @@ def patch_performance_tab(app_dir: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def patch_library_compatibility(app_dir: Path) -> None:
+    """Show exact-ID desktop compatibility on library cards once the local cache exists."""
+    home = app_dir / "src/main/java/com/armsx2/ui/home/HomeScreen.kt"
+    text = home.read_text(encoding="utf-8")
+    import_anchor = "import com.armsx2.GameInfo\n"
+    if "TouchStationFinaleCompatibilityStore" in text:
+        raise SystemExit("Finale library compatibility patch is already present")
+    text = replace_once(
+        text,
+        import_anchor,
+        import_anchor + "import com.armsx2.ui.settings.TouchStationFinaleCompatibilityStore\n",
+        "library compatibility store import",
+    )
+    home_anchor = "    val context = LocalContext.current\n"
+    home_start = text.index("fun HomeScreen(")
+    anchor_index = text.find(home_anchor, home_start)
+    if anchor_index < 0:
+        raise SystemExit("HomeScreen context anchor not found")
+    text = text[:anchor_index] + text[anchor_index:].replace(
+        home_anchor,
+        home_anchor + """    LaunchedEffect(context) {
+        TouchStationFinaleCompatibilityStore.loadCache(context)
+    }
+""",
+        1,
+    )
+    metadata_anchor = """        game.regionFlag?.let { Text(it, fontSize = 13.sp) }
+        if (game.compatibility > 0) {"""
+    metadata_replacement = """        game.regionFlag?.let { Text(it, fontSize = 13.sp) }
+        TouchStationFinaleCompatibilityStore.statusFor(game.serial)?.let { status ->
+            StatusChip("PC: $status")
+        }
+        if (game.compatibility > 0) {"""
+    text = replace_once(
+        text,
+        metadata_anchor,
+        metadata_replacement,
+        "library desktop compatibility badge",
+    )
+    home.write_text(text, encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path)
@@ -694,6 +736,7 @@ def main() -> None:
     patch_version(app_dir)
     suite_path.write_text(KOTLIN_SOURCE, encoding="utf-8")
     patch_performance_tab(app_dir)
+    patch_library_compatibility(app_dir)
 
     required_markers = [
         "Update official compatibility database",
