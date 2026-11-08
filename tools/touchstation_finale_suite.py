@@ -652,7 +652,7 @@ fun TouchStationFinaleSuite(
         TouchStationFinaleReliability.recordEvent(context, "finale-ui", "Finale diagnostics opened")
         device.value = withContext(Dispatchers.IO) { touchStationFinaleDeviceSnapshot(context) }
         reliabilitySnapshot.value = withContext(Dispatchers.IO) {
-            TouchStationFinaleReliability.snapshot(context) + "\\n" +
+            TouchStationFinaleReliability.snapshot(context) + "\n" +
                 TouchStationFinaleReliability.startupSelfTest(context, settings)
         }
         database.value = withContext(Dispatchers.IO) { touchStationFinaleReadCache(context) }
@@ -1425,7 +1425,7 @@ object TouchStationFinaleReliability {
         checks += "INFO Android " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT
         checks += "INFO package " + context.packageName
         checks += "INFO " + latestCrashSummary(context)
-        return checks.joinToString("\\n")
+        return checks.joinToString("\n")
     }
 
     fun validateSettings(settings: Settings): List<String> {
