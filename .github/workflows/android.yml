@@ -1,4 +1,4 @@
-name: TouchStation 8.0.0 Release
+name: TouchStation 9.0.0 Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-8-0-release
+  group: touchstation-9-0-release
   cancel-in-progress: true
 
 jobs:
@@ -94,7 +94,7 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
@@ -105,6 +105,8 @@ jobs:
           python tools/touchstation_v7_performance.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_v8_suite.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_v9_auto.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
@@ -168,6 +170,16 @@ jobs:
           grep -Fq 'touchstation.v7.performanceOverlay.migrated' "$APP/src/main/java/com/armsx2/ui/InGameOverlay.kt"
           grep -Fq 'TouchStationPpuMonitor(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           grep -Fq 'TouchStation8MonitoringSuite(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          V9_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation9AutoOptimizationSuite.kt"
+          grep -Fq 'TouchStation 9.0 Auto Optimization Suite' "$V9_SUITE"
+          grep -Fq 'Automatic Device Detection' "$V9_SUITE"
+          grep -Fq 'Auto Configuration Engine' "$V9_SUITE"
+          grep -Fq 'Adaptive Resolution Guard' "$V9_SUITE"
+          grep -Fq 'Game-Specific Profiles' "$V9_SUITE"
+          grep -Fq 'Compatibility Checker 2.0' "$V9_SUITE"
+          grep -Fq 'Shader Cache Manager' "$V9_SUITE"
+          grep -Fq 'Crash Recovery / Safe Mode' "$V9_SUITE"
+          grep -Fq 'Hardware Benchmark & Recommendation' "$V9_SUITE"
           SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation8MonitoringSuite.kt"
           ! grep -Fq 'import androidx.compose.foundation.layout.weight' "$PPU_MONITOR"
           ! grep -Fq 'padCount.intValue' "$SUITE"
@@ -209,8 +221,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='8.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='800'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='9.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='900'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -266,39 +278,38 @@ jobs:
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-v8.0.0-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-v9.0.0-arm64.apk"
 
       - name: Upload TouchStation 8.0.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-v8.0.0-arm64
-          path: ${{ runner.temp }}/TouchStation-v8.0.0-arm64.apk
+          name: TouchStation-v9.0.0-arm64
+          path: ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
           if-no-files-found: error
           retention-days: 90
 
       - name: Publish TouchStation 8.0.0 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v8.0.0
-          name: TouchStation 8.0.0 Release
+          tag_name: v9.0.0
+          name: TouchStation 9.0.0 Release
           make_latest: true
           prerelease: false
           overwrite_files: true
-          files: ${{ runner.temp }}/TouchStation-v8.0.0-arm64.apk
+          files: ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
           body: |
-            TouchStation 8.0.0 Release for Android ARM64.
+            TouchStation 9.0.0 Release for Android ARM64.
 
-            - Upgraded PPU Monitor with overlay visibility, position, opacity, font size, framerate graph and frametime graph controls.
-            - Added a pause-menu Performance Overlay action: one selection switches the overlay between visible and hidden without opening Settings.
-            - Added per-game overlay mode preferences, with the global preference used as the fallback.
-            - Added the TouchStation 8.0 Monitoring Suite with PPU, SPU and RSX configuration diagnostics and clear separation between emulated RSX workload and physical Android GPU utilization.
-            - Added live SPU configuration visibility including decoder index, block size, preferred threads, SPURS thread limit, cache, loop detection and accurate DMA setting.
-            - Added physical controller status to the suite and retained the upstream Controller Manager's button mapping, player assignment, controller profiles, hotkeys and vibration controls.
-            - Integrated the upstream game's compatibility metadata and per-game settings system; device-specific compatibility is not guessed or fabricated.
-            - Kept the TouchStation Control Center for thermal severity, battery readings, RAM, app memory, storage, Vulkan reporting and diagnostic report export.
-            - Kept structured bug reporting and added a suite shortcut for compatibility or emulator issues.
-            - Audio, renderer, display and shader controls continue to use the upstream Audio, Renderer and Overlay settings rather than duplicate implementations.
-            - Unsupported PPU/SPU instruction counters and Android driver GPU counters remain N/A. Guest PPU/SPU/RSX utilization is shown only where the native in-game overlay exposes it.
+            - Added device detection for SoC, CPU cores, ABI, Android version, RAM, storage, display refresh rate, OpenGL ES renderer/vendor and Android-reported Vulkan feature level.
+            - Added one-tap Performance, Balanced and Quality automatic configurations. PPU and LLVM compile threads are selected conservatively; Safe SPU block size and MSAA Off are used as starting settings.
+            - Added an adaptive output-scaling guard based on Android thermal severity and available RAM. This changes the Android output surface, not the game's internal RSX resolution; the pinned native bridge does not expose a closed-loop frame-time callback.
+            - Added live thermal severity, available RAM, app PSS and free-storage diagnostics.
+            - Added per-game profile application through the upstream global/per-game settings system.
+            - Added a compatibility advisor for CPU requirement warnings, ABI, GPU/driver identification and existing upstream game metadata. Device-specific game compatibility remains Unknown until tested.
+            - Reused the existing native in-game FPS, frame-time and PPU/SPU/guest-RSX overlay. Physical GPU utilization and unsupported native counters remain N/A.
+            - Added a shader cache manager that removes only known compiled Vulkan/OpenGL cache files; it does not remove games, firmware, saves or configuration.
+            - Added a conservative Safe Recovery profile and shareable diagnostic report. It does not claim to intercept native process crashes.
+            - Added a bounded CPU smoke test; it is not presented as a GPU or PS3 game benchmark.
             - Gameplay remains physical-controller-only. No on-screen gameplay controls are added; touch remains available for menus/settings.
 
             Users must supply official firmware and game files they are legally entitled to use. The native engine remains the pinned upstream ARMSX3 build; this release adds TouchStation Android-side tools and does not claim a from-scratch PS3 core.
