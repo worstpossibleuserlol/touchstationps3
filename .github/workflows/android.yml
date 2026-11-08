@@ -185,7 +185,7 @@ jobs:
           if current not in (expected, mirror):
               raise SystemExit("Unexpected Gradle distribution URL; refusing an unreviewed wrapper change")
           lines[matches[0]] = mirror
-          path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
           if grep -q '^networkTimeout=' "$WRAPPER_PROPERTIES"; then
             sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$WRAPPER_PROPERTIES"
@@ -380,12 +380,12 @@ jobs:
           matches = [i for i, line in enumerate(lines) if line.startswith("distributionUrl=")]
           if len(matches) != 1:
               raise SystemExit("Expected exactly one Gradle distributionUrl property")
-          lines[matches[0]] = "distributionUrl=" + url.replace(":", r"\\:")
+          lines[matches[0]] = "distributionUrl=" + url.replace(":", r"\:")
           if not any(line == "distributionSha256Sum=2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb" for line in lines):
               raise SystemExit("Pinned Gradle 9.4.1 SHA-256 is missing or changed")
           if not any(line == "networkTimeout=120000" for line in lines):
               raise SystemExit("Gradle wrapper timeout is not the expected 120000 ms")
-          path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
             echo "Gradle wrapper bootstrap attempt $attempt/4: $gradle_url"
             if ./gradlew --no-daemon --version; then
