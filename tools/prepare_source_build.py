@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a pinned ARMSX3 Android source tree for the TouchStation 5.0.0 build.
+"""Prepare a pinned ARMSX3 Android source tree for the TouchStation 6.0.0 release.
 
 This preserves the upstream emulator core and Android application, adds a
 small chipset-profile section to its existing Performance settings, and applies
@@ -2006,7 +2006,7 @@ def main() -> None:
 
     print("TouchStation source preparation complete.")
     print("App label and visible wordmarks: TouchStation")
-    print("Version: 5.0.0 / versionCode 502")
+    print("Base branding patches applied; tools/touchstation_control_center.py finalizes version 6.0.0 / versionCode 600.")
     print("Virtual gameplay controls: hidden; physical PlayStation/gamepad input remains dedicated to the game.")
     print("In-game settings access: touch-only gear plus controller route through Pause Menu > Options > All Settings.")
     print("In-game gear Settings screen: controller-focusable Exit Game stops the VM and returns to the library.")
