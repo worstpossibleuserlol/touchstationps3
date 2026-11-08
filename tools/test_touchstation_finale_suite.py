@@ -12,6 +12,7 @@ SPEC = importlib.util.spec_from_file_location("touchstation_finale_suite", SCRIP
 assert SPEC is not None and SPEC.loader is not None
 FINALE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(FINALE)
+FINALE_SOURCE_TEXT = SCRIPT.read_text(encoding="utf-8")
 
 PREP_SCRIPT = Path(__file__).with_name("prepare_source_build.py")
 PREP_SPEC = importlib.util.spec_from_file_location("prepare_source_build", PREP_SCRIPT)
@@ -197,7 +198,6 @@ class HomeViewModel {
             "Ordered & Atomic",
             "touchStationFinaleApplyFifoRecoveryProfile",
             "CoreSettingOverrides.record",
-            "fullMessage = error.trim().take(4_000)",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
@@ -254,6 +254,8 @@ fun GameErrorBanner() {
             )
             FINALE.patch_game_error_banner(app)
             result = banner.read_text(encoding="utf-8")
+            self.assertIn("import androidx.compose.foundation.clickable", result)
+            self.assertIn("import androidx.compose.foundation.gestures.detectVerticalDragGestures", result)
             self.assertIn("TouchStationFinaleErrorHistory.record(fullMessage)", result)
             self.assertIn("reason.value = fullMessage", result)
             self.assertIn("detectVerticalDragGestures", result)
@@ -261,6 +263,7 @@ fun GameErrorBanner() {
             self.assertIn("Critical error recorded", result)
             with self.assertRaises(SystemExit):
                 FINALE.patch_game_error_banner(app)
+        self.assertIn("fullMessage = error.trim().take(4_000)", FINALE_SOURCE_TEXT)
 
     def test_native_fifo_limits_are_explicit_not_faked(self) -> None:
         source = FINALE.KOTLIN_SOURCE
