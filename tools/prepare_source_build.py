@@ -677,6 +677,30 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
         "About TouchStation description",
     )
 
+    text = replace_once(
+        text,
+        "import com.armsx2.ui.common.RoundAction\\n",
+        "import com.armsx2.ui.common.RoundAction\\nimport com.armsx2.ui.settings.controllerFocusable\\n",
+        "About controller-focus import",
+    )
+    text = replace_once(
+        text,
+        'leading = { RoundAction("←", str("action.back"), onBack) },',
+        'leading = { RoundAction("←", str("action.back"), onBack, controllerId = "about.back") },',
+        "About back-button controller focus",
+    )
+    text = replace_once(
+        text,
+        "        modifier = modifier.fillMaxWidth(),\\n        shape = RoundedCornerShape(20.dp),",
+        "        modifier = modifier.fillMaxWidth().controllerFocusable(\\n"
+        "            \\"about.project.$repository\\",\\n"
+        "            RoundedCornerShape(20.dp),\\n"
+        "            onConfirm = onOpen,\\n"
+        "        ),\\n"
+        "        shape = RoundedCornerShape(20.dp),",
+        "About project-card controller focus",
+    )
+
     station_pattern = re.compile(
         r'(?m)^([ \t]*)title = str\("about.repository.title"\),\n'
         r'[ \t]*repository = "ARMSX2/ARMSX3",\n'
