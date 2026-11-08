@@ -25,7 +25,7 @@ TouchStation is an Android ARM64 distribution built from the ARMSX3 Android PS3 
 - **Advanced overlay controls:** show/hide, position, opacity, text size, framerate graph and frametime graph controls.
 - **One-press pause-menu overlay toggle:** the in-game pause menu includes a Performance Overlay action. Select it to hide the overlay; select it again to show the full overlay. No Settings navigation is required.
 - **Per-game overlay mode:** overlay Full/Off preference is stored per game when a title is active. The global setting is the fallback. Position, opacity, size and graph preferences use the existing global/per-game settings store.
-- **TouchStation 8.0 Monitoring Suite and 9.0 Auto Optimization Suite:** combines PPU, SPU and RSX configuration diagnostics, connected physical controller count, current-game identity, settings scope, compatibility metadata availability, and support shortcuts.
+- **TouchStation 8.0 Monitoring Suite:** combines PPU, SPU and RSX configuration diagnostics, connected physical controller count, current-game identity, settings scope, compatibility metadata availability, and support shortcuts.
 - **Controller Center integration:** retains the upstream Controller Manager's button mapping, player assignment, hotkeys, vibration option and saved controller profiles. The monitoring suite also reports the connected physical controller count.
 - **Game compatibility and profiles:** retains upstream library compatibility metadata and per-game emulator settings. Device-specific compatibility ratings are not invented; they require an actual game/device test.
 - **Crash and diagnostics integration:** retains the TouchStation Control Center's exportable device diagnostic report and structured bug-report entry point.
