@@ -523,7 +523,13 @@ def patch_performance_tab(app_dir: Path) -> None:
     path = app_dir / "src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
     text = path.read_text(encoding="utf-8")
 
-    advanced_labels = re.findall(r'(?m)^\s*label = "([^"]+)"    if "detectTouchStationChipset" in text or "TouchStation chipset profiles" in text:
+    advanced_labels = re.findall(r'(?m)^\s*label = "([^"]+)"$', ADVANCED_SETTINGS_SECTION)
+    if len(advanced_labels) != 26 or len(set(advanced_labels)) != 26:
+        raise SystemExit(
+            f"Expected 26 uniquely named TouchStation advanced controls; found {len(advanced_labels)}"
+        )
+
+    if "detectTouchStationChipset" in text or "TouchStation chipset profiles" in text:
         raise SystemExit("TouchStation chipset profile patch is already present")
 
     import_marker = "import androidx.compose.runtime.MutableState\n"
@@ -571,9 +577,9 @@ def patch_touchstation_drawer(app_dir: Path) -> None:
 
     old_urls = """internal const val DiscordUrl = "https://discord.gg/2Tynvwhc4A"
 internal const val GithubUrl = "https://github.com/ARMSX2/ARMSX3"
-internal const val WebsiteUrl = "https://armsx2.net/armsx3""""
+internal const val WebsiteUrl = "https://armsx2.net/armsx3"""
     new_urls = """internal const val GithubUrl = "https://github.com/worstpossibleuserlol/touchstationps3"
-internal const val ReportBugUrl = "https://github.com/worstpossibleuserlol/touchstationps3/issues/new?template=bug_report.yml""""
+internal const val ReportBugUrl = "https://github.com/worstpossibleuserlol/touchstationps3/issues/new?template=bug_report.yml"""
     text = replace_once(text, old_urls, new_urls, "upstream drawer links")
 
     old_item_end = """    val xmbWave: Boolean = false,
@@ -644,9 +650,9 @@ def patch_touchstation_about(app_dir: Path) -> None:
         raise SystemExit("TouchStation About screen patch is already present")
 
     old_urls = """private const val RepositoryUrl = "https://github.com/ARMSX2/ARMSX3"
-private const val Rpcs3RepositoryUrl = "https://github.com/RPCS3/rpcs3""""
+private const val Rpcs3RepositoryUrl = "https://github.com/RPCS3/rpcs3"""
     new_urls = """private const val TouchStationRepositoryUrl = "https://github.com/worstpossibleuserlol/touchstationps3"
-private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3""""
+private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
     text = replace_once(text, old_urls, new_urls, "About repository links")
     text = replace_once(
         text,
@@ -1444,9 +1450,9 @@ def patch_touchstation_drawer(app_dir: Path) -> None:
 
     old_urls = """internal const val DiscordUrl = "https://discord.gg/2Tynvwhc4A"
 internal const val GithubUrl = "https://github.com/ARMSX2/ARMSX3"
-internal const val WebsiteUrl = "https://armsx2.net/armsx3""""
+internal const val WebsiteUrl = "https://armsx2.net/armsx3"""
     new_urls = """internal const val GithubUrl = "https://github.com/worstpossibleuserlol/touchstationps3"
-internal const val ReportBugUrl = "https://github.com/worstpossibleuserlol/touchstationps3/issues/new?template=bug_report.yml""""
+internal const val ReportBugUrl = "https://github.com/worstpossibleuserlol/touchstationps3/issues/new?template=bug_report.yml"""
     text = replace_once(text, old_urls, new_urls, "upstream drawer links")
 
     old_item_end = """    val xmbWave: Boolean = false,
@@ -1517,9 +1523,9 @@ def patch_touchstation_about(app_dir: Path) -> None:
         raise SystemExit("TouchStation About screen patch is already present")
 
     old_urls = """private const val RepositoryUrl = "https://github.com/ARMSX2/ARMSX3"
-private const val Rpcs3RepositoryUrl = "https://github.com/RPCS3/rpcs3""""
+private const val Rpcs3RepositoryUrl = "https://github.com/RPCS3/rpcs3"""
     new_urls = """private const val TouchStationRepositoryUrl = "https://github.com/worstpossibleuserlol/touchstationps3"
-private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3""""
+private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
     text = replace_once(text, old_urls, new_urls, "About repository links")
     text = replace_once(
         text,
