@@ -1973,6 +1973,37 @@ def patch_boot_splash_branding(app_dir: Path) -> None:
 
 
 
+def patch_kotlin_compiler_mirror(source_dir: Path) -> None:
+    """Prefer a Maven Central mirror for the Kotlin compiler artifact that GitHub intermittently 504s."""
+    settings = source_dir / "settings.gradle.kts"
+    if not settings.is_file():
+        raise SystemExit(f"Missing Gradle settings file: {settings}")
+
+    text = settings.read_text(encoding="utf-8")
+    mirror_url = "https://maven.wso2.org/nexus/content/repositories/central/"
+    if mirror_url in text and 'includeModule("org.jetbrains.kotlin", "kotlin-compiler-embeddable")' in text:
+        return
+
+    marker = """        google()
+        mavenCentral()
+        // Discord Social SDK ships as a local .aar."""
+    replacement = f"""        google()
+        maven {{
+            name = "kotlinCompilerEmbeddableMirror"
+            url = uri("{mirror_url}")
+            content {{
+                includeModule("org.jetbrains.kotlin", "kotlin-compiler-embeddable")
+            }}
+        }}
+        mavenCentral()
+        // Discord Social SDK ships as a local .aar."""
+    if marker not in text:
+        raise SystemExit("Could not find the dependencyResolutionManagement repository anchor in settings.gradle.kts")
+    if text.count(marker) != 1:
+        raise SystemExit("Expected exactly one dependencyResolutionManagement repository anchor")
+    settings.write_text(text.replace(marker, replacement, 1), encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path, help="android/armsx3-ui source directory")
@@ -1987,6 +2018,7 @@ def main() -> None:
         if not required.is_file():
             raise SystemExit(f"Missing expected upstream source file: {required}")
 
+    patch_kotlin_compiler_mirror(args.source)
     patch_gradle(app_dir)
     patch_touchstation_drawer(app_dir)
     patch_touchstation_about(app_dir)
