@@ -1,37 +1,56 @@
-# TouchStation 5.0.0 Final
+# TouchStation 6.0.0 Release
 
-TouchStation is an Android ARM64 distribution of the ARMSX3 Android PS3 emulator, based on its RPCS3-derived native engine.
+TouchStation is an Android ARM64 distribution built from the ARMSX3 Android PS3 emulator application. Its native emulator core is provided by the pinned upstream ARMSX3 release, which is derived from RPCS3. TouchStation is a downstream project, not a PS3 emulator core written from scratch.
 
-## 5.0.0 Final
+## 6.0.0 Release
 
-- **Exact supplied launcher artwork:** the supplied square TouchStation wordmark (black background, white lettering) is used for the launcher, adaptive/round launcher assets and splash mark. The build converts it to grayscale to remove JPEG colour artefacts and verifies that the packaged launcher contains no coloured pixels.
-- **Controller-only gameplay:** the in-game virtual touchscreen overlay is not composed. Physical USB and Bluetooth game controllers remain the intended gameplay input. No virtual buttons or motion-control overlay are rendered.
-- **In-game Settings shortcut:** one white gear icon sits in the top-right while a game is running. It opens the existing settings screen by touch only, has no controller binding, and cannot take PlayStation controller focus.
-- **20+ real performance and compatibility controls:** output resolution scale, screen-resolution override, sustained-performance mode, Android Performance Hint Manager (ADPF), Adreno GPU Turbo, log suppression, thread scheduler mode, PPU decoder, SPU decoder, SPU block size, preferred SPU thread count, LLVM thread count, SPURS thread limit, clock scale, SPU cache, LLVM precompilation, SPU loop detection, accurate SPU DMA, savestate-compatible mode, accurate SPU RSV, accurate cache-line mode, SPU XFloat precision, frame-generation options and compiled-code cache management.
-- **TouchStation additions:** automatic chipset detection and Dimensity, Snapdragon and Exynos profiles; Balanced, Performance and Compatibility targets; shader compiler thread control; shader and SPU compile notifications.
+- **TouchStation Control Center:** a consolidated device diagnostics panel inside Performance settings.
+- **Live performance monitoring:** rolling CPU, GPU and FPS graphs, plus app memory. CPU readings are device-wide; GPU readings depend on counters exposed by the Android driver; FPS is shown only when the native bridge returns a real reading.
+- **Thermal and battery information:** Android thermal-severity status, battery level and battery-sensor temperature. Battery temperature is not the SoC temperature. Android thermal status is a severity level, not a temperature measurement.
+- **Device and graphics information:** SoC/hardware identity, Android version, RAM, app PSS, free internal storage, and Vulkan feature information reported by Android.
+- **Diagnostic sharing:** export a text report containing device, system, core-initialization, current-game, controller, thermal and memory information, or open the structured TouchStation bug-report form.
+- **Controller status:** physical gamepad hot-plug monitoring, connection status, and an in-game disconnect warning.
+- **Controller-only gameplay:** virtual touchscreen gameplay controls remain disabled. Touch input is retained for menus and settings.
+- **Existing upstream management features are retained:** game-folder scanning, game search, cover art, recent games, favourites and categories, per-game settings, firmware installation/management, and the upstream game compatibility metadata.
 
-Chipset profiles only adjust supported emulator settings. They do not overclock the phone, change voltage, or replace graphics drivers. Performance depends on SoC generation, Vulkan driver, memory, thermals and the game being run. Some options are device- or game-dependent.
+Unsupported device or core metrics remain **N/A**; TouchStation does not estimate or invent FPS, GPU utilization, PPU/SPU activity, or SoC temperature.
+
+## Control Center location
+
+Open **Settings → Performance**. The live Performance Monitor appears first, followed by the TouchStation Control Center. The control center refreshes device diagnostics every 2.5 seconds. Use **Export diagnostic report** to share a report with a support contact, or **Report a Bug** to open the repository's structured issue form.
+
+The existing performance monitor reports:
+- CPU load sampled from Linux `/proc/stat`.
+- GPU utilization only when a supported kernel driver counter is readable by the app.
+- FPS only when the pinned native bridge supplies a valid frame-rate reading.
+- TouchStation process memory and rolling 60-second graphs.
+
+Some Android devices restrict GPU utilization counters and thermal information. These fields correctly show N/A when unavailable.
+
+## Emulator engine and firmware
+
+The build downloads the ARM64 native engine libraries from the pinned ARMSX3 Android release and builds the matching upstream Android application with TouchStation changes. It does **not** compile a new PS3 engine from scratch or replace the upstream PPU, SPU, RSX or Vulkan implementations.
+
+Users provide their own official PS3 system update package (PUP) and game files they are legally entitled to use. Sony firmware, commercial games, encryption keys and copyrighted game assets are not bundled.
+
+## Build and release
+
+The GitHub Actions workflow:
+1. Checks out the pinned ARMSX3 Android application source.
+2. stages the matching ARM64 native libraries from the upstream release;
+3. applies TouchStation branding, controller-only gameplay, advanced settings, monitoring and Control Center patches;
+4. builds the ARM64 release APK;
+5. verifies app version, native libraries, launcher artwork, APK signature and alignment;
+6. uploads the APK artifact and publishes the `v6.0.0` GitHub release when all checks pass.
+
+The release workflow is the authoritative APK build path. The upstream source revision and native library release are intentionally pinned for reproducibility.
 
 ## Menu and controller access
 
-The navigation drawer includes direct links to the TouchStation GitHub repository, the structured **Report a Bug** issue form, and **About TouchStation**. The About page shows the installed app/core versions, device details, project source, upstream base, and license information.
+The navigation drawer includes direct links to the TouchStation GitHub repository, the structured **Report a Bug** issue form, and **About TouchStation**. About shows project attribution and explains that gameplay requires a physical controller.
 
-The drawer rows use the controller navigation system. While a game is running, open the pause menu and use the D-pad to move between tabs and controls. **Y** opens the Options tab; select **All Settings** with the confirm button to open the full in-game settings screen. **L1/R1** also cycle pause-menu tabs, and **B** backs out.
-
-The small top-right gear remains touch-only so it does not take over a controller button that games may need. Controller users can reach the same full settings screen through **Pause Menu → Options → All Settings**. The in-game Settings page also exposes controller-focusable Resume Game, Restart Game, Save State & Exit, and Exit Game actions.
-
-## Emulator engine
-
-The native PPU/SPU execution, RSX/Vulkan rendering, firmware installation and game-boot workflows are provided by the pinned upstream ARMSX3 release. TouchStation is a downstream branded distribution with configuration additions, not a new emulator core.
-
-## User setup
-
-Users provide their own official PS3 system update package (PUP) and game files. No Sony firmware, commercial games, encryption keys or copyrighted game assets are bundled. Some digital content may also require its own license data.
-
-## Release build
-
-The GitHub Actions workflow builds the ARM64 APK, checks app name and version, verifies native libraries, validates the monochrome launcher icon, checks APK alignment and signature, uploads the correctly named artifact, and publishes the 5.0.0 Final release when all checks pass.
+While a game is running, the pause menu provides access to Options and All Settings. A touch-only gear also opens the in-game Settings screen without taking over a gamepad button. **Y** opens the pause-menu Options tab; **L1/R1** cycle tabs and **B** backs out.
 
 ## License and credits
 
-The emulator distribution is governed by GPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md for the upstream source and notices.
+The emulator distribution is governed by GPL-2.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for upstream source and third-party notices.
