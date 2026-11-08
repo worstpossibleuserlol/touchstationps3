@@ -130,6 +130,25 @@ private data class TouchStationFinaleDevice(
 private fun touchStationFinaleNormaliseId(value: String): String =
     value.filter { it.isLetterOrDigit() }.uppercase(Locale.ROOT)
 
+/**
+ * Read the last successfully downloaded desktop compatibility database.
+ * Invalid, empty, oversized or partially-written cache files are ignored.
+ */
+private fun touchStationFinaleReadCache(context: Context): JSONObject? {
+    val cacheFile = File(context.filesDir, TOUCHSTATION_FINALE_COMPAT_FILE)
+    if (!cacheFile.isFile || cacheFile.length() !in 1L..(32L * 1024L * 1024L)) {
+        return null
+    }
+    return runCatching {
+        val payload = JSONObject(cacheFile.readText(Charsets.UTF_8))
+        if (payload.optInt("return_code", -1) != 0 || payload.optJSONObject("results") == null) {
+            null
+        } else {
+            payload
+        }
+    }.getOrNull()
+}
+
 private suspend fun touchStationFinaleFetchCompatibility(context: Context): Pair<JSONObject?, String> =
     withContext(Dispatchers.IO) {
         runCatching {
