@@ -17,7 +17,7 @@ jobs:
   build-arm64:
     name: Build TouchStation Android app with native PS3 engine
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - name: Checkout TouchStation
         uses: actions/checkout@v4
@@ -58,12 +58,13 @@ jobs:
           UPSTREAM="$RUNNER_TEMP/armsx3-source"
           COMMIT="482d35b6a9f2eee61cdc6c0820a2d57392b235e6"
           git clone --filter=blob:none --no-checkout https://github.com/ARMSX2/ARMSX3.git "$UPSTREAM"
-          git -C "$UPSTREAM" sparse-checkout init --cone
-          git -C "$UPSTREAM" sparse-checkout set android/armsx3-ui
           git -C "$UPSTREAM" fetch --depth=1 origin "$COMMIT"
           git -C "$UPSTREAM" checkout --detach FETCH_HEAD
+          # Include the complete upstream tree and exact submodule source so the
+          # corresponding-source release archive is complete, not just the Android UI.
+          git -C "$UPSTREAM" submodule update --init --recursive --depth 1
           test -f "$UPSTREAM/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
-          echo "Upstream source pinned to $COMMIT"
+          echo "Upstream source and submodules pinned to $COMMIT"
 
       - name: Download matching upstream ARM64 native libraries
         shell: bash
@@ -94,7 +95,7 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/add_gpl_modification_notices.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
@@ -108,6 +109,27 @@ jobs:
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_v9_auto.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/add_gpl_modification_notices.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+
+          # Package the exact patched source and all build scripts for GPL source distribution.
+          UPSTREAM="$RUNNER_TEMP/armsx3-source"
+          mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/.github/workflows"
+          cp LICENSE README.md THIRD_PARTY_NOTICES.md SOURCE_DISTRIBUTION.md "$UPSTREAM/touchstation-build/"
+          cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
+          cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
+          tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
+            -czf "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
+            -C "$RUNNER_TEMP" armsx3-source
+          sha256sum "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
+            > "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256"
+          test -s "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz"
+          tar -tzf "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
+            > "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/TOUCHSTATION_MODIFICATIONS.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/tools/add_gpl_modification_notices.py" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/THIRD_PARTY_NOTICES.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/SOURCE_DISTRIBUTION.md" "$RUNNER_TEMP/source-archive-entries.txt"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
           DRAWER="$APP/src/main/java/com/armsx2/navigation/NavigationDrawer.kt"
@@ -282,15 +304,18 @@ jobs:
           ls -lh "$APK"
           cp "$APK" "$RUNNER_TEMP/TouchStation-v9.0.0-arm64.apk"
 
-      - name: Upload TouchStation 8.0.0 APK
+      - name: Upload TouchStation 9.0.0 APK and corresponding source
         uses: actions/upload-artifact@v4
         with:
           name: TouchStation-v9.0.0-arm64
-          path: ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
+          path: |
+            ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
+            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish TouchStation 8.0.0 Release
+      - name: Publish TouchStation 9.0.0 Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v9.0.0
@@ -298,7 +323,10 @@ jobs:
           make_latest: true
           prerelease: false
           overwrite_files: true
-          files: ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
+          files: |
+            ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
+            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256
           body: |
             TouchStation 9.0.0 Release for Android ARM64.
 
@@ -313,5 +341,9 @@ jobs:
             - Added a conservative Safe Recovery profile and shareable diagnostic report. It does not claim to intercept native process crashes.
             - Added a bounded CPU smoke test; it is not presented as a GPU or PS3 game benchmark.
             - Gameplay remains physical-controller-only. No on-screen gameplay controls are added; touch remains available for menus/settings.
+
+            Corresponding source: download TouchStation-v9.0.0-corresponding-source.tar.gz and verify it with the accompanying .sha256 file. The archive contains the exact pinned upstream source tree, submodules, TouchStation modifications, patch scripts and build workflow for this APK.
+
+            Licensing: TouchStation's downstream work is distributed under GPL-2.0-only. Upstream notices and independent third-party licenses are retained. See THIRD_PARTY_NOTICES.md and SOURCE_DISTRIBUTION.md in the source archive.
 
             Users must supply official firmware and game files they are legally entitled to use. The native engine remains the pinned upstream ARMSX3 build; this release adds TouchStation Android-side tools and does not claim a from-scratch PS3 core.
