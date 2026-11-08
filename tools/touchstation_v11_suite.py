@@ -138,12 +138,16 @@ private fun touchStation11Snapshot(context: Context): TouchStation11Snapshot {
         level != null -> "Android feature level " + level.version
         else -> "No Vulkan feature version reported by Android"
     }
-    val controllers = runCatching {
-        InputDevice.getDeviceIds().mapNotNull { id ->
-            val device = InputDevice.getDevice(id) ?: return@mapNotNull null
-            val gamepad = (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
-            val joystick = (device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
-            if (gamepad || joystick) device.name else null
+    val controllers: List<String> = runCatching {
+        InputDevice.getDeviceIds().toList().mapNotNull { id: Int ->
+            val device = InputDevice.getDevice(id)
+            if (device == null) {
+                null
+            } else {
+                val gamepad = (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                val joystick = (device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+                if (gamepad || joystick) device.name else null
+            }
         }.distinct()
     }.getOrDefault(emptyList())
     val freeStorage = runCatching {
