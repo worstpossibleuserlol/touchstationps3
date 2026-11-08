@@ -652,7 +652,8 @@ fun TouchStationFinaleSuite(
         TouchStationFinaleReliability.recordEvent(context, "finale-ui", "Finale diagnostics opened")
         device.value = withContext(Dispatchers.IO) { touchStationFinaleDeviceSnapshot(context) }
         reliabilitySnapshot.value = withContext(Dispatchers.IO) {
-            TouchStationFinaleReliability.snapshot(context)
+            TouchStationFinaleReliability.snapshot(context) + "\\n" +
+                TouchStationFinaleReliability.startupSelfTest(context, settings)
         }
         database.value = withContext(Dispatchers.IO) { touchStationFinaleReadCache(context) }
         TouchStationFinaleCompatibilityStore.replace(database.value)
@@ -1003,6 +1004,11 @@ fun TouchStationFinaleSuite(
                 TouchStationFinaleRow("App cache inventory", TouchStationFinaleReliability.inspectDirectory(context.cacheDir))
                 TouchStationFinaleRow("Game source", gameSourceStatus.value)
                 TouchStationFinaleRow("Settings validation", if (settingsValidation.isEmpty()) "PASS" else settingsValidation.joinToString())
+                Text(
+                    reliabilitySnapshot.value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     "Native PPU/SPU counters, RSX queue depth, GPU fences and shader-cache internals remain unavailable unless the native bridge exposes them. Missing telemetry is never shown as zero.",
                     style = MaterialTheme.typography.bodySmall,
