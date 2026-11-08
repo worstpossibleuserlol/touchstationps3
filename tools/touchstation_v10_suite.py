@@ -626,7 +626,7 @@ def patch_control_center(app_dir: Path) -> None:
     path = app_dir / "src/main/java/com/armsx2/ui/settings/TouchStationControlCenter.kt"
     text = path.read_text(encoding="utf-8")
     text = text.replace(
-        "TouchStation 8.0.0 diagnostic report",
+        "TouchStation 9.0.0 diagnostic report",
         "TouchStation 10.0.0 diagnostic report",
     )
     path.write_text(text, encoding="utf-8")
