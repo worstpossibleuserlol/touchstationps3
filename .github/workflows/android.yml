@@ -120,6 +120,14 @@ jobs:
           grep -Fq 'TouchStation is an independent downstream project.' "$ABOUT"
           grep -Fq 'controllerId = "about.back"' "$ABOUT"
           grep -Fq '"about.project.$repository"' "$ABOUT"
+          XMB="$APP/src/main/java/com/armsx2/ui/xmb/XmbHome.kt"
+          grep -Fq 'openExternalUrl(context, ReportBugUrl)' "$XMB"
+          grep -Fq 'openExternalUrl(context, GithubUrl)' "$XMB"
+          grep -Fq 'title = "TouchStation"' "$XMB"
+          if grep -Eq 'DiscordUrl|WebsiteUrl' "$XMB"; then
+            echo "Legacy Discord or Website URL remains in the TouchStation XMB."
+            exit 1
+          fi
 
           # Regression checks for controller-only navigation paths; no gameplay button is rebound.
           grep -Fq 'controllerFocusable(controllerId' "$DRAWER"
