@@ -121,7 +121,7 @@ class HomeViewModel {
             self.assertIn("import com.armsx2.ui.settings.TouchStationFinaleCompatibilityStore", result)
             self.assertIn("LaunchedEffect(compatibilityRevision, state.sort)", result)
             vm_result = vm.read_text(encoding="utf-8")
-            self.assertIn("TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: it.compatibility", vm_result)
+            self.assertIn("TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: -1", vm_result)
             with self.assertRaises(SystemExit):
                 FINALE.patch_library_compatibility(app)
 
