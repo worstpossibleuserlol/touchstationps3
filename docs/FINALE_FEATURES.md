@@ -24,7 +24,7 @@ This release combines the diagnostics and settings tools from the earlier TouchS
 15. **Official compatibility test date** — shows the database's recorded test date where present.
 16. **Game update metadata** — displays the latest update field where the database supplies one.
 17. **Device-local compatibility record** — stores a separate user-entered result for this game and handset.
-18. **Local test-stage history** — lets the user record boot, menu, gameplay, stable-session or failed-boot observations.
+18. **Local test-stage record** — lets the user record the latest observed boot, menu, gameplay, stable-session or failed-boot result for this handset.
 19. **Game boot and launch readiness evidence** — brings together current engine/runtime state and prior process-exit evidence.
 20. **GTA IV per-game profile** — applies a conservative set of existing PS3 settings only when GTA IV is selected and per-game settings are active.
 
