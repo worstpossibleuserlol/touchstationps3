@@ -69,14 +69,46 @@ jobs:
           test -f "$UPSTREAM/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           echo "Upstream source and submodules pinned to $COMMIT"
 
-      - name: Download matching upstream ARM64 native libraries
+      - name: Download and verify pinned upstream ARM64 native libraries
         shell: bash
         run: |
           set -euo pipefail
           UPSTREAM_APK="$RUNNER_TEMP/armsx3-1.6.4.apk"
-          curl --fail --location --retry 3 --retry-delay 2 \
-            "https://github.com/ARMSX2/ARMSX3/releases/download/1.6.4/ARMSX3-1.6.4-a15-armv8.2-sdk35.apk" \
-            --output "$UPSTREAM_APK"
+          DOWNLOAD_TMP="$RUNNER_TEMP/armsx3-1.6.4.download"
+          EXPECTED_SIZE="79216349"
+          EXPECTED_SHA256="e84d287e297dc0e8edc9e0fa9b9930b12a4fe38140e5b5dd585a1454fd22b708"
+          RELEASE_URL="https://github.com/ARMSX2/ARMSX3/releases/download/1.6.4/ARMSX3-1.6.4-a15-armv8.2-sdk35.apk"
+          ASSET_API_URL="https://api.github.com/repos/ARMSX2/ARMSX3/releases/assets/714709325"
+
+          verify_download() {
+            local file="$1"
+            [ -s "$file" ] || return 1
+            [ "$(stat -c '%s' "$file")" = "$EXPECTED_SIZE" ] || return 1
+            printf '%s  %s\n' "$EXPECTED_SHA256" "$file" | sha256sum --check --status
+          }
+
+          # GitHub's browser-download endpoint can transiently return HTTP 5xx.
+          # Retry transient failures, then fall back to the release asset API.
+          if curl --fail --show-error --location \
+              --connect-timeout 30 --max-time 900 \
+              --retry 8 --retry-all-errors --retry-delay 5 --retry-max-time 300 \
+              "$RELEASE_URL" --output "$DOWNLOAD_TMP" && verify_download "$DOWNLOAD_TMP"; then
+            mv "$DOWNLOAD_TMP" "$UPSTREAM_APK"
+          else
+            rm -f "$DOWNLOAD_TMP"
+            echo "Browser download failed or checksum did not match; trying the GitHub release asset API."
+            curl --fail --show-error --location \
+              --connect-timeout 30 --max-time 900 \
+              --retry 8 --retry-all-errors --retry-delay 5 --retry-max-time 300 \
+              -H "Accept: application/octet-stream" \
+              "$ASSET_API_URL" --output "$DOWNLOAD_TMP"
+            if ! verify_download "$DOWNLOAD_TMP"; then
+              echo "Downloaded upstream release asset has an unexpected size or SHA-256." >&2
+              exit 1
+            fi
+            mv "$DOWNLOAD_TMP" "$UPSTREAM_APK"
+          fi
+          echo "Verified upstream release asset size and SHA-256."
 
           unzip -Z1 "$UPSTREAM_APK" > "$RUNNER_TEMP/upstream-entries.txt"
           grep -Fxq "lib/arm64-v8a/libarmsx3-core.so" "$RUNNER_TEMP/upstream-entries.txt"
