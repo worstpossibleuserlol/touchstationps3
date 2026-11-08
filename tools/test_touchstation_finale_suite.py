@@ -131,6 +131,7 @@ class HomeViewModel {
             "https://rpcs3.net/compatibility/?api=v1&export",
             "touchStationFinaleNormaliseId",
             "Full library compatibility index",
+            "Reload cached library index",
             "Apply GTA IV per-game profile",
             "settingsArePerGame",
             "spuXFloat = 0",
