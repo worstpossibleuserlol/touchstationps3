@@ -101,6 +101,7 @@ jobs:
 
       - name: Run TouchStation Finale patcher regression tests
         run: python3 tools/test_touchstation_finale_suite.py
+
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
           python tools/prepare_source_build.py \
@@ -124,8 +125,9 @@ jobs:
 
           # Package the exact patched source and all build scripts for GPL source distribution.
           UPSTREAM="$RUNNER_TEMP/armsx3-source"
-          mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/.github/workflows"
+          mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/docs" "$UPSTREAM/touchstation-build/.github/workflows"
           cp LICENSE README.md THIRD_PARTY_NOTICES.md SOURCE_DISTRIBUTION.md "$UPSTREAM/touchstation-build/"
+          cp docs/FINALE_FEATURES.md "$UPSTREAM/touchstation-build/docs/"
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
           tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
