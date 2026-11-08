@@ -1291,11 +1291,14 @@ object TouchStationFinaleReliability {
                 (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.currentThermalStatus?.toString() ?: "N/A"
             } else "Unsupported"
         }.getOrDefault("N/A")
-        val pads = InputDevice.getDeviceIds().mapNotNull { id ->
+        val pads = mutableListOf<String>()
+        InputDevice.getDeviceIds().forEach { id ->
             runCatching {
-                val device = InputDevice.getDevice(id) ?: return@runCatching null
-                if (device.isVirtual) null else device.name + " (" + id + ")"
-            }.getOrNull()
+                val device = InputDevice.getDevice(id)
+                if (device != null && !device.isVirtual) {
+                    pads.add(device.name + " (" + id + ")")
+                }
+            }
         }
         recordPss(context, pss)
         return "Lifecycle: " + lifecycleStatus() +
