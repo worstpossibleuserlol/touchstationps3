@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -217,7 +218,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -232,10 +233,10 @@ import kotlinx.coroutines.delay
 @Composable
 fun TouchStation8MonitoringSuite(settings: Settings) {
     val context = LocalContext.current
-    val padCount = remember { mutableIntStateOf(PadRouter.connectedPads().size) }
+    val padCount = remember { mutableStateOf(PadRouter.connectedPads().size) }
     LaunchedEffect(Unit) {
         while (true) {
-            padCount.intValue = runCatching { PadRouter.connectedPads().size }.getOrDefault(0)
+            padCount.value = runCatching { PadRouter.connectedPads().size }.getOrDefault(0)
             delay(2_000)
         }
     }
