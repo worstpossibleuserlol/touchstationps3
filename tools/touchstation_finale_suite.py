@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +37,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.armsx2.GameInfo
+import com.armsx2.GamePlatform
+import com.armsx2.data.library.GameLibraryRepository
 import com.armsx2.config.Settings
 import com.armsx2.config.SettingsScope
 import com.armsx2.runtime.MainActivityRuntime
@@ -157,8 +160,12 @@ private fun touchStationFinaleDeviceSnapshot(context: Context): TouchStationFina
             }
         }.distinct()
     }.getOrDefault(emptyList())
-    val soc = listOf(Build.SOC_MANUFACTURER, Build.SOC_MODEL)
-        .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "N/A" }
+    val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        listOf(Build.SOC_MANUFACTURER, Build.SOC_MODEL)
+            .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "N/A" }
+    } else {
+        Build.HARDWARE.ifBlank { "N/A" }
+    }
     return TouchStationFinaleDevice(
         totalRamMb = memory.totalMem.takeIf { it > 0L }?.div(1024L * 1024L),
         availableRamMb = memory.availMem.takeIf { it > 0L }?.div(1024L * 1024L),
@@ -250,6 +257,8 @@ fun TouchStationFinaleSuite(
     val scope = rememberCoroutineScope()
     val device = remember { mutableStateOf<TouchStationFinaleDevice?>(null) }
     val database = remember { mutableStateOf<JSONObject?>(null) }
+    val libraryGames = remember { mutableStateOf<List<GameInfo>>(emptyList()) }
+    val librarySearch = remember { mutableStateOf("") }
     val busy = remember { mutableStateOf(false) }
     val message = remember { mutableStateOf("Compatibility data has not been refreshed in this session.") }
     val game: GameInfo? = MainActivityRuntime.currentGame.value
@@ -276,6 +285,14 @@ fun TouchStationFinaleSuite(
     LaunchedEffect(context) {
         device.value = withContext(Dispatchers.IO) { touchStationFinaleDeviceSnapshot(context) }
         database.value = withContext(Dispatchers.IO) { touchStationFinaleReadCache(context) }
+        libraryGames.value = withContext(Dispatchers.IO) {
+            runCatching {
+                GameLibraryRepository(context).loadCached().games
+                    .filter { it.platform == GamePlatform.PS3 && !it.serial.isNullOrBlank() }
+                    .distinctBy { touchStationFinaleNormaliseId(it.serial.orEmpty()) }
+                    .sortedBy { it.title.lowercase(Locale.ROOT) }
+            }.getOrDefault(emptyList())
+        }
     }
 
     val report = buildString {
@@ -361,8 +378,51 @@ fun TouchStationFinaleSuite(
                 )
             }
 
-            TouchStationFinaleSection("02 · Your device test record") {
-                TouchStationFinaleRow("This device's result", localStatus ?: "Not tested")
+            TouchStationFinaleSection("02 · Full library compatibility index") {
+                Text(
+                    "Search the cached PS3 library by title or exact title ID. Each row is matched against the official compatibility database by normalized ID, not approximate title text.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = librarySearch.value,
+                    onValueChange = { librarySearch.value = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Search PS3 library") },
+                )
+                val query = librarySearch.value.trim().lowercase(Locale.ROOT)
+                val matches = libraryGames.value.filter { item ->
+                    query.isBlank() ||
+                        item.title.lowercase(Locale.ROOT).contains(query) ||
+                        item.serial.orEmpty().lowercase(Locale.ROOT).contains(query)
+                }.take(40)
+                if (matches.isEmpty()) {
+                    Text(
+                        if (libraryGames.value.isEmpty()) "No cached PS3 library entries yet. Scan your game folders in the library first."
+                        else "No matching game in the cached PS3 library.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    matches.forEach { item ->
+                        val entry = touchStationFinaleOfficialEntry(database.value, item.serial)
+                        TouchStationFinaleRow(
+                            item.title,
+                            (item.serial ?: "No title ID") + " · " +
+                                (entry?.optString("status")?.takeIf { it.isNotBlank() } ?: "No official entry"),
+                        )
+                    }
+                }
+                Text(
+                    "Showing up to 40 matches. Download or refresh the official database above to populate status results. No untested title is labelled playable.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            TouchStationFinaleSection("03 · Your device test record") {
+                TouchStationFinaleRow("This device's result", localStatus)
                 Text(
                     "Record only what you personally observed on this handset and TouchStation build. This stays on this device and is separate from the official desktop compatibility database.",
                     style = MaterialTheme.typography.bodySmall,
@@ -401,7 +461,7 @@ fun TouchStationFinaleSuite(
                 }
             }
 
-            TouchStationFinaleSection("03 · GTA IV compatibility profile") {
+            TouchStationFinaleSection("04 · GTA IV compatibility profile") {
                 TouchStationFinaleRow("Game detected", if (isGtaIv) "Grand Theft Auto IV" else "Not the selected game")
                 TouchStationFinaleRow("Settings scope", if (settingsArePerGame) "Per-game" else "Global")
                 Text(
@@ -444,7 +504,7 @@ fun TouchStationFinaleSuite(
                 )
             }
 
-            TouchStationFinaleSection("04 · Device readiness and system checks") {
+            TouchStationFinaleSection("05 · Device readiness and system checks") {
                 TouchStationFinaleRow("Device", deviceSnapshot?.device ?: "Scanning…")
                 TouchStationFinaleRow("SoC", deviceSnapshot?.soc ?: "Scanning…")
                 TouchStationFinaleRow("Android / ABI", Build.VERSION.RELEASE + " / " + (deviceSnapshot?.abi ?: "N/A"))
@@ -463,7 +523,7 @@ fun TouchStationFinaleSuite(
                 )
             }
 
-            TouchStationFinaleSection("05 · PS3 core configuration snapshot") {
+            TouchStationFinaleSection("06 · PS3 core configuration snapshot") {
                 TouchStationFinaleRow("PPU decoder / threads", settings.ps3.ppuDecoder.toString() + " / " + settings.ps3.ppuThreads)
                 TouchStationFinaleRow("LLVM threads / precompile", settings.ps3.llvmThreads.toString() + " / " + settings.ps3.llvmPrecompile)
                 TouchStationFinaleRow("SPU decoder / block size", settings.ps3.spuDecoder.toString() + " / " + settings.ps3.spuBlockSize)
