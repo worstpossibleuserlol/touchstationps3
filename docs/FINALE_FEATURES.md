@@ -115,3 +115,19 @@ The log export is user-initiated and stays on-device until the user explicitly s
 
 
 The error banner preserves the complete native error text (up to 4,000 characters), not only its first line, so the engine's suggested setting names and next enum value remain visible. The error remains saved in the bounded local history after swipe dismissal.
+
+
+## Finale Android reliability layer
+
+The Finale source patcher now generates a dedicated `com.armsx2.reliability.TouchStationFinaleReliability` module and initializes it from the Android Application:
+
+- Bounded diagnostic event writer (512 KiB active log with one rotated copy), Java/Kotlin crash reports (latest five), previous-crash marker and activity lifecycle tracking.
+- Guarded-operation helper, app PSS trend sampling, available RAM, free app storage, thermal snapshot and physical input-device enumeration.
+- Startup self-tests for settings JSON round-trip, app-cache read/write, native-library directory visibility and arm64-v8a ABI presence.
+- Safe-mode state, settings range/serialization validation, explicit Global/per-game settings rollback checkpoints and user-confirmed restore via the existing apply callback.
+- Game-source readability checks, user-triggered SHA-256 with a 256 MiB limit, and a bounded app-cache inventory.
+- Diagnostic export combines the existing stdout/stderr session log, app-process logcat, Finale event history and the latest Java/Kotlin crash report.
+
+These are Android-side reliability aids. The app does not automatically restart a failed game or reset native worker threads. The pinned prebuilt native engine exposes no trustworthy PPU/SPU task counters, RSX FIFO queue depth, GPU fences, shader-cache internals or safe native FIFO recovery API. These remain marked unavailable and require native-source changes, rebuilt ARM64 libraries and real-device testing.
+
+The OS owns Bluetooth pairing/reconnection; TouchStation can enumerate connected physical input devices but cannot force a reconnect. PSS trends are diagnostic hints, not proof of a memory leak. The app-cache inventory does not inspect private shader-cache internals or delete files. Large game images are not hashed automatically.
