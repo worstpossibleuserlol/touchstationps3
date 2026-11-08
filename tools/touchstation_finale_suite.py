@@ -738,7 +738,7 @@ def patch_library_compatibility(app_dir: Path) -> None:
             )"""
     sorter_new = """            HomeSort.Compatibility -> filtered.sortedWith(
                 compareByDescending<GameInfo> {
-                    TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: it.compatibility
+                    TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: -1
                 }.thenBy { it.sortKey(forceEn).lowercase() },
             )"""
     vm_text = replace_once(vm_text, sorter_old, sorter_new, "official compatibility sort comparator")
