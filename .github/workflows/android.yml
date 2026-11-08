@@ -1,4 +1,4 @@
-name: TouchStation 7.0.0 Release
+name: TouchStation 8.0.0 Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-7-0-release
+  group: touchstation-8-0-release
   cancel-in-progress: true
 
 jobs:
@@ -94,7 +94,7 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
@@ -103,6 +103,8 @@ jobs:
           python tools/touchstation_control_center.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_v7_performance.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_v8_suite.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
@@ -158,10 +160,22 @@ jobs:
           PPU_MONITOR="$APP/src/main/java/com/armsx2/ui/settings/TouchStationPpuMonitor.kt"
           grep -Fq 'TouchStation PPU Monitor' "$PPU_MONITOR"
           grep -Fq 'In-game performance overlay' "$PPU_MONITOR"
-          grep -Fq 'setOverlayPosition(0)' "$PPU_MONITOR"
+          grep -Fq 'Overlay position' "$PPU_MONITOR"
+          grep -Fq 'Framerate graph' "$PPU_MONITOR"
+          grep -Fq 'Frametime graph' "$PPU_MONITOR"
+          grep -Fq 'Rpcs3Settings.setOverlayPosition(index)' "$PPU_MONITOR"
           grep -Fq 'setOsdMode(OsdMode.Full)' "$APP/src/main/java/com/armsx2/ui/InGameOverlay.kt"
           grep -Fq 'touchstation.v7.performanceOverlay.migrated' "$APP/src/main/java/com/armsx2/ui/InGameOverlay.kt"
           grep -Fq 'TouchStationPpuMonitor(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          grep -Fq 'TouchStation8MonitoringSuite(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation8MonitoringSuite.kt"
+          grep -Fq 'SPU Monitor' "$SUITE"
+          grep -Fq 'RSX Graphics Monitor' "$SUITE"
+          grep -Fq 'Controller Center' "$SUITE"
+          grep -Fq 'Game Compatibility and Profiles' "$SUITE"
+          grep -Fq 'Stability, Crash Diagnostics and Audio / Display' "$SUITE"
+          grep -Fq 'ui.osdMode.game.' "$APP/src/main/java/com/armsx2/ui/InGameOverlay.kt"
+          grep -Fq 'Performance Overlay' "$EMULATION_MENU"
           CONTROL_CENTER="$APP/src/main/java/com/armsx2/ui/settings/TouchStationControlCenter.kt"
           grep -Fq 'TouchStation Control Center' "$CONTROL_CENTER"
           grep -Fq 'currentThermalStatus' "$CONTROL_CENTER"
@@ -176,7 +190,7 @@ jobs:
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
           grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
 
-      - name: Build TouchStation 7.0.0 Release
+      - name: Build TouchStation 8.0.0 Release
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
@@ -192,8 +206,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='7.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='700'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='8.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='800'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -249,40 +263,39 @@ jobs:
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-v7.0.0-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-v8.0.0-arm64.apk"
 
-      - name: Upload TouchStation 7.0.0 APK
+      - name: Upload TouchStation 8.0.0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-v7.0.0-arm64
-          path: ${{ runner.temp }}/TouchStation-v7.0.0-arm64.apk
+          name: TouchStation-v8.0.0-arm64
+          path: ${{ runner.temp }}/TouchStation-v8.0.0-arm64.apk
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish TouchStation 7.0.0 Release
+      - name: Publish TouchStation 8.0.0 Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v7.0.0
-          name: TouchStation 7.0.0 Release
+          tag_name: v8.0.0
+          name: TouchStation 8.0.0 Release
           make_latest: true
           prerelease: false
           overwrite_files: true
-          files: ${{ runner.temp }}/TouchStation-v7.0.0-arm64.apk
+          files: ${{ runner.temp }}/TouchStation-v8.0.0-arm64.apk
           body: |
-            TouchStation 7.0.0 Release for Android ARM64.
+            TouchStation 8.0.0 Release for Android ARM64.
 
-            - TouchStation branding on the launcher, app header, default boot splash, screenshot album, backup filename and default controller-skin display name.
-            - Added an explicit Exit Game action to both the classic pause menu and the XMB in-game menu.
-            - Added 26 live-applied advanced emulator settings covering RSX rendering, VRAM, texture handling, SPU verification and CPU compatibility.
-            - Added a live Performance settings monitor with device CPU load, driver-reported GPU utilization, app RAM and rolling graphs.
-            - Added physical-controller hot-plug detection, a controller status panel, and an in-game disconnect warning.
-            - Added the controller-only gameplay and touchscreen menu/settings notice to About TouchStation.
-            - Added the TouchStation Control Center to Performance settings: Android thermal severity, battery level and battery-sensor temperature, SoC/hardware identity, RAM, app PSS, free internal storage, Vulkan feature reporting, native-core state and current-game details.
-            - Added one-tap diagnostic report sharing with device, system, controller, thermal and memory information, plus a direct structured bug-report action.
-            - Kept live CPU/GPU/FPS tiles and rolling graphs. Driver/core values remain N/A when the device or pinned bridge does not expose a real counter; PPU/SPU activity is not fabricated.
-            - Retained the upstream game library and management flows, including scanning, search, covers, favourites/categories, recent games and per-game settings.
-            - Retained upstream PS3 firmware installation/management and game compatibility metadata.
-            - Retained shader compiler controls, shader/SPU compile notifications, chipset profiles and controller hot-plug warnings.
+            - Upgraded PPU Monitor with overlay visibility, position, opacity, font size, framerate graph and frametime graph controls.
+            - Added a pause-menu Performance Overlay action: one selection switches the overlay between visible and hidden without opening Settings.
+            - Added per-game overlay mode preferences, with the global preference used as the fallback.
+            - Added the TouchStation 8.0 Monitoring Suite with PPU, SPU and RSX configuration diagnostics and clear separation between emulated RSX workload and physical Android GPU utilization.
+            - Added live SPU configuration visibility including decoder index, block size, preferred threads, SPURS thread limit, cache, loop detection and accurate DMA setting.
+            - Added physical controller status to the suite and retained the upstream Controller Manager's button mapping, player assignment, controller profiles, hotkeys and vibration controls.
+            - Integrated the upstream game's compatibility metadata and per-game settings system; device-specific compatibility is not guessed or fabricated.
+            - Kept the TouchStation Control Center for thermal severity, battery readings, RAM, app memory, storage, Vulkan reporting and diagnostic report export.
+            - Kept structured bug reporting and added a suite shortcut for compatibility or emulator issues.
+            - Audio, renderer, display and shader controls continue to use the upstream Audio, Renderer and Overlay settings rather than duplicate implementations.
+            - Unsupported PPU/SPU instruction counters and Android driver GPU counters remain N/A. Guest PPU/SPU/RSX utilization is shown only where the native in-game overlay exposes it.
             - Gameplay remains physical-controller-only. No on-screen gameplay controls are added; touch remains available for menus/settings.
-            
+
             Users must supply official firmware and game files they are legally entitled to use. The native engine remains the pinned upstream ARMSX3 build; this release adds TouchStation Android-side tools and does not claim a from-scratch PS3 core.
