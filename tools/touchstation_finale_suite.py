@@ -29,6 +29,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,6 +58,51 @@ private const val TOUCHSTATION_FINALE_COMPAT_URL =
     "https://rpcs3.net/compatibility/?api=v1&export"
 private const val TOUCHSTATION_FINALE_COMPAT_FILE = "touchstation-finale-compatibility.json"
 private const val TOUCHSTATION_FINALE_COMPAT_SYNC_KEY = "touchstation.finale.compatLastSync"
+
+/**
+ * Shared exact-ID compatibility cache used by the settings centre and game-library tiles.
+ * The displayed statuses are desktop RPCS3 references, not device-specific results.
+ */
+object TouchStationFinaleCompatibilityStore {
+    val revision = mutableIntStateOf(0)
+    private val statusById = mutableStateMapOf<String, String>()
+
+    fun replace(database: JSONObject?) {
+        statusById.clear()
+        val results = database?.optJSONObject("results")
+        if (results != null) {
+            val keys = results.keys()
+            while (keys.hasNext()) {
+                val id = keys.next()
+                val status = results.optJSONObject(id)?.optString("status")?.takeIf { it.isNotBlank() }
+                if (status != null) {
+                    statusById[touchStationFinaleNormaliseId(id)] = status
+                }
+            }
+        }
+        revision.intValue++
+    }
+
+    fun statusFor(serial: String?): String? {
+        revision.intValue
+        if (serial.isNullOrBlank()) return null
+        return statusById[touchStationFinaleNormaliseId(serial)]
+    }
+
+    fun rankFor(serial: String?): Int? = when (statusFor(serial)?.lowercase(Locale.ROOT)) {
+        "playable" -> 5
+        "ingame" -> 4
+        "intro" -> 3
+        "loadable" -> 2
+        "nothing" -> 1
+        "unplayable" -> 0
+        else -> null
+    }
+
+    suspend fun loadCache(context: Context) {
+        replace(withContext(Dispatchers.IO) { touchStationFinaleReadCache(context) })
+    }
+}
 
 private data class TouchStationFinaleDevice(
     val totalRamMb: Long?,
@@ -285,6 +332,7 @@ fun TouchStationFinaleSuite(
     LaunchedEffect(context) {
         device.value = withContext(Dispatchers.IO) { touchStationFinaleDeviceSnapshot(context) }
         database.value = withContext(Dispatchers.IO) { touchStationFinaleReadCache(context) }
+        TouchStationFinaleCompatibilityStore.replace(database.value)
         libraryGames.value = withContext(Dispatchers.IO) {
             runCatching {
                 GameLibraryRepository(context).loadCached().games
@@ -360,7 +408,10 @@ fun TouchStationFinaleSuite(
                             scope.launch {
                                 busy.value = true
                                 val result = touchStationFinaleFetchCompatibility(context)
-                                if (result.first != null) database.value = result.first
+                                if (result.first != null) {
+                                    database.value = result.first
+                                    TouchStationFinaleCompatibilityStore.replace(result.first)
+                                }
                                 message.value = result.second
                                 busy.value = false
                             }
