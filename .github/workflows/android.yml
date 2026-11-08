@@ -436,7 +436,7 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='Finale'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='TouchStation Finale'" "$RUNNER_TEMP/badging.txt"
           grep -F "versionCode='1200'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
