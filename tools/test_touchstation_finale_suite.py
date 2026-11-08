@@ -55,7 +55,7 @@ dependencyResolutionManagement {
             )
             self.assertLess(
                 once.index("kotlinCompilerEmbeddableMirror"),
-                once.index("        mavenCentral()\\n        // Discord"),
+                once.index("        mavenCentral()\n        // Discord"),
             )
 
     def test_version_promotion_is_exact(self) -> None:
