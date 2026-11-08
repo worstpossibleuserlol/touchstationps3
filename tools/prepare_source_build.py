@@ -876,8 +876,8 @@ object TouchStationControllerMonitor {
     fun refresh() {
         val devices = InputDevice.getDeviceIds().mapNotNull { id ->
             val device = InputDevice.getDevice(id) ?: return@mapNotNull null
-            val hasGamepadSource = (device.sources and InputDevice.SOURCE_GAMEPAD) != 0
-            val hasJoystickSource = (device.sources and InputDevice.SOURCE_JOYSTICK) != 0
+            val hasGamepadSource = (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+            val hasJoystickSource = (device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
             if (device.isVirtual || (!hasGamepadSource && !hasJoystickSource)) {
                 null
             } else {
@@ -1610,7 +1610,7 @@ def patch_touchstation_runtime_features(app_dir: Path) -> None:
     text = performance.read_text(encoding="utf-8")
     if "TouchStationPerformanceMonitor()" in text:
         raise SystemExit("TouchStation performance monitor insertion is already present")
-    marker = "        // Prominent latency preset: zero queued GS frames keeps the emulated CPU\n"
+    marker = '        CollapsibleSection("TouchStation chipset profiles", initiallyExpanded = true) {'
     text = replace_once(
         text,
         marker,
