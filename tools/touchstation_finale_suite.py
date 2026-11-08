@@ -8,9 +8,12 @@ from pathlib import Path
 KOTLIN_SOURCE = r'''package com.armsx2.ui.settings
 
 import android.app.ActivityManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.os.Debug
 import android.os.PowerManager
 import android.os.StatFs
@@ -49,14 +52,17 @@ import com.armsx3.core.ARMSX3
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 private const val TOUCHSTATION_FINALE_COMPAT_URL =
     "https://rpcs3.net/compatibility/?api=v1&export"
 private const val TOUCHSTATION_FINALE_COMPAT_FILE = "touchstation-finale-compatibility.json"
 private const val TOUCHSTATION_FINALE_COMPAT_SYNC_KEY = "touchstation.finale.compatLastSync"
+private const val TOUCHSTATION_FINALE_ERROR_HISTORY_KEY = "touchstation.finale.errorHistory"
 
 /**
  * Shared exact-ID compatibility cache used by the settings centre and game-library tiles.
@@ -111,6 +117,87 @@ object TouchStationFinaleCompatibilityStore {
 
     suspend fun loadCache(context: Context) {
         replace(withContext(Dispatchers.IO) { touchStationFinaleReadCache(context) })
+    }
+}
+
+
+/**
+ * Bounded, local-only game error history. Dismissal hides the banner, not the recorded event.
+ * Only error text supplied by the bridge is stored; no log is uploaded automatically.
+ */
+object TouchStationFinaleErrorHistory {
+    private fun readEvents(): JSONArray = runCatching {
+        JSONArray(MainActivityRuntime.prefs.getString(TOUCHSTATION_FINALE_ERROR_HISTORY_KEY, "[]") ?: "[]")
+    }.getOrDefault(JSONArray())
+
+    fun record(message: String) {
+        val previous = readEvents()
+        val next = JSONArray()
+        val start = (previous.length() - 29).coerceAtLeast(0)
+        for (index in start until previous.length()) {
+            previous.optJSONObject(index)?.let { next.put(it) }
+        }
+        next.put(
+            JSONObject()
+                .put("timestamp", System.currentTimeMillis())
+                .put("message", message.take(2_000))
+                .put("fifo", message.contains("FIFO", ignoreCase = true))
+                .put("critical", isCritical(message)),
+        )
+        MainActivityRuntime.prefs.edit()
+            .putString(TOUCHSTATION_FINALE_ERROR_HISTORY_KEY, next.toString())
+            .apply()
+    }
+
+    fun latestMessage(): String {
+        val events = readEvents()
+        return events.optJSONObject(events.length() - 1)
+            ?.optString("message").orEmpty().ifBlank { "None recorded" }
+    }
+
+    fun eventCount(): Int = readEvents().length()
+
+    fun fifoFailureCount(): Int {
+        val events = readEvents()
+        return (0 until events.length()).count {
+            events.optJSONObject(it)?.optBoolean("fifo", false) == true
+        }
+    }
+
+    fun isCritical(message: String): Boolean {
+        val value = message.lowercase(Locale.ROOT)
+        return listOf("fatal", "dead fifo", "segmentation fault", "access violation", "abort",
+            "panic", "native crash", "process terminated").any { it in value }
+    }
+
+    fun explanation(message: String): String {
+        val value = message.lowercase(Locale.ROOT)
+        return when {
+            "dead fifo" in value || "fifo" in value ->
+                "The RSX graphics command queue reported a failure. The game may have stopped; dismissing this notice cannot resume it."
+            "out of memory" in value || "memory" in value ->
+                "The emulator or game reported a memory problem. Close other apps and relaunch the game after checking available memory."
+            "shader" in value ->
+                "The graphics shader path reported an error. A shader cache or graphics-driver issue may be involved."
+            "spu" in value || "ppu" in value ->
+                "A PS3 processor task reported an error. The game may require a native-core fix or different supported settings."
+            else ->
+                "The emulator reported a game error. The exact cause needs the exported TouchStation.log for diagnosis."
+        }
+    }
+
+    fun suggestion(message: String): String {
+        val value = message.lowercase(Locale.ROOT)
+        return when {
+            "dead fifo" in value || "fifo" in value ->
+                "Save the log, stop the game, then relaunch. Do not assume a dismissed FIFO error means the queue recovered."
+            "shader" in value ->
+                "Save the log and test the game with its shader cache preserved; do not delete cache files automatically."
+            "memory" in value ->
+                "Save the log, close other apps and retry after the device has cooled down."
+            else ->
+                "Export TouchStation.log and include the game title, title ID and the steps that led to the error."
+        }
     }
 }
 
@@ -256,17 +343,92 @@ private fun touchStationFinaleGtaIv(title: String): Boolean {
         Regex("""\bgta\s*iv\b""", RegexOption.IGNORE_CASE).containsMatchIn(title)
 }
 
-private fun touchStationFinaleShareReport(context: Context, report: String) {
+private fun touchStationFinaleShareReport(
+    context: Context,
+    report: String,
+    subject: String = "TouchStation Version Finale diagnostic report",
+) {
     runCatching {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "TouchStation Version Finale diagnostic report")
+            putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, report)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(Intent.createChooser(intent, "Share diagnostic report").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
+
+private suspend fun touchStationFinaleCollectLog(context: Context, diagnosticReport: String): String =
+    withContext(Dispatchers.IO) {
+        val temporary = File(context.cacheDir, "TouchStation-logcat.tmp")
+        val capture = runCatching {
+            val process = ProcessBuilder(
+                "logcat", "-d", "-t", "3000", "--pid=${android.os.Process.myPid()}",
+            ).redirectErrorStream(true).redirectOutput(temporary).start()
+            if (!process.waitFor(6, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                error("logcat capture timed out")
+            }
+            if (temporary.isFile && temporary.length() in 1L..(4L * 1024L * 1024L)) {
+                temporary.readText(Charsets.UTF_8).takeLast(2_000_000)
+            } else {
+                "No app-process log lines were returned. Android may restrict logcat access."
+            }
+        }.getOrElse {
+            "App-process log capture unavailable: " + (it.message ?: "unknown error")
+        }
+        temporary.delete()
+        buildString {
+            appendLine("TouchStation.log")
+            appendLine("Created: " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.US).format(java.util.Date()))
+            appendLine("Capture scope: this TouchStation app process only; system-wide logs are not collected.")
+            appendLine("Recent error count: " + TouchStationFinaleErrorHistory.eventCount())
+            appendLine("Recorded FIFO errors: " + TouchStationFinaleErrorHistory.fifoFailureCount())
+            appendLine("Latest recorded error: " + TouchStationFinaleErrorHistory.latestMessage())
+            appendLine()
+            appendLine("=== Android app-process logcat ===")
+            appendLine(capture)
+            appendLine()
+            appendLine("=== TouchStation diagnostic snapshot ===")
+            append(diagnosticReport)
+        }.also {
+            File(context.cacheDir, "TouchStation.log").writeText(it, Charsets.UTF_8)
+        }
+    }
+
+private suspend fun touchStationFinaleSaveLog(context: Context, contents: String): Pair<Boolean, String> =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            require(contents.isNotBlank()) { "The log is empty." }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, "TouchStation.log")
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: error("Android could not create the Downloads file.")
+                try {
+                    val output = context.contentResolver.openOutputStream(uri)
+                        ?: error("Android could not open the Downloads file.")
+                    output.use { it.write(contents.toByteArray(Charsets.UTF_8)) }
+                } catch (error: Exception) {
+                    context.contentResolver.delete(uri, null, null)
+                    throw error
+                }
+                "Saved to Downloads/TouchStation.log"
+            } else {
+                val directory = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
+                val destination = File(directory, "TouchStation.log")
+                destination.writeText(contents, Charsets.UTF_8)
+                "Saved to " + destination.absolutePath
+            }
+        }.fold(
+            onSuccess = { true to it },
+            onFailure = { false to ("Log export failed: " + (it.message ?: "storage error")) },
+        )
+    }
 
 @Composable
 private fun TouchStationFinaleRow(label: String, value: String) {
@@ -331,6 +493,9 @@ fun TouchStationFinaleSuite(
     val librarySearch = remember { mutableStateOf("") }
     val busy = remember { mutableStateOf(false) }
     val message = remember { mutableStateOf("Compatibility data has not been refreshed in this session.") }
+    val logBusy = remember { mutableStateOf(false) }
+    val logContents = remember { mutableStateOf("") }
+    val logMessage = remember { mutableStateOf("No TouchStation.log has been exported in this session.") }
     val game: GameInfo? = MainActivityRuntime.currentGame.value
     val gameTitle = game?.title?.takeIf { it.isNotBlank() } ?: "No game selected"
     val serial = game?.serial?.takeIf { it.isNotBlank() }
@@ -383,6 +548,11 @@ fun TouchStationFinaleSuite(
         appendLine("Native runtime ready: " + nativeReady)
         appendLine("Game: " + gameTitle)
         appendLine("Game ID: " + (serial ?: "N/A"))
+        appendLine("Recorded game errors: " + TouchStationFinaleErrorHistory.eventCount())
+        appendLine("Recorded FIFO errors: " + TouchStationFinaleErrorHistory.fifoFailureCount())
+        appendLine("Latest recorded error: " + TouchStationFinaleErrorHistory.latestMessage())
+        appendLine("Latest error explanation: " + TouchStationFinaleErrorHistory.explanation(TouchStationFinaleErrorHistory.latestMessage()))
+        appendLine("Latest error recovery suggestion: " + TouchStationFinaleErrorHistory.suggestion(TouchStationFinaleErrorHistory.latestMessage()))
         appendLine("Official PC compatibility: " + officialStatus)
         appendLine("Official test date: " + officialDate)
         appendLine("Local device test: " + localStatus)
@@ -651,6 +821,65 @@ fun TouchStationFinaleSuite(
                 TouchStationFinaleRow("SPU cache / LLVM precompile", settings.ps3.spuCache.toString() + " / " + settings.ps3.llvmPrecompile)
             }
 
+            TouchStationFinaleSection("07 · Error history and FIFO diagnostics") {
+                TouchStationFinaleRow("Recorded game errors", TouchStationFinaleErrorHistory.eventCount().toString())
+                TouchStationFinaleRow("Recorded FIFO failures", TouchStationFinaleErrorHistory.fifoFailureCount().toString())
+                TouchStationFinaleRow("Latest error", TouchStationFinaleErrorHistory.latestMessage().take(160))
+                Text(
+                    TouchStationFinaleErrorHistory.explanation(TouchStationFinaleErrorHistory.latestMessage()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    TouchStationFinaleErrorHistory.suggestion(TouchStationFinaleErrorHistory.latestMessage()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "The bundled native bridge does not expose live FIFO queue depth, command progress, GPU fences or RSX command validation. TouchStation records explicit FIFO errors and exports evidence, but cannot safely reset or repair a stalled native queue from the Android UI.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            Button(
+                onClick = {
+                    if (!logBusy.value) {
+                        scope.launch {
+                            logBusy.value = true
+                            val result = runCatching {
+                                val contents = touchStationFinaleCollectLog(context, report)
+                                logContents.value = contents
+                                touchStationFinaleSaveLog(context, contents)
+                            }.getOrElse {
+                                false to ("Log export failed: " + (it.message ?: "unknown error"))
+                            }
+                            logMessage.value = result.second
+                            logBusy.value = false
+                        }
+                    }
+                },
+                enabled = !logBusy.value,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (logBusy.value) "Collecting log…" else "Download TouchStation.log")
+            }
+            OutlinedButton(
+                onClick = {
+                    if (logContents.value.isNotBlank()) {
+                        touchStationFinaleShareReport(context, logContents.value, "TouchStation.log")
+                    }
+                },
+                enabled = logContents.value.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Share TouchStation.log")
+            }
+            Text(
+                logMessage.value,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             OutlinedButton(
                 onClick = { touchStationFinaleShareReport(context, report) },
                 modifier = Modifier.fillMaxWidth(),
@@ -701,7 +930,7 @@ def patch_version(app_dir: Path) -> None:
     if "versionCode = 1100" not in text or 'versionName = "11.0.0"' not in text:
         raise SystemExit("Expected prepared 11.0.0 / versionCode 1100 app before Finale promotion")
     text = replace_once(text, "versionCode = 1100", "versionCode = 1200", "versionCode")
-    text = replace_once(text, 'versionName = "11.0.0"', 'versionName = "Finale"', "versionName")
+    text = replace_once(text, 'versionName = "11.0.0"', 'versionName = "TouchStation Finale"', "versionName")
     path.write_text(text, encoding="utf-8")
 
 
@@ -812,6 +1041,91 @@ def patch_library_compatibility(app_dir: Path) -> None:
     view_model.write_text(vm_text, encoding="utf-8")
 
 
+
+def patch_game_error_banner(app_dir: Path) -> None:
+    """Record game errors and make the banner dismissible with an upward swipe."""
+    path = app_dir / "src/main/java/com/armsx2/ui/emulation/GameErrorBanner.kt"
+    text = path.read_text(encoding="utf-8")
+    if "TouchStationFinaleErrorHistory" in text:
+        raise SystemExit("Finale game-error banner patch is already present")
+
+    text = replace_once(
+        text,
+        "import androidx.compose.foundation.clickable\\n",
+        "import androidx.compose.foundation.gestures.detectVerticalDragGestures\\n",
+        "game-error swipe gesture import",
+    )
+    text = replace_once(
+        text,
+        "import androidx.compose.runtime.mutableStateOf\\n",
+        "import androidx.compose.runtime.mutableStateOf\\nimport androidx.compose.ui.graphics.graphicsLayer\\nimport androidx.compose.ui.input.pointer.pointerInput\\n",
+        "game-error pointer input imports",
+    )
+    text = replace_once(
+        text,
+        "import com.armsx2.i18n.str\\n",
+        "import com.armsx2.i18n.str\\nimport com.armsx2.ui.settings.TouchStationFinaleErrorHistory\\n",
+        "game-error history import",
+    )
+    text = replace_once(
+        text,
+        "    fun clear() {\\n        reason.value = null\\n    }",
+        "    fun clear() {\\n        reason.value = null\\n    }\\n\\n    fun isCritical(error: String): Boolean = TouchStationFinaleErrorHistory.isCritical(error)",
+        "game-error critical classifier",
+    )
+    text = replace_once(
+        text,
+        "        reason.value = line",
+        "        TouchStationFinaleErrorHistory.record(line)\\n        reason.value = line",
+        "game-error history recording",
+    )
+    text = replace_once(
+        text,
+        "        val shown = remember(reason) { reason }.orEmpty()",
+        "        val shown = remember(reason) { reason }.orEmpty()\\n        val critical = GameErrorNotice.isCritical(shown)\\n        val verticalDrag = remember(reason) { mutableStateOf(0f) }",
+        "game-error drag state",
+    )
+    text = replace_once(
+        text,
+        "            modifier = Modifier\\n                .windowInsetsPadding",
+        """            modifier = Modifier
+                .pointerInput(reason) {
+                    detectVerticalDragGestures(
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            verticalDrag.value = (verticalDrag.value + dragAmount).coerceAtMost(0f)
+                        },
+                        onDragEnd = {
+                            if (verticalDrag.value <= -72f) GameErrorNotice.clear()
+                            verticalDrag.value = 0f
+                        },
+                        onDragCancel = { verticalDrag.value = 0f },
+                    )
+                }
+                .graphicsLayer { translationY = verticalDrag.value }
+                .windowInsetsPadding""",
+        "game-error swipe modifier",
+    )
+    text = replace_once(
+        text,
+        "                Text(shown, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)",
+        """                Text(shown, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    TouchStationFinaleErrorHistory.explanation(shown),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    if (critical) "Critical error recorded. Swiping only hides this notice; it does not resume the game."
+                    else "Swipe this notice upward to dismiss it. The event remains in error history.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )""",
+        "game-error explanation and safety copy",
+    )
+    path.write_text(text, encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path)
@@ -830,6 +1144,7 @@ def main() -> None:
     suite_path.write_text(KOTLIN_SOURCE, encoding="utf-8")
     patch_performance_tab(app_dir)
     patch_library_compatibility(app_dir)
+    patch_game_error_banner(app_dir)
 
     required_markers = [
         "Update official compatibility database",
@@ -839,6 +1154,9 @@ def main() -> None:
         "SPU XFloat",
         "safe SPU block mode",
         "Export Finale diagnostic report",
+        "Download TouchStation.log",
+        "Share TouchStation.log",
+        "TouchStationFinaleErrorHistory.fifoFailureCount()",
         "Physical controllers",
         "Engine initialized",
         "GPU utilization",
@@ -852,7 +1170,7 @@ def main() -> None:
         missing.append("Exact title-ID normalizer")
     if missing:
         raise SystemExit("Missing Finale source markers: " + ", ".join(missing))
-    print("Applied TouchStation Version Finale suite, official compatibility sync and GTA IV settings profile.")
+    print("Applied TouchStation Finale suite, downloadable app logs, persistent error history, swipe-dismiss diagnostics and GTA IV settings profile.")
 
 
 if __name__ == "__main__":
