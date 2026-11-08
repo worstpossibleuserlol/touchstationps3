@@ -45,6 +45,7 @@ import com.armsx2.GamePlatform
 import com.armsx2.data.library.GameLibraryRepository
 import com.armsx2.config.Settings
 import com.armsx2.config.SettingsScope
+import com.armsx2.config.CoreSettingOverrides
 import com.armsx2.runtime.MainActivityRuntime
 import com.armsx2.ui.InGameOverlay
 import com.armsx3.HttpClient
@@ -337,6 +338,61 @@ private fun touchStationFinaleDeviceKey(serial: String, device: TouchStationFina
     return "touchstation.finale.local.$game.$handset.$abi"
 }
 
+
+private const val TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH = "Core@@RSX FIFO Fetch Accuracy"
+private const val TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH = "Video@@Driver Wake-Up Delay"
+
+private fun touchStationFinaleReadCoreSetting(path: String): String =
+    runCatching {
+        JSONObject(ARMSX3.instance.settingsGet(path)).opt("value")?.toString() ?: "N/A"
+    }.getOrDefault("N/A")
+
+/**
+ * The native dead-FIFO exception recommends moving RSX FIFO accuracy away from PS3
+ * mode and increasing Driver Wake-Up Delay. Apply supported values only to this
+ * game's scope and read them back before reporting success.
+ */
+private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boolean, String> {
+    if (serial.isBlank() || !ARMSX3.initialized) {
+        return false to "Native runtime or game title ID is unavailable."
+    }
+    val accuracyValue = JSONObject.quote("Ordered & Atomic")
+    val delayValue = "20"
+    var accuracyApplied = false
+    var delayApplied = false
+    runCatching { ARMSX3.instance.settingsBeginBatch() }
+    try {
+        accuracyApplied = runCatching {
+            ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue)
+        }.getOrDefault(false)
+        delayApplied = runCatching {
+            ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH, delayValue)
+        }.getOrDefault(false)
+    } finally {
+        runCatching { ARMSX3.instance.settingsEndBatch() }
+    }
+    if (accuracyApplied) {
+        runCatching {
+            CoreSettingOverrides.record(
+                SettingsScope.Game, serial, TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue,
+            )
+        }
+    }
+    if (delayApplied) {
+        runCatching {
+            CoreSettingOverrides.record(
+                SettingsScope.Game, serial, TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH, delayValue,
+            )
+        }
+    }
+    val accuracyReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH)
+    val delayReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH)
+    val verified = accuracyApplied && delayApplied &&
+        accuracyReadback == "Ordered & Atomic" && delayReadback == delayValue
+    val detail = "RSX FIFO Fetch Accuracy: $accuracyReadback; Driver Wake-Up Delay: $delayReadback µs."
+    return verified to detail
+}
+
 private fun touchStationFinaleGtaIv(title: String): Boolean {
     val normalized = title.lowercase(Locale.ROOT)
     return normalized.contains("grand theft auto iv") ||
@@ -551,6 +607,8 @@ fun TouchStationFinaleSuite(
         appendLine("Recorded game errors: " + TouchStationFinaleErrorHistory.eventCount())
         appendLine("Recorded FIFO errors: " + TouchStationFinaleErrorHistory.fifoFailureCount())
         appendLine("Latest recorded error: " + TouchStationFinaleErrorHistory.latestMessage())
+        appendLine("RSX FIFO Fetch Accuracy: " + touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH))
+        appendLine("Driver Wake-Up Delay: " + touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH) + " µs")
         appendLine("Latest error explanation: " + TouchStationFinaleErrorHistory.explanation(TouchStationFinaleErrorHistory.latestMessage()))
         appendLine("Latest error recovery suggestion: " + TouchStationFinaleErrorHistory.suggestion(TouchStationFinaleErrorHistory.latestMessage()))
         appendLine("Official PC compatibility: " + officialStatus)
@@ -753,7 +811,7 @@ fun TouchStationFinaleSuite(
                 TouchStationFinaleRow("Game detected", if (isGtaIv) "Grand Theft Auto IV" else "Not the selected game")
                 TouchStationFinaleRow("Settings scope", if (settingsArePerGame) "Per-game" else "Global")
                 Text(
-                    "The conservative profile selects safe SPU block mode, accurate SPU XFloat, asynchronous shader recompilation, MSAA off, cached SPU code, precompilation and restrained LLVM/PPU thread counts. It does not add missing native core features or guarantee GTA IV will boot or run smoothly.",
+                    "The profile selects safe SPU block mode, accurate SPU XFloat, asynchronous shaders, MSAA off, SPU cache, LLVM precompile and restrained PPU/LLVM threads. It also applies RSX FIFO Fetch Accuracy = Ordered & Atomic and Driver Wake-Up Delay = 20 µs to this game only. Ordered & Atomic can reduce performance; this is a targeted stability test, not a GTA IV guarantee.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -774,10 +832,15 @@ fun TouchStationFinaleSuite(
                             ),
                         )
                         val saved = runCatching { onApply(configured) }.getOrDefault(false)
-                        message.value = if (saved) {
-                            "GTA IV conservative settings were saved and read back. Test the game and report the result separately."
+                        val fifoResult = if (saved && serial != null) {
+                            touchStationFinaleApplyFifoRecoveryProfile(serial)
                         } else {
-                            "Settings could not be verified. No successful profile application is claimed."
+                            false to "A per-game title ID or verified settings save is unavailable."
+                        }
+                        message.value = when {
+                            !saved -> "Settings could not be verified. No successful profile application is claimed."
+                            fifoResult.first -> "GTA IV profile and FIFO recovery settings were saved and read back. " + fifoResult.second
+                            else -> "The standard GTA IV profile was saved, but FIFO settings were not fully verified: " + fifoResult.second
                         }
                     },
                     enabled = isGtaIv && settingsArePerGame && game != null,
@@ -819,6 +882,8 @@ fun TouchStationFinaleSuite(
                 TouchStationFinaleRow("Shader recompilation mode", settings.ps3.shaderMode.toString())
                 TouchStationFinaleRow("MSAA mode", settings.ps3.msaaMode.toString())
                 TouchStationFinaleRow("SPU cache / LLVM precompile", settings.ps3.spuCache.toString() + " / " + settings.ps3.llvmPrecompile)
+                TouchStationFinaleRow("RSX FIFO Fetch Accuracy", touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH))
+                TouchStationFinaleRow("Driver Wake-Up Delay", touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH) + " µs")
             }
 
             TouchStationFinaleSection("07 · Error history and FIFO diagnostics") {
@@ -1075,8 +1140,14 @@ def patch_game_error_banner(app_dir: Path) -> None:
     )
     text = replace_once(
         text,
+        "        val line = error.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: return",
+        "        val fullMessage = error.trim().take(4_000)\n        val line = fullMessage.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: return",
+        "game-error full message",
+    )
+    text = replace_once(
+        text,
         "        reason.value = line",
-        "        TouchStationFinaleErrorHistory.record(line)\n        reason.value = line",
+        "        TouchStationFinaleErrorHistory.record(fullMessage)\n        reason.value = fullMessage",
         "game-error history recording",
     )
     text = replace_once(
@@ -1156,6 +1227,10 @@ def main() -> None:
         "Export Finale diagnostic report",
         "Download TouchStation.log",
         "Share TouchStation.log",
+        "Core@@RSX FIFO Fetch Accuracy",
+        "Video@@Driver Wake-Up Delay",
+        "Ordered & Atomic",
+        "touchStationFinaleApplyFifoRecoveryProfile",
         "TouchStationFinaleErrorHistory.fifoFailureCount()",
         "Physical controllers",
         "Engine initialized",
