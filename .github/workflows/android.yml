@@ -168,11 +168,30 @@ jobs:
           UPSTREAM="$RUNNER_TEMP/armsx3-source"
           WRAPPER_PROPERTIES="$UPSTREAM/android/armsx3-ui/gradle/wrapper/gradle-wrapper.properties"
           test -s "$WRAPPER_PROPERTIES"
+          # Use Gradle's alternate official download host to avoid the intermittent
+          # services.gradle.org -> GitHub release-asset 504 path seen on this runner.
+          # The upstream-pinned distributionSha256Sum remains unchanged and is enforced by Wrapper.
+          python3 - "$WRAPPER_PROPERTIES" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          content = path.read_text(encoding="utf-8")
+          expected = "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.1-bin.zip"
+          alternate = "distributionUrl=https\\://downloads.gradle.org/distributions/gradle-9.4.1-bin.zip"
+          if alternate not in content:
+              if content.count(expected) != 1:
+                  raise SystemExit("Expected exactly one pinned Gradle 9.4.1 distribution URL")
+              content = content.replace(expected, alternate, 1)
+          path.write_text(content, encoding="utf-8")
+          PY
           if grep -q '^networkTimeout=' "$WRAPPER_PROPERTIES"; then
             sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$WRAPPER_PROPERTIES"
           else
             printf '\\nnetworkTimeout=120000\\n' >> "$WRAPPER_PROPERTIES"
           fi
+          grep -Fxq 'distributionUrl=https\\://downloads.gradle.org/distributions/gradle-9.4.1-bin.zip' "$WRAPPER_PROPERTIES"
+          grep -Fxq 'distributionSha256Sum=2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb' "$WRAPPER_PROPERTIES"
           grep -Fxq 'networkTimeout=120000' "$WRAPPER_PROPERTIES"
 
           # Package the exact patched source and all build scripts for GPL source distribution.
