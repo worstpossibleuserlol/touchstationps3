@@ -73,6 +73,37 @@ fun PerformanceTab() {
             with self.assertRaises(SystemExit):
                 FINALE.patch_performance_tab(app)
 
+    def test_library_badge_uses_exact_cached_desktop_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary)
+            home = app / "src/main/java/com/armsx2/ui/home/HomeScreen.kt"
+            home.parent.mkdir(parents=True)
+            home.write_text(
+                """package com.armsx2.ui.home
+import com.armsx2.GameInfo
+fun HomeScreen() {
+    val context = LocalContext.current
+}
+@Composable
+private fun GameMetadata(game: GameInfo) {
+    Row {
+        game.regionFlag?.let { Text(it, fontSize = 13.sp) }
+        if (game.compatibility > 0) {
+            Text("★")
+        }
+    }
+}
+""",
+                encoding="utf-8",
+            )
+            FINALE.patch_library_compatibility(app)
+            result = home.read_text(encoding="utf-8")
+            self.assertIn("TouchStationFinaleCompatibilityStore.loadCache(context)", result)
+            self.assertIn('StatusChip("PC: $status")', result)
+            self.assertIn("import com.armsx2.ui.settings.TouchStationFinaleCompatibilityStore", result)
+            with self.assertRaises(SystemExit):
+                FINALE.patch_library_compatibility(app)
+
     def test_finale_source_has_exact_id_compatibility_and_safe_profile(self) -> None:
         source = FINALE.KOTLIN_SOURCE
         for marker in (
