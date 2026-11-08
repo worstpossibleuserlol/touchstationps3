@@ -166,6 +166,7 @@ jobs:
           grep -Fq 'LaunchedEffect(compatibilityRevision, state.sort)' "$HOME"
           grep -Fq 'Update official compatibility database' "$FINALE_SUITE"
           grep -Fq 'Full library compatibility index' "$FINALE_SUITE"
+          grep -Fq "Reload cached library index" "$FINALE_SUITE"
           grep -Fq 'Apply GTA IV per-game profile' "$FINALE_SUITE"
           grep -Fq 'exact normalized PS3 title ID' "$FINALE_SUITE"
           grep -Fq 'PPU compilation progress' "$V11_SUITE"
