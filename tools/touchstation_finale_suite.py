@@ -1208,7 +1208,13 @@ object TouchStationFinaleReliability {
         val directory = diagnosticsDir(application)
         val marker = File(directory, "uncaught.marker")
         if (marker.isFile) {
-            recordEvent(application, "crash-recovery", "A previous Java/Kotlin uncaught exception was recorded.")
+            application.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(SAFE_MODE_KEY, true).apply()
+            recordEvent(
+                application,
+                "crash-recovery",
+                "A previous Java/Kotlin uncaught exception was recorded; safe mode was enabled for the next session.",
+            )
             marker.delete()
         }
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
