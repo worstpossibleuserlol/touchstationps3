@@ -159,8 +159,19 @@ jobs:
           python tools/add_gpl_modification_notices.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
-          # Package the exact patched source and all build scripts for GPL source distribution.
+          # The pinned upstream wrapper defaults to a 10-second distribution-download timeout.
+          # Keep the pinned Gradle version and SHA-256, but allow slow CI downloads to complete.
           UPSTREAM="$RUNNER_TEMP/armsx3-source"
+          WRAPPER_PROPERTIES="$UPSTREAM/android/armsx3-ui/gradle/wrapper/gradle-wrapper.properties"
+          test -s "$WRAPPER_PROPERTIES"
+          if grep -q '^networkTimeout=' "$WRAPPER_PROPERTIES"; then
+            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$WRAPPER_PROPERTIES"
+          else
+            printf '\\nnetworkTimeout=120000\\n' >> "$WRAPPER_PROPERTIES"
+          fi
+          grep -Fxq 'networkTimeout=120000' "$WRAPPER_PROPERTIES"
+
+          # Package the exact patched source and all build scripts for GPL source distribution.
           mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/docs" "$UPSTREAM/touchstation-build/.github/workflows"
           cp LICENSE README.md THIRD_PARTY_NOTICES.md SOURCE_DISTRIBUTION.md "$UPSTREAM/touchstation-build/"
           cp docs/FINALE_FEATURES.md "$UPSTREAM/touchstation-build/docs/"
@@ -318,6 +329,27 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./gradlew
+
+          # Bootstrap the pinned Gradle distribution separately. Retry only this download
+          # step; do not mask failures from the actual Android compilation.
+          gradle_ready=0
+          for attempt in 1 2 3; do
+            echo "Gradle wrapper bootstrap attempt $attempt/3"
+            if ./gradlew --no-daemon --version; then
+              gradle_ready=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              delay=$((attempt * 15))
+              echo "Gradle distribution download failed; retrying in ${delay}s."
+              sleep "$delay"
+            fi
+          done
+          if [ "$gradle_ready" -ne 1 ]; then
+            echo "Could not bootstrap the pinned Gradle distribution after 3 attempts." >&2
+            exit 1
+          fi
+
           ./gradlew --no-daemon --stacktrace :app:assembleGithubRelease
 
       - name: Verify package, branding, icon, and native engine
