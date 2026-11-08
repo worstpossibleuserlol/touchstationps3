@@ -12,6 +12,14 @@ TouchStation is an Android ARM64 distribution of the ARMSX3 Android PS3 emulator
 
 Chipset profiles only adjust supported emulator settings. They do not overclock the phone, change voltage, or replace graphics drivers. Performance depends on SoC generation, Vulkan driver, memory, thermals and the game being run. Some options are device- or game-dependent.
 
+## Menu and controller access
+
+The navigation drawer includes direct links to the TouchStation GitHub repository, the structured **Report a Bug** issue form, and **About TouchStation**. The About page shows the installed app/core versions, device details, project source, upstream base, and license information.
+
+The drawer rows use the controller navigation system. While a game is running, open the pause menu and use the D-pad to move between tabs and controls. **Y** opens the Options tab; select **All Settings** with the confirm button to open the full in-game settings screen. **L1/R1** also cycle pause-menu tabs, and **B** backs out.
+
+The small top-right gear remains touch-only so it does not take over a controller button that games may need. Controller users can reach the same full settings screen through **Pause Menu → Options → All Settings**. The in-game Settings page also exposes controller-focusable Resume Game, Restart Game, Save State & Exit, and Exit Game actions.
+
 ## Emulator engine
 
 The native PPU/SPU execution, RSX/Vulkan rendering, firmware installation and game-boot workflows are provided by the pinned upstream ARMSX3 release. TouchStation is a downstream branded distribution with configuration additions, not a new emulator core.
