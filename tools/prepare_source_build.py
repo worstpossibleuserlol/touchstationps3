@@ -568,23 +568,30 @@ private object TouchStationMetricReader {
 
     /** Device-wide CPU load, sampled from Linux procfs rather than guessed from clock speed. */
     @Synchronized
-    fun cpuPercent(): Float? = runCatching {
-        val fields = File("/proc/stat").useLines { lines ->
-            lines.firstOrNull()?.trim()?.split(Regex("\\s+"))?.drop(1)
-                ?.mapNotNull { it.toLongOrNull() }
-        } ?: return null
-        if (fields.size < 4) return null
-        val values = fields.take(8)
-        val total = values.sum()
-        val idle = values[3] + (values.getOrNull(4) ?: 0L)
-        val old = previousCpu
-        previousCpu = total to idle
-        if (old == null) return null
-        val totalDelta = total - old.first
-        val idleDelta = idle - old.second
-        if (totalDelta <= 0L) return null
-        ((totalDelta - idleDelta).toFloat() * 100f / totalDelta.toFloat()).coerceIn(0f, 100f)
-    }.getOrNull()
+    fun cpuPercent(): Float? {
+        return runCatching {
+            val fields = File("/proc/stat").useLines { lines ->
+                lines.firstOrNull()?.trim()?.split(Regex("\\s+"))?.drop(1)
+                    ?.mapNotNull { it.toLongOrNull() }
+            }
+            if (fields == null || fields.size < 4) {
+                null
+            } else {
+                val values = fields.take(8)
+                val total = values.sum()
+                val idle = values[3] + (values.getOrNull(4) ?: 0L)
+                val old = previousCpu
+                previousCpu = total to idle
+                val totalDelta = if (old == null) 0L else total - old.first
+                val idleDelta = if (old == null) 0L else idle - old.second
+                if (old == null || totalDelta <= 0L) {
+                    null
+                } else {
+                    ((totalDelta - idleDelta).toFloat() * 100f / totalDelta.toFloat()).coerceIn(0f, 100f)
+                }
+            }
+        }.getOrNull()
+    }
 
     /** Reads real driver counters where the Android kernel exposes them to an app process. */
     @Synchronized
