@@ -118,7 +118,6 @@ jobs:
           cp LICENSE README.md THIRD_PARTY_NOTICES.md SOURCE_DISTRIBUTION.md "$UPSTREAM/touchstation-build/"
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
-          cp "$UPSTREAM/TOUCHSTATION_MODIFICATIONS.md" "$UPSTREAM/"
           tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
             -czf "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
             -C "$RUNNER_TEMP" armsx3-source
