@@ -1605,6 +1605,8 @@ def patch_application_reliability(app_dir: Path) -> None:
     """Initialize Finale lifecycle and crash diagnostics from Application.onCreate."""
     path = app_dir / "src/main/java/com/armsx2/Pasx2Application.kt"
     text = path.read_text(encoding="utf-8")
+    if "TouchStationFinaleReliability.install(this)" in text:
+        raise SystemExit("Application reliability hook is already installed")
     import_anchor = "import android.os.Build\n"
     text = replace_once(
         text,
