@@ -101,6 +101,29 @@ private fun GameMetadata(game: GameInfo) {
             self.assertIn("TouchStationFinaleCompatibilityStore.loadCache(context)", result)
             self.assertIn('StatusChip("PC: $status")', result)
             self.assertIn("import com.armsx2.ui.settings.TouchStationFinaleCompatibilityStore", result)
+            vm = app / "src/main/java/com/armsx2/ui/home/HomeViewModel.kt"
+            vm.parent.mkdir(parents=True, exist_ok=True)
+            vm.write_text(
+                """package com.armsx2.ui.home
+import com.armsx2.GameInfo
+class HomeViewModel {
+    private fun buildState(base: HomeUiState): HomeUiState {
+        val sorted = when (base.sort) {
+            HomeSort.Compatibility -> filtered.sortedWith(
+                compareByDescending<GameInfo> { it.compatibility }
+                    .thenBy { it.sortKey(forceEn).lowercase() },
+            )
+        }
+        return base.copy(visibleGames = sorted)
+    }
+}
+""",
+                encoding="utf-8",
+            )
+            FINALE.patch_library_compatibility(app)
+            vm_result = vm.read_text(encoding="utf-8")
+            self.assertIn("TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: it.compatibility", vm_result)
+            self.assertIn("LaunchedEffect(compatibilityRevision, state.sort)", result)
             with self.assertRaises(SystemExit):
                 FINALE.patch_library_compatibility(app)
 
