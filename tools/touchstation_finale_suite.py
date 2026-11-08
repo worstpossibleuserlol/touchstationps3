@@ -1377,22 +1377,50 @@ object TouchStationFinaleReliability {
         }
     }.getOrElse { "Source check failed: " + (it.message ?: "provider error") }
 
-    fun sha256GameUri(context: Context, uri: Uri, maxBytes: Long): String = runCatching {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val stream = context.contentResolver.openInputStream(uri) ?: error("Source stream unavailable")
-        var total = 0L
-        stream.use { input ->
-            val buffer = ByteArray(64 * 1024)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                total += count
-                if (total > maxBytes) return "Hash skipped: source exceeds " + maxBytes / (1024L * 1024L) + " MB limit"
-                digest.update(buffer, 0, count)
+    fun sha256GameUri(context: Context, uri: Uri, maxBytes: Long): String {
+        return runCatching {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val stream = context.contentResolver.openInputStream(uri) ?: error("Source stream unavailable")
+            var total = 0L
+            stream.use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > maxBytes) {
+                        return@runCatching "Hash skipped: source exceeds " + maxBytes / (1024L * 1024L) + " MB limit"
+                    }
+                    digest.update(buffer, 0, count)
+                }
             }
-        }
-        "SHA-256 (" + total + " bytes): " + digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-    }.getOrElse { "SHA-256 failed: " + (it.message ?: "source error") }
+            "SHA-256 (" + total + " bytes): " + digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        }.getOrElse { "SHA-256 failed: " + (it.message ?: "source error") }
+    }
+
+    fun startupSelfTest(context: Context, settings: Settings): String {
+        val checks = mutableListOf<String>()
+        val issues = validateSettings(settings)
+        checks += if (issues.isEmpty()) "PASS settings serialize/read back" else "FAIL settings: " + issues.joinToString()
+        val cacheOk = runCatching {
+            val file = File(context.cacheDir, "finale-self-test.tmp")
+            file.writeText("TouchStation Finale self-test", Charsets.UTF_8)
+            val valid = file.readText(Charsets.UTF_8) == "TouchStation Finale self-test"
+            file.delete()
+            valid
+        }.getOrDefault(false)
+        checks += if (cacheOk) "PASS app cache read/write" else "FAIL app cache read/write"
+        val nativeDirectory = File(context.applicationInfo.nativeLibraryDir.orEmpty())
+        val libraryCount = nativeDirectory.listFiles()?.count { it.isFile && it.extension == "so" } ?: 0
+        checks += if (libraryCount > 0) "PASS native library directory (" + libraryCount + " .so files)"
+            else "WARN native libraries not visible in nativeLibraryDir"
+        checks += if (Build.SUPPORTED_ABIS.contains("arm64-v8a")) "PASS arm64-v8a ABI available"
+            else "WARN arm64-v8a ABI not listed"
+        checks += "INFO Android " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT
+        checks += "INFO package " + context.packageName
+        checks += "INFO " + latestCrashSummary(context)
+        return checks.joinToString("\\n")
+    }
 
     fun validateSettings(settings: Settings): List<String> {
         val issues = mutableListOf<String>()
