@@ -48,18 +48,20 @@ class FinalePatchTests(unittest.TestCase):
             source.write_text(
                 """package com.armsx2.ui.settings
 fun PerformanceTab() {
-    TouchStation11ReliabilitySuite(
-        settings = s,
-        onApply = { updated ->
-            runCatching {
-                apply(updated)
-                InGameOverlay.reloadSettings()
-                true
-            }.getOrDefault(false)
-        },
-    )
-    SettingsDivider()
+    Column {
+        TouchStation11ReliabilitySuite(
+            settings = s,
+            onApply = { updated ->
+                runCatching {
+                    apply(updated)
+                    InGameOverlay.reloadSettings()
+                    true
+                }.getOrDefault(false)
+            },
+        )
+        SettingsDivider()
 
+    }
 }
 """,
                 encoding="utf-8",
