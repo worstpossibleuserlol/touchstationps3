@@ -274,6 +274,8 @@ fun GameErrorBanner() {
         for marker in (
             "registerActivityLifecycleCallbacks",
             "setDefaultUncaughtExceptionHandler",
+            "SAFE_MODE_KEY",
+            "uncaught exception was recorded; safe mode was enabled",
             "MAX_LOG_BYTES",
             "pruneCrashes",
             "inspectGameUri",
