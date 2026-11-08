@@ -198,6 +198,9 @@ class HomeViewModel {
             "Ordered & Atomic",
             "touchStationFinaleApplyFifoRecoveryProfile",
             "CoreSettingOverrides.record",
+            "TouchStationFinaleReliability.startupSelfTest(context, settings)",
+            "TouchStationFinaleSettingsRollback.save",
+            "TouchStationFinaleReliability.sha256GameUri",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
@@ -264,6 +267,39 @@ fun GameErrorBanner() {
             with self.assertRaises(SystemExit):
                 FINALE.patch_game_error_banner(app)
         self.assertIn("fullMessage = error.trim().take(4_000)", FINALE_SOURCE_TEXT)
+
+    def test_reliability_module_exposes_bounded_android_services(self) -> None:
+        source = FINALE.RELIABILITY_KOTLIN_SOURCE
+        for marker in (
+            "registerActivityLifecycleCallbacks",
+            "setDefaultUncaughtExceptionHandler",
+            "MAX_LOG_BYTES",
+            "pruneCrashes",
+            "inspectGameUri",
+            "sha256GameUri",
+            "startupSelfTest",
+            "validateSettings",
+            "memoryTrend",
+            "No files changed.",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, source)
+
+    def test_application_reliability_patcher_is_idempotency_guarded(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary)
+            source = app / "src/main/java/com/armsx2/Pasx2Application.kt"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                "package com.armsx2\\nimport android.os.Build\\nclass Pasx2Application {\\n fun onCreate() {\\n installCrashLogging()\\n }\\n}",
+                encoding="utf-8",
+            )
+            FINALE.patch_application_reliability(app)
+            result = source.read_text(encoding="utf-8")
+            self.assertIn("import com.armsx2.reliability.TouchStationFinaleReliability", result)
+            self.assertIn("TouchStationFinaleReliability.install(this)", result)
+            with self.assertRaises(SystemExit):
+                FINALE.patch_application_reliability(app)
 
     def test_native_fifo_limits_are_explicit_not_faked(self) -> None:
         source = FINALE.KOTLIN_SOURCE
