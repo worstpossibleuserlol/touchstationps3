@@ -12,10 +12,9 @@ import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
 import android.content.Intent
-import android.hardware.input.InputManager
 import android.os.Build
 import android.os.Debug
-import android.os.InputDevice
+import android.view.InputDevice
 import android.os.PowerManager
 import android.os.StatFs
 import androidx.compose.foundation.layout.Arrangement
@@ -465,11 +464,14 @@ fun TouchStation11ReliabilitySuite(
                 TouchStation11Row("App memory (PSS)", snapshot.value?.appPssMb?.let { it.toString() + " MB" } ?: "N/A")
                 TouchStation11Row("RAM history (last samples)", memoryGraph)
                 TouchStation11Row("Thermal severity", touchStation11Thermal(snapshot.value?.thermalStatus))
-                TouchStation11Row("Thermal warning", when (snapshot.value?.thermalStatus) {
-                    null -> "N/A"
-                    in PowerManager.THERMAL_STATUS_SEVERE..PowerManager.THERMAL_STATUS_SHUTDOWN -> "Elevated — consider pausing"
-                    in PowerManager.THERMAL_STATUS_MODERATE..PowerManager.THERMAL_STATUS_MODERATE -> "Moderate"
-                    else -> "No elevated thermal warning reported"
+                TouchStation11Row("Thermal warning", run {
+                    val status = snapshot.value?.thermalStatus
+                    when {
+                        status == null -> "N/A"
+                        status >= PowerManager.THERMAL_STATUS_SEVERE -> "Elevated — consider pausing"
+                        status == PowerManager.THERMAL_STATUS_MODERATE -> "Moderate"
+                        else -> "No elevated thermal warning reported"
+                    }
                 })
                 TouchStation11Row("Vulkan system feature", snapshot.value?.vulkanInfo ?: "Scanning…")
                 TouchStation11Row("Vulkan physical-device extensions", "N/A — full VkPhysicalDevice query is not exposed by the current bridge")
