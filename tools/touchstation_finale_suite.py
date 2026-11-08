@@ -1117,7 +1117,7 @@ def patch_game_error_banner(app_dir: Path) -> None:
     text = replace_once(
         text,
         "import androidx.compose.foundation.clickable\n",
-        "import androidx.compose.foundation.gestures.detectVerticalDragGestures\n",
+        "import androidx.compose.foundation.clickable\nimport androidx.compose.foundation.gestures.detectVerticalDragGestures\n",
         "game-error swipe gesture import",
     )
     text = replace_once(
