@@ -586,8 +586,7 @@ def main() -> None:
 
     required_markers = [
         "Update official compatibility database",
-        "touchstation.rpcs3.net",
-        "Exact normalized PS3 title ID",
+        "exact normalized PS3 title ID",
         "Stable session (10+ min)",
         "GTA IV per-game profile",
         "SPU XFloat",
@@ -604,7 +603,6 @@ def main() -> None:
         missing.append("Official compatibility API endpoint")
     if "touchStationFinaleNormaliseId" not in KOTLIN_SOURCE:
         missing.append("Exact title-ID normalizer")
-    missing = [item for item in missing if item not in ("touchstation.rpcs3.net", "Exact normalized PS3 title ID")]
     if missing:
         raise SystemExit("Missing Finale source markers: " + ", ".join(missing))
     print("Applied TouchStation Version Finale suite, official compatibility sync and GTA IV settings profile.")
