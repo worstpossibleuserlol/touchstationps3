@@ -93,6 +93,9 @@ jobs:
           test -s "$APP/src/main/jniLibs/arm64-v8a/libGLESv2_angle.so"
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
+      - name: Validate TouchStation build script
+        run: python3 -m py_compile tools/prepare_source_build.py
+
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
           python tools/prepare_source_build.py \
@@ -146,6 +149,13 @@ jobs:
           grep -Fq 'MainActivityRuntime.closeGame()' "$APP/src/main/java/com/armsx2/ui/settingshub/SettingsScreen.kt"
           grep -Fq 'Exit Game' "$APP/src/main/java/com/armsx2/ui/xmb/XmbInGame.kt"
           grep -Fq 'TouchStation Advanced Settings (26)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          grep -Fq 'TouchStationPerformanceMonitor()' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          grep -Fq 'TouchStation Performance Monitor' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationPerformanceMonitor.kt"
+          grep -Fq 'Game FPS is unavailable because the pinned RPCS3 bridge currently returns no FPS reading.' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationPerformanceMonitor.kt"
+          grep -Fq 'TouchStationControllerConnectionPanel()' "$APP/src/main/java/com/armsx2/ui/controls/ControllerManagerScreen.kt"
+          grep -Fq 'TouchStationControllerWarning' "$APP/src/main/java/com/armsx2/ui/WindowImpl.kt"
+          grep -Fq 'Controller disconnected' "$APP/src/main/java/com/armsx2/ui/controls/TouchStationControllerMonitor.kt"
+          grep -Fq 'Gameplay requires a physical controller.' "$ABOUT"
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
           grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
 
@@ -247,6 +257,10 @@ jobs:
             - TouchStation branding on the launcher, app header, default boot splash, screenshot album, backup filename and default controller-skin display name.
             - Added an explicit Exit Game action to both the classic pause menu and the XMB in-game menu.
             - Added 26 live-applied advanced emulator settings covering RSX rendering, VRAM, texture handling, SPU verification and CPU compatibility.
+            - Added a live Performance settings monitor with device CPU load, driver-reported GPU utilization, app RAM and rolling graphs.
+            - Added physical-controller hot-plug detection, a controller status panel, and an in-game disconnect warning.
+            - Added the controller-only gameplay and touchscreen menu/settings notice to About TouchStation.
+            - The FPS graph reports only real core readings; the current pinned upstream bridge does not expose game FPS yet.
             - Retained shader compiler controls and shader/SPU compile notifications.
             - Retained automatic and manual chipset profiles for Dimensity, Snapdragon and Exynos.
             - Removed the in-game virtual touchscreen overlay; physical controller input remains supported.
