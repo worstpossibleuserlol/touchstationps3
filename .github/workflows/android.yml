@@ -1,7 +1,9 @@
-name: TouchStation 9.0.0 Release
+name: TouchStation 10.0.0 Release
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -10,7 +12,7 @@ permissions:
 
 # Keep release builds queued so the latest branding fix can finish.
 concurrency:
-  group: touchstation-9-0-release
+  group: touchstation-10-0-release
   cancel-in-progress: true
 
 jobs:
@@ -95,7 +97,7 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/add_gpl_modification_notices.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/add_gpl_modification_notices.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
@@ -109,6 +111,8 @@ jobs:
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_v9_auto.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_v10_suite.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/add_gpl_modification_notices.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
@@ -119,12 +123,12 @@ jobs:
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
           tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
-            -czf "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
+            -czf "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz" \
             -C "$RUNNER_TEMP" armsx3-source
-          sha256sum "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
-            > "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256"
-          test -s "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz"
-          tar -tzf "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
+          sha256sum "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz" \
+            > "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz.sha256"
+          test -s "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz"
+          tar -tzf "$RUNNER_TEMP/TouchStation-v10.0.0-corresponding-source.tar.gz" \
             > "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/TOUCHSTATION_MODIFICATIONS.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/tools/add_gpl_modification_notices.py" "$RUNNER_TEMP/source-archive-entries.txt"
@@ -193,7 +197,14 @@ jobs:
           grep -Fq 'TouchStationPpuMonitor(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           grep -Fq 'TouchStation8MonitoringSuite(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           V9_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation9AutoOptimizationSuite.kt"
-          grep -Fq 'TouchStation 9.0 Auto Optimization Suite' "$V9_SUITE"
+          grep -Fq 'TouchStation 10.0 Auto Optimization Suite' "$V9_SUITE"
+          V10_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation10StabilitySuite.kt"
+          grep -Fq 'TouchStation 10.0 PS3 Stability & Diagnostics Suite' "$V10_SUITE"
+          grep -Fq 'Apply PPU Thread Recommendation' "$V10_SUITE"
+          grep -Fq 'Run Game Launch Readiness Check' "$V10_SUITE"
+          grep -Fq 'Apply Safe Game Boot Profile' "$V10_SUITE"
+          grep -Fq 'Export TouchStation 10 Diagnostic Report' "$V10_SUITE"
+          grep -Fq 'touchstation.v10.lastApply' "$V9_SUITE"
           grep -Fq 'Automatic Device Detection' "$V9_SUITE"
           grep -Fq 'Auto Configuration Engine' "$V9_SUITE"
           grep -Fq 'Adaptive Resolution Guard' "$V9_SUITE"
@@ -229,7 +240,7 @@ jobs:
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
           grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
 
-      - name: Build TouchStation 8.0.0 Release
+      - name: Build TouchStation 10.0.0 Release
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
@@ -245,8 +256,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='9.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='900'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='10.0.0'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='1000'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -302,33 +313,34 @@ jobs:
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-v9.0.0-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-v10.0.0-arm64.apk"
 
-      - name: Upload TouchStation 9.0.0 APK and corresponding source
+      - name: Upload TouchStation 10.0.0 APK and corresponding source
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-v9.0.0-arm64
+          name: TouchStation-v10.0.0-arm64
           path: |
-            ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
-            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz
-            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-v10.0.0-arm64.apk
+            ${{ runner.temp }}/TouchStation-v10.0.0-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-v10.0.0-corresponding-source.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish TouchStation 9.0.0 Release
+      - name: Publish TouchStation 10.0.0 Release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v9.0.0
-          name: TouchStation 9.0.0 Release
+          tag_name: v10.0.0
+          name: TouchStation 10.0.0 Release
           make_latest: true
           prerelease: false
           overwrite_files: true
           files: |
-            ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
-            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz
-            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-v10.0.0-arm64.apk
+            ${{ runner.temp }}/TouchStation-v10.0.0-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-v10.0.0-corresponding-source.tar.gz.sha256
           body: |
-            TouchStation 9.0.0 Release for Android ARM64.
+            TouchStation 10.0.0 Release for Android ARM64.
 
             - Added device detection for SoC, CPU cores, ABI, Android version, RAM, storage, display refresh rate, OpenGL ES renderer/vendor and Android-reported Vulkan feature level.
             - Added one-tap Performance, Balanced and Quality automatic configurations. PPU and LLVM compile threads are selected conservatively; Safe SPU block size and MSAA Off are used as starting settings.
@@ -342,7 +354,7 @@ jobs:
             - Added a bounded CPU smoke test; it is not presented as a GPU or PS3 game benchmark.
             - Gameplay remains physical-controller-only. No on-screen gameplay controls are added; touch remains available for menus/settings.
 
-            Corresponding source: download TouchStation-v9.0.0-corresponding-source.tar.gz and verify it with the accompanying .sha256 file. The archive contains the exact pinned upstream source tree, submodules, TouchStation modifications, patch scripts and build workflow for this APK.
+            Corresponding source: download TouchStation-v10.0.0-corresponding-source.tar.gz and verify it with the accompanying .sha256 file. The archive contains the exact pinned upstream source tree, submodules, TouchStation modifications, patch scripts and build workflow for this APK.
 
             Licensing: TouchStation's downstream work is distributed under GPL-2.0-only. Upstream notices and independent third-party licenses are retained. See THIRD_PARTY_NOTICES.md and SOURCE_DISTRIBUTION.md in the source archive.
 
