@@ -444,7 +444,7 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
     val detail = "RSX FIFO Fetch Accuracy: $accuracyReadback; Driver Wake-Up Delay: $delayReadback µs; " +
         "per-game overrides persisted: " + (accuracyPersisted && delayPersisted) + "; " +
         (if (activeNow) "both values are active now." else "saved for the next game launch; restart the game to apply non-dynamic settings.")
-    return verified to detail
+    return persisted to detail
 }
 
 private fun touchStationFinaleGtaIv(title: String): Boolean {
