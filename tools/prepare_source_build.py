@@ -805,12 +805,6 @@ import com.armsx2.navigation.openExternalUrl"""
         "// TouchStation project links and the in-app About page live in this column.",
         "XMB project column comment",
     )
-    text = replace_once(
-        text,
-        'title = "ARMSX3",',
-        'title = "TouchStation",',
-        "XMB project column title",
-    )
     old_discord = """            XmbNode.Action("armsx3.discord", str("about.discord"), XmbIcon(model = R.drawable.ic_discord, glyph = "💬")) {
                 openExternalUrl(context, DiscordUrl)
             },
