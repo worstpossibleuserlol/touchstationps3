@@ -291,7 +291,7 @@ fun GameErrorBanner() {
             source = app / "src/main/java/com/armsx2/Pasx2Application.kt"
             source.parent.mkdir(parents=True)
             source.write_text(
-                "package com.armsx2\\nimport android.os.Build\\nclass Pasx2Application {\\n fun onCreate() {\\n installCrashLogging()\\n }\\n}",
+                "package com.armsx2\nimport android.os.Build\nclass Pasx2Application {\n fun onCreate() {\n installCrashLogging()\n }\n}",
                 encoding="utf-8",
             )
             FINALE.patch_application_reliability(app)
