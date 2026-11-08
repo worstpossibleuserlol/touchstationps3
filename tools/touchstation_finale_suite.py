@@ -1051,43 +1051,43 @@ def patch_game_error_banner(app_dir: Path) -> None:
 
     text = replace_once(
         text,
-        "import androidx.compose.foundation.clickable\\n",
-        "import androidx.compose.foundation.gestures.detectVerticalDragGestures\\n",
+        "import androidx.compose.foundation.clickable\n",
+        "import androidx.compose.foundation.gestures.detectVerticalDragGestures\n",
         "game-error swipe gesture import",
     )
     text = replace_once(
         text,
-        "import androidx.compose.runtime.mutableStateOf\\n",
-        "import androidx.compose.runtime.mutableStateOf\\nimport androidx.compose.ui.graphics.graphicsLayer\\nimport androidx.compose.ui.input.pointer.pointerInput\\n",
+        "import androidx.compose.runtime.mutableStateOf\n",
+        "import androidx.compose.runtime.mutableStateOf\nimport androidx.compose.ui.graphics.graphicsLayer\nimport androidx.compose.ui.input.pointer.pointerInput\n",
         "game-error pointer input imports",
     )
     text = replace_once(
         text,
-        "import com.armsx2.i18n.str\\n",
-        "import com.armsx2.i18n.str\\nimport com.armsx2.ui.settings.TouchStationFinaleErrorHistory\\n",
+        "import com.armsx2.i18n.str\n",
+        "import com.armsx2.i18n.str\nimport com.armsx2.ui.settings.TouchStationFinaleErrorHistory\n",
         "game-error history import",
     )
     text = replace_once(
         text,
-        "    fun clear() {\\n        reason.value = null\\n    }",
-        "    fun clear() {\\n        reason.value = null\\n    }\\n\\n    fun isCritical(error: String): Boolean = TouchStationFinaleErrorHistory.isCritical(error)",
+        "    fun clear() {\n        reason.value = null\n    }",
+        "    fun clear() {\n        reason.value = null\n    }\n\n    fun isCritical(error: String): Boolean = TouchStationFinaleErrorHistory.isCritical(error)",
         "game-error critical classifier",
     )
     text = replace_once(
         text,
         "        reason.value = line",
-        "        TouchStationFinaleErrorHistory.record(line)\\n        reason.value = line",
+        "        TouchStationFinaleErrorHistory.record(line)\n        reason.value = line",
         "game-error history recording",
     )
     text = replace_once(
         text,
         "        val shown = remember(reason) { reason }.orEmpty()",
-        "        val shown = remember(reason) { reason }.orEmpty()\\n        val critical = GameErrorNotice.isCritical(shown)\\n        val verticalDrag = remember(reason) { mutableStateOf(0f) }",
+        "        val shown = remember(reason) { reason }.orEmpty()\n        val critical = GameErrorNotice.isCritical(shown)\n        val verticalDrag = remember(reason) { mutableStateOf(0f) }",
         "game-error drag state",
     )
     text = replace_once(
         text,
-        "            modifier = Modifier\\n                .windowInsetsPadding",
+        "            modifier = Modifier\n                .windowInsetsPadding",
         """            modifier = Modifier
                 .pointerInput(reason) {
                     detectVerticalDragGestures(
