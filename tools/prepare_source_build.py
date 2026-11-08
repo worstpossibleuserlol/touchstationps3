@@ -1094,7 +1094,7 @@ def patch_touchstation_about(app_dir: Path) -> None:
     old_urls = """private const val RepositoryUrl = "https://github.com/ARMSX2/ARMSX3"
 private const val Rpcs3RepositoryUrl = "https://github.com/RPCS3/rpcs3"""
     new_urls = """private const val TouchStationRepositoryUrl = "https://github.com/worstpossibleuserlol/touchstationps3"
-private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
+private const val ThirdPartyNoticesUrl = "https://github.com/worstpossibleuserlol/touchstationps3/blob/main/THIRD_PARTY_NOTICES.md"""
     text = replace_once(text, old_urls, new_urls, "About repository links")
     text = replace_once(
         text,
@@ -1177,10 +1177,10 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
     def upstream_card(match: re.Match[str]) -> str:
         indent = match.group(1)
         return "\n".join((
-            indent + 'title = "Upstream emulator base",',
-            indent + 'repository = "ARMSX2/ARMSX3",',
-            indent + 'description = "Android frontend and ARM64 engine distribution used by TouchStation.",',
-            indent + 'glyph = "PS3",',
+            indent + 'title = "Third-party notices & licenses",',
+            indent + 'repository = "THIRD_PARTY_NOTICES.md",',
+            indent + 'description = "Licenses and acknowledgements for third-party components in this build.",',
+            indent + 'glyph = "©",',
         ))
 
     text, upstream_count = upstream_pattern.subn(upstream_card, text)
@@ -1189,15 +1189,15 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
             f"Expected two upstream About cards; found {upstream_count}"
         )
     if text.count("uriHandler.openUri(Rpcs3RepositoryUrl)") != 2:
-        raise SystemExit("Expected two original upstream card actions")
+        raise SystemExit("Expected two original third-party notices card actions")
     text = text.replace(
         "uriHandler.openUri(Rpcs3RepositoryUrl)",
-        "uriHandler.openUri(UpstreamRepositoryUrl)",
+        "uriHandler.openUri(ThirdPartyNoticesUrl)",
     )
 
     attribution_marker = "                    // Every third-party component in the APK and its license: BSD, MIT, Apache-2.0"
     attribution = """                    Text(
-                        "TouchStation is an independent downstream project. Its PS3 emulation engine is provided through ARMSX3 and derives from RPCS3. TouchStation is not affiliated with Sony or the upstream projects.",
+                        "TouchStation is the product-facing app identity. This distribution includes third-party open-source components that retain their original licenses and required notices. See Third-party Notices for source and acknowledgements.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
