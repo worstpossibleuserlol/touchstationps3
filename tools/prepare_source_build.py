@@ -769,6 +769,62 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
     path.write_text(text, encoding="utf-8")
 
 
+
+def patch_touchstation_xmb(app_dir: Path) -> None:
+    """Replace upstream Website/Discord entries in the XMB with TouchStation destinations."""
+    path = app_dir / "src/main/java/com/armsx2/ui/xmb/XmbHome.kt"
+    text = path.read_text(encoding="utf-8")
+
+    if "ReportBugUrl" in text:
+        raise SystemExit("TouchStation XMB branding patch is already present")
+
+    old_imports = """import com.armsx2.navigation.AppRoute
+import com.armsx2.navigation.DiscordUrl
+import com.armsx2.navigation.GithubUrl
+import com.armsx2.navigation.UiNavigator
+import com.armsx2.navigation.WebsiteUrl
+import com.armsx2.navigation.openExternalUrl"""
+    new_imports = """import com.armsx2.navigation.AppRoute
+import com.armsx2.navigation.GithubUrl
+import com.armsx2.navigation.ReportBugUrl
+import com.armsx2.navigation.UiNavigator
+import com.armsx2.navigation.openExternalUrl"""
+    text = replace_once(text, old_imports, new_imports, "XMB community-link imports")
+
+    old_website = """            XmbNode.Action("net.browser", fw(full, "msg_browser", "xmb.browser"), XmbIcon("explore_category_network", "tex_browser", "🌐"), WebsiteUrl.removePrefix("https://").trimEnd('/')) {
+                openExternalUrl(context, WebsiteUrl)
+            },"""
+    new_bug_link = """            XmbNode.Action("net.reportBug", "Report a Bug", XmbIcon("explore_category_network", "tex_browser", "🐛"), ReportBugUrl.removePrefix("https://").trimEnd('/')) {
+                openExternalUrl(context, ReportBugUrl)
+            },"""
+    text = replace_once(text, old_website, new_bug_link, "XMB Website destination")
+
+    text = replace_once(
+        text,
+        "// Where PlayStation Network was: ARMSX3's own news and links, under ARMSX3's mark.",
+        "// TouchStation project links and the in-app About page live in this column.",
+        "XMB project column comment",
+    )
+    text = replace_once(
+        text,
+        'title = "ARMSX3",',
+        'title = "TouchStation",',
+        "XMB project column title",
+    )
+    old_discord = """            XmbNode.Action("armsx3.discord", str("about.discord"), XmbIcon(model = R.drawable.ic_discord, glyph = "💬")) {
+                openExternalUrl(context, DiscordUrl)
+            },
+"""
+    text = replace_once(text, old_discord, "", "XMB Discord action")
+    text = replace_once(
+        text,
+        'XmbNode.Action("armsx3.github", str("about.github"), XmbIcon(model = R.drawable.ic_github, glyph = "🐙")) {',
+        'XmbNode.Action("touchstation.github", "GitHub", XmbIcon(model = R.drawable.ic_github, glyph = "🐙")) {',
+        "XMB GitHub action title",
+    )
+    path.write_text(text, encoding="utf-8")
+
+
 def patch_app_name(app_dir: Path) -> None:
     resources = app_dir / "src/main/res"
     found = 0
@@ -1409,6 +1465,7 @@ def main() -> None:
     patch_gradle(app_dir)
     patch_touchstation_drawer(app_dir)
     patch_touchstation_about(app_dir)
+    patch_touchstation_xmb(app_dir)
     patch_performance_tab(app_dir)
     patch_app_name(app_dir)
     patch_app_wordmark(app_dir)
