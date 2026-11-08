@@ -246,7 +246,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TouchStation-v6.0.0-arm64
-          path: ${{ runner.temp }}/TouchStation-v5.0.0-arm64.apk
+          path: ${{ runner.temp }}/TouchStation-v6.0.0-arm64.apk
           if-no-files-found: error
           retention-days: 90
 
@@ -258,7 +258,7 @@ jobs:
           make_latest: true
           prerelease: false
           overwrite_files: true
-          files: ${{ runner.temp }}/TouchStation-v5.0.0-arm64.apk
+          files: ${{ runner.temp }}/TouchStation-v6.0.0-arm64.apk
           body: |
             TouchStation 6.0.0 Release for Android ARM64.
 
