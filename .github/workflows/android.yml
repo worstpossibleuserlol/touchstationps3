@@ -118,6 +118,8 @@ jobs:
           grep -Fq 'TouchStation project' "$ABOUT"
           grep -Fq 'Upstream emulator base' "$ABOUT"
           grep -Fq 'TouchStation is an independent downstream project.' "$ABOUT"
+          grep -Fq 'controllerId = "about.back"' "$ABOUT"
+          grep -Fq '"about.project.$repository"' "$ABOUT"
 
           # Regression checks for controller-only navigation paths; no gameplay button is rebound.
           grep -Fq 'controllerFocusable(controllerId' "$DRAWER"
