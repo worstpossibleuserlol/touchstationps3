@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -295,7 +294,7 @@ fun TouchStation8MonitoringSuite(settings: Settings) {
             }
 
             SuiteSection("Controller Center") {
-                SuiteRow("Connected physical controllers", padCount.intValue.toString())
+                SuiteRow("Connected physical controllers", padCount.value.toString())
                 SuiteRow("Button mapping and player assignment", "Available in Controller Manager")
                 SuiteRow("Saved controller profiles and hotkeys", "Available in Controller Manager")
                 SuiteRow("Gameplay input", "Physical controllers only")
