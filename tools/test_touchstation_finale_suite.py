@@ -77,6 +77,7 @@ fun PerformanceTab() {
         with tempfile.TemporaryDirectory() as temporary:
             app = Path(temporary)
             home = app / "src/main/java/com/armsx2/ui/home/HomeScreen.kt"
+            vm = app / "src/main/java/com/armsx2/ui/home/HomeViewModel.kt"
             home.parent.mkdir(parents=True)
             home.write_text(
                 """package com.armsx2.ui.home
@@ -96,13 +97,6 @@ private fun GameMetadata(game: GameInfo) {
 """,
                 encoding="utf-8",
             )
-            FINALE.patch_library_compatibility(app)
-            result = home.read_text(encoding="utf-8")
-            self.assertIn("TouchStationFinaleCompatibilityStore.loadCache(context)", result)
-            self.assertIn('StatusChip("PC: $status")', result)
-            self.assertIn("import com.armsx2.ui.settings.TouchStationFinaleCompatibilityStore", result)
-            vm = app / "src/main/java/com/armsx2/ui/home/HomeViewModel.kt"
-            vm.parent.mkdir(parents=True, exist_ok=True)
             vm.write_text(
                 """package com.armsx2.ui.home
 import com.armsx2.GameInfo
@@ -121,9 +115,13 @@ class HomeViewModel {
                 encoding="utf-8",
             )
             FINALE.patch_library_compatibility(app)
+            result = home.read_text(encoding="utf-8")
+            self.assertIn("TouchStationFinaleCompatibilityStore.loadCache(context)", result)
+            self.assertIn('StatusChip("PC: $status")', result)
+            self.assertIn("import com.armsx2.ui.settings.TouchStationFinaleCompatibilityStore", result)
+            self.assertIn("LaunchedEffect(compatibilityRevision, state.sort)", result)
             vm_result = vm.read_text(encoding="utf-8")
             self.assertIn("TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: it.compatibility", vm_result)
-            self.assertIn("LaunchedEffect(compatibilityRevision, state.sort)", result)
             with self.assertRaises(SystemExit):
                 FINALE.patch_library_compatibility(app)
 
