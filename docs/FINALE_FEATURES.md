@@ -19,8 +19,8 @@ This release combines the diagnostics and settings tools from the earlier TouchS
 
 11. **Official RPCS3 compatibility-data refresh** — downloads the official desktop compatibility export on request.
 12. **Exact title-ID matching** — matches normalized PS3 title IDs, not approximate game names.
-13. **Library compatibility search** — filters the locally cached PS3 library by title or title ID.
-14. **Official compatibility status** — displays the status attached to the matched game ID.
+13. **Library search and compatibility badges** — filters the local PS3 library by title or ID and shows exact-ID desktop statuses on matching cards, clearly labelled PC.
+14. **Official status and sorting** — displays the status attached to the matched ID and sorts by Playable, Ingame, Intro, Loadable and Nothing; unknown games remain below verified records.
 15. **Official compatibility test date** — shows the database's recorded test date where present.
 16. **Game update metadata** — displays the latest update field where the database supplies one.
 17. **Device-local compatibility record** — stores a separate user-entered result for this game and handset.
