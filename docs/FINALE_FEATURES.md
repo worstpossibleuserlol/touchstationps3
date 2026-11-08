@@ -97,7 +97,7 @@ The Finale Android frontend now includes the following user-facing stability too
 9. Show plain-language explanations for common FIFO, shader, memory, PPU and SPU messages.
 10. Show a relevant next-step suggestion for common errors.
 11. No live FIFO stall watchdog is claimed: the bundled native bridge exposes no queue-depth or command-progress counter.
-12. No native FIFO timeout or queue reset is claimed: those controls must be implemented in the native PS3 core.
+12. The Android GTA IV profile applies the core-supported RSX FIFO Fetch Accuracy value "Ordered & Atomic" and Driver Wake-Up Delay 20 µs per game; this follows the native error's own recommendation to move away from PS3 FIFO mode and raise the driver wake delay, but is not proven to fix every title.
 13. No GPU-fence synchronization health check is claimed without native fence telemetry.
 14. No RSX command-stream validator is claimed without native command instrumentation.
 15. No automatic GPU queue recovery is attempted; an unsafe reset could corrupt emulator state.
@@ -109,6 +109,9 @@ The Finale Android frontend now includes the following user-facing stability too
 
 ### FIFO fix boundary
 
-The visible `Dead FIFO commands queue state has been detected` message comes from the native PS3 graphics/emulation path. The current workflow packages pinned prebuilt ARM64 native libraries; this Android-side patch can record the message, retain its history, export app-process logs and guide a safe relaunch. It cannot honestly claim to repair the underlying RSX FIFO queue, GPU fences or native command scheduler. A real core fix requires a targeted change to the matching native source, a rebuilt ARM64 engine library, and game-specific validation. The app does not suppress the native failure or pretend that dismissing its banner recovers the game.
+The visible `Dead FIFO commands queue state has been detected` message is thrown by the native RSX FIFO recovery path. That function explicitly recommends increasing Driver Wake-Up Delay or moving RSX FIFO Fetch Accuracy to the next mode. The GTA IV profile now writes `Ordered & Atomic` and `20` µs to the selected game's settings scope using the core's supported settings API, and reads both values back. This is a targeted mitigation, not a native FIFO algorithm rewrite or a guarantee that GTA IV will run. The bundled ARM64 engine remains prebuilt; changes to GPU fences, command scheduling, live queue watchdogs or queue-reset logic still require a native-core rebuild and game-specific validation. Dismissing the banner never pretends to recover the game.
 
 The log export is user-initiated and stays on-device until the user explicitly shares it. The logcat capture is limited to TouchStation's own process and may be unavailable on some Android builds; the diagnostic snapshot is still included and the export reports the limitation.
+
+
+The error banner preserves the complete native error text (up to 4,000 characters), not only its first line, so the engine's suggested setting names and next enum value remain visible. The error remains saved in the bounded local history after swipe dismissal.
