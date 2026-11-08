@@ -881,7 +881,7 @@ object TouchStationControllerMonitor {
 
     @Synchronized
     fun refresh() {
-        val devices = InputDevice.getDeviceIds().mapNotNull { id ->
+        val devices = InputDevice.getDeviceIds().toList().mapNotNull { id ->
             val device = InputDevice.getDevice(id) ?: return@mapNotNull null
             val hasGamepadSource = (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
             val hasJoystickSource = (device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
@@ -1641,6 +1641,13 @@ def patch_touchstation_runtime_features(app_dir: Path) -> None:
 
     controller_screen = app_dir / "src/main/java/com/armsx2/ui/controls/ControllerManagerScreen.kt"
     text = controller_screen.read_text(encoding="utf-8")
+    text = replace_once(
+        text,
+        "import androidx.compose.foundation.layout.fillMaxWidth\n",
+        "import androidx.compose.foundation.layout.fillMaxWidth\n"
+        "import androidx.compose.foundation.layout.height\n",
+        "controller panel spacer height import",
+    )
     panel_marker = "            BoxWithConstraints(Modifier.fillMaxWidth()) {"
     text = replace_once(
         text,
