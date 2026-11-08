@@ -13,8 +13,51 @@ assert SPEC is not None and SPEC.loader is not None
 FINALE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(FINALE)
 
+PREP_SCRIPT = Path(__file__).with_name("prepare_source_build.py")
+PREP_SPEC = importlib.util.spec_from_file_location("prepare_source_build", PREP_SCRIPT)
+assert PREP_SPEC is not None and PREP_SPEC.loader is not None
+PREP = importlib.util.module_from_spec(PREP_SPEC)
+PREP_SPEC.loader.exec_module(PREP)
+
 
 class FinalePatchTests(unittest.TestCase):
+    def test_kotlin_compiler_mirror_is_scoped_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            settings = root / "settings.gradle.kts"
+            settings.write_text(
+                """pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        // Discord Social SDK ships as a local .aar.
+    }
+}
+""",
+                encoding="utf-8",
+            )
+            PREP.patch_kotlin_compiler_mirror(root)
+            once = settings.read_text(encoding="utf-8")
+            PREP.patch_kotlin_compiler_mirror(root)
+            twice = settings.read_text(encoding="utf-8")
+            self.assertEqual(once, twice)
+            self.assertEqual(once.count("kotlinCompilerEmbeddableMirror"), 1)
+            self.assertIn(
+                'includeModule("org.jetbrains.kotlin", "kotlin-compiler-embeddable")',
+                once,
+            )
+            self.assertLess(
+                once.index("kotlinCompilerEmbeddableMirror"),
+                once.index("        mavenCentral()\\n        // Discord"),
+            )
+
     def test_version_promotion_is_exact(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             app = Path(temporary)
