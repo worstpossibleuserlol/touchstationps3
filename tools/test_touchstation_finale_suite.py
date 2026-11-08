@@ -151,6 +151,9 @@ class HomeViewModel {
         self.assertIn("GPU utilization and exact Vulkan extensions remain N/A", source)
         self.assertIn("FPS and frametime are supplied only by the native in-game overlay", source)
         self.assertIn("Official status is a desktop RPCS3 reference", source)
+        self.assertIn("internal fun entryFor(serial: String?)", source)
+        self.assertIn("entriesById.value = next", source)
+        self.assertNotIn("touchStationFinaleOfficialEntry", source)
 
 
 if __name__ == "__main__":
