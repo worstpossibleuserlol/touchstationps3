@@ -3,6 +3,8 @@ name: TouchStation 10.0.0 Release
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -318,6 +320,7 @@ jobs:
           retention-days: 90
 
       - name: Publish TouchStation 10.0.0 Release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v10.0.0
