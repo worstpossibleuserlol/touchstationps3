@@ -198,6 +198,7 @@ class HomeViewModel {
             "Ordered & Atomic",
             "touchStationFinaleApplyFifoRecoveryProfile",
             "CoreSettingOverrides.record",
+            "CoreSettingOverrides.load",
             "TouchStationFinaleReliability.startupSelfTest(context, settings)",
             "TouchStationFinaleSettingsRollback.save",
             "TouchStationFinaleReliability.sha256GameUri",
