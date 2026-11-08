@@ -519,6 +519,437 @@ def patch_gradle(app_dir: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+
+PERFORMANCE_MONITOR_SOURCE = r'''package com.armsx2.ui.settings
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import java.io.File
+import java.util.Locale
+
+private data class TouchStationMetricSample(
+    val cpu: Float?,
+    val gpu: Float?,
+    val fps: Float?,
+)
+
+private object TouchStationMetricReader {
+    private var previousCpu: Pair<Long, Long>? = null
+    private var previousGpu: Pair<Long, Long>? = null
+
+    @Synchronized
+    fun reset() {
+        previousCpu = null
+        previousGpu = null
+    }
+
+    /** Device-wide CPU load, sampled from Linux procfs rather than guessed from clock speed. */
+    @Synchronized
+    fun cpuPercent(): Float? = runCatching {
+        val fields = File("/proc/stat").useLines { lines ->
+            lines.firstOrNull()?.trim()?.split(Regex("\\s+"))?.drop(1)
+                ?.mapNotNull { it.toLongOrNull() }
+        } ?: return null
+        if (fields.size < 4) return null
+        val values = fields.take(8)
+        val total = values.sum()
+        val idle = values[3] + (values.getOrNull(4) ?: 0L)
+        val old = previousCpu
+        previousCpu = total to idle
+        if (old == null) return null
+        val totalDelta = total - old.first
+        val idleDelta = idle - old.second
+        if (totalDelta <= 0L) return null
+        ((totalDelta - idleDelta).toFloat() * 100f / totalDelta.toFloat()).coerceIn(0f, 100f)
+    }.getOrNull()
+
+    /** Reads real driver counters where the Android kernel exposes them to an app process. */
+    @Synchronized
+    fun gpuPercent(): Float? {
+        val kgsl = runCatching {
+            File("/sys/class/kgsl/kgsl-3d0/gpubusy").readText().trim()
+                .split(Regex("\\s+")).mapNotNull { it.toLongOrNull() }
+        }.getOrNull()
+
+        if (kgsl != null && kgsl.size >= 2) {
+            val busy = kgsl[0]
+            val total = kgsl[1]
+            val old = previousGpu
+            previousGpu = busy to total
+            if (old != null) {
+                val busyDelta = busy - old.first
+                val totalDelta = total - old.second
+                if (busyDelta >= 0L && totalDelta > 0L) {
+                    return (busyDelta.toFloat() * 100f / totalDelta.toFloat()).coerceIn(0f, 100f)
+                }
+            }
+        }
+
+        val fixedCandidates = listOf(
+            File("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage"),
+            File("/sys/class/misc/mali0/device/utilization"),
+            File("/sys/class/misc/mali0/device/gpu_busy"),
+        )
+        for (candidate in fixedCandidates) {
+            readPercent(candidate)?.let { return it }
+        }
+
+        val devfreq = File("/sys/class/devfreq")
+        for (device in devfreq.listFiles().orEmpty()) {
+            val identity = device.name.lowercase() + " " +
+                runCatching { File(device, "name").readText().lowercase() }.getOrDefault("")
+            if (!identity.contains("gpu") && !identity.contains("mali") &&
+                !identity.contains("kgsl") && !identity.contains("adreno")
+            ) continue
+            for (name in listOf("load", "utilization", "gpu_busy_percentage")) {
+                readPercent(File(device, name))?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun readPercent(file: File): Float? = runCatching {
+        val raw = file.readText().trim()
+        val number = Regex("""\d+(?:\.\d+)?""").find(raw)?.value?.toFloatOrNull()
+        number?.takeIf { it in 0f..100f }
+    }.getOrNull()
+
+    /** This is a real core value when implemented; the current pinned bridge returns no sample. */
+    fun fps(): Float? = runCatching {
+        com.armsx3.NativeApp.getFPS().takeIf { it.isFinite() && it > 0f }
+    }.getOrNull()
+
+    fun appRamMb(): Int? = runCatching {
+        val info = android.os.Debug.MemoryInfo()
+        android.os.Debug.getMemoryInfo(info)
+        (info.totalPss / 1024).takeIf { it > 0 }
+    }.getOrNull()
+}
+
+@Composable
+fun TouchStationPerformanceMonitor() {
+    val history = remember { mutableStateListOf<TouchStationMetricSample>() }
+    var appRamMb by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(Unit) {
+        TouchStationMetricReader.reset()
+        while (true) {
+            history.add(
+                TouchStationMetricSample(
+                    cpu = TouchStationMetricReader.cpuPercent(),
+                    gpu = TouchStationMetricReader.gpuPercent(),
+                    fps = TouchStationMetricReader.fps(),
+                ),
+            )
+            if (history.size > 60) history.removeAt(0)
+            appRamMb = TouchStationMetricReader.appRamMb()
+            delay(1_000)
+        }
+    }
+
+    val latest = history.lastOrNull()
+    val cpuColor = MaterialTheme.colorScheme.primary
+    val gpuColor = MaterialTheme.colorScheme.tertiary
+    val fpsColor = MaterialTheme.colorScheme.secondary
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("TouchStation Performance Monitor", style = MaterialTheme.typography.titleLarge)
+        Text(
+            "Live readings · 1-second interval · rolling 60-second graphs",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricTile(
+                Modifier.weight(1f),
+                "CPU",
+                latest?.cpu?.let { String.format(Locale.US, "%.0f%%", it) } ?: "N/A",
+                "device load",
+            )
+            MetricTile(
+                Modifier.weight(1f),
+                "GPU",
+                latest?.gpu?.let { String.format(Locale.US, "%.0f%%", it) } ?: "N/A",
+                "driver reading",
+            )
+            MetricTile(
+                Modifier.weight(1f),
+                "FPS",
+                latest?.fps?.let { String.format(Locale.US, "%.1f", it) } ?: "N/A",
+                "game frames",
+            )
+        }
+        MetricTile(
+            Modifier.fillMaxWidth(),
+            "App RAM",
+            appRamMb?.let { it.toString() + " MB" } ?: "N/A",
+            "TouchStation process memory",
+        )
+
+        MetricGraph(
+            title = "CPU usage",
+            values = history.map { it.cpu },
+            maximum = 100f,
+            lineColor = cpuColor,
+            unavailable = "CPU readings are not currently available from /proc/stat.",
+        )
+        MetricGraph(
+            title = "GPU usage",
+            values = history.map { it.gpu },
+            maximum = 100f,
+            lineColor = gpuColor,
+            unavailable = "This device driver does not expose a readable GPU utilization counter.",
+        )
+        MetricGraph(
+            title = "Game FPS",
+            values = history.map { it.fps },
+            maximum = 120f,
+            lineColor = fpsColor,
+            unavailable = "Game FPS is unavailable because the pinned RPCS3 bridge currently returns no FPS reading.",
+        )
+        Text(
+            "CPU is device-wide load. GPU usage is read from supported kernel-driver counters when accessible. " +
+                "FPS is only shown when the emulation core supplies a real value; unavailable metrics are not estimated.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun MetricTile(
+    modifier: Modifier,
+    label: String,
+    value: String,
+    detail: String,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.titleLarge)
+            Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun MetricGraph(
+    title: String,
+    values: List<Float?>,
+    maximum: Float,
+    lineColor: Color,
+    unavailable: String,
+) {
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    Column(Modifier.fillMaxWidth()) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        Canvas(Modifier.fillMaxWidth().height(76.dp)) {
+            val left = 3.dp.toPx()
+            val right = size.width - 3.dp.toPx()
+            val top = 5.dp.toPx()
+            val bottom = size.height - 5.dp.toPx()
+            for (step in 0..4) {
+                val y = top + (bottom - top) * step / 4f
+                drawLine(
+                    color = gridColor,
+                    start = Offset(left, y),
+                    end = Offset(right, y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
+            val scale = maxOf(maximum, values.filterNotNull().maxOrNull() ?: maximum)
+            val path = Path()
+            var segmentOpen = false
+            values.forEachIndexed { index, value ->
+                if (value == null) {
+                    segmentOpen = false
+                } else {
+                    val x = if (values.size <= 1) right else {
+                        left + (right - left) * index / (values.size - 1).toFloat()
+                    }
+                    val y = bottom - (value.coerceIn(0f, scale) / scale) * (bottom - top)
+                    if (segmentOpen) path.lineTo(x, y) else {
+                        path.moveTo(x, y)
+                        segmentOpen = true
+                    }
+                }
+            }
+            drawPath(path, color = lineColor, style = Stroke(width = 2.dp.toPx()))
+        }
+        if (values.none { it != null }) {
+            Text(
+                unavailable,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+'''
+
+CONTROLLER_MONITOR_SOURCE = r'''package com.armsx2.ui.controls
+
+import android.content.Context
+import android.hardware.input.InputManager
+import android.os.Handler
+import android.os.Looper
+import android.view.InputDevice
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+
+data class TouchStationControllerDevice(
+    val id: Int,
+    val name: String,
+)
+
+data class TouchStationControllerSnapshot(
+    val devices: List<TouchStationControllerDevice> = emptyList(),
+)
+
+object TouchStationControllerMonitor {
+    val state = mutableStateOf(TouchStationControllerSnapshot())
+    private var inputManager: InputManager? = null
+
+    private val listener = object : InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) = refresh()
+        override fun onInputDeviceRemoved(deviceId: Int) = refresh()
+        override fun onInputDeviceChanged(deviceId: Int) = refresh()
+    }
+
+    @Synchronized
+    fun start(context: Context) {
+        val next = context.applicationContext.getSystemService(Context.INPUT_SERVICE) as? InputManager
+            ?: return
+        if (inputManager !== next) {
+            runCatching { inputManager?.unregisterInputDeviceListener(listener) }
+            inputManager = next
+            next.registerInputDeviceListener(listener, Handler(Looper.getMainLooper()))
+        }
+        refresh()
+    }
+
+    @Synchronized
+    fun refresh() {
+        val devices = InputDevice.getDeviceIds().mapNotNull { id ->
+            val device = InputDevice.getDevice(id) ?: return@mapNotNull null
+            val hasGamepadSource = (device.sources and InputDevice.SOURCE_GAMEPAD) != 0
+            val hasJoystickSource = (device.sources and InputDevice.SOURCE_JOYSTICK) != 0
+            if (device.isVirtual || (!hasGamepadSource && !hasJoystickSource)) {
+                null
+            } else {
+                TouchStationControllerDevice(device.id, device.name)
+            }
+        }.sortedBy { it.name.lowercase() }
+        state.value = TouchStationControllerSnapshot(devices)
+    }
+}
+
+@Composable
+fun TouchStationControllerConnectionPanel() {
+    val context = LocalContext.current
+    LaunchedEffect(context) { TouchStationControllerMonitor.start(context) }
+    val devices by TouchStationControllerMonitor.state
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Text("Controller connection", style = MaterialTheme.typography.titleMedium)
+            if (devices.devices.isEmpty()) {
+                Text(
+                    "No physical game controller detected.",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else {
+                devices.devices.forEach { device ->
+                    Text("Connected: " + device.name, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Text(
+                "Bluetooth pairing and USB reconnection are managed by Android. Reconnect the controller, " +
+                    "return here, then refresh detection.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(onClick = TouchStationControllerMonitor::refresh) {
+                Text("Refresh controllers")
+            }
+        }
+    }
+}
+
+@Composable
+fun TouchStationControllerWarning(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    LaunchedEffect(context) { TouchStationControllerMonitor.start(context) }
+    val devices by TouchStationControllerMonitor.state
+    if (devices.devices.isEmpty()) {
+        Surface(
+            modifier = modifier,
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ) {
+            Text(
+                "Controller disconnected — reconnect your controller to continue gameplay.",
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+'''
+
+
 def patch_performance_tab(app_dir: Path) -> None:
     path = app_dir / "src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
     text = path.read_text(encoding="utf-8")
@@ -1166,6 +1597,82 @@ def patch_in_game_settings_button(app_dir: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+
+def patch_touchstation_runtime_features(app_dir: Path) -> None:
+    """Add honest live metrics, physical-controller hotplug status and About guidance."""
+    monitor_path = app_dir / "src/main/java/com/armsx2/ui/settings/TouchStationPerformanceMonitor.kt"
+    monitor_path.write_text(PERFORMANCE_MONITOR_SOURCE, encoding="utf-8")
+
+    controller_path = app_dir / "src/main/java/com/armsx2/ui/controls/TouchStationControllerMonitor.kt"
+    controller_path.write_text(CONTROLLER_MONITOR_SOURCE, encoding="utf-8")
+
+    performance = app_dir / "src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+    text = performance.read_text(encoding="utf-8")
+    if "TouchStationPerformanceMonitor()" in text:
+        raise SystemExit("TouchStation performance monitor insertion is already present")
+    marker = "        // Prominent latency preset: zero queued GS frames keeps the emulated CPU\n"
+    text = replace_once(
+        text,
+        marker,
+        "        TouchStationPerformanceMonitor()\n        SettingsDivider()\n\n" + marker,
+        "PerformanceTab live monitor panel",
+    )
+    performance.write_text(text, encoding="utf-8")
+
+    about = app_dir / "src/main/java/com/armsx2/ui/about/AboutScreen.kt"
+    text = about.read_text(encoding="utf-8")
+    controls_marker = "                    // Every third-party component in the APK and its license: BSD, MIT, Apache-2.0"
+    controls_note = """                    Text(
+                        "Gameplay requires a physical controller. On-screen gameplay controls are disabled; touchscreen input is only for menus and settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    )
+                    // Every third-party component in the APK and its license: BSD, MIT, Apache-2.0"""
+    text = replace_once(text, controls_marker, controls_note, "About physical-controller notice")
+    about.write_text(text, encoding="utf-8")
+
+    controller_screen = app_dir / "src/main/java/com/armsx2/ui/controls/ControllerManagerScreen.kt"
+    text = controller_screen.read_text(encoding="utf-8")
+    panel_marker = "            BoxWithConstraints(Modifier.fillMaxWidth()) {"
+    text = replace_once(
+        text,
+        panel_marker,
+        "            TouchStationControllerConnectionPanel()\n"
+        "            Spacer(Modifier.height(10.dp))\n"
+        + panel_marker,
+        "controller connection status panel",
+    )
+    controller_screen.write_text(text, encoding="utf-8")
+
+    window = app_dir / "src/main/java/com/armsx2/ui/WindowImpl.kt"
+    text = window.read_text(encoding="utf-8")
+    text = replace_once(
+        text,
+        "import com.armsx2.runtime.MainActivityRuntime\n",
+        "import com.armsx2.runtime.MainActivityRuntime\n"
+        "import com.armsx2.ui.controls.TouchStationControllerWarning\n",
+        "controller warning import",
+    )
+    window_marker = (
+        "                val gameOnScreen = MainActivityRuntime.eState.value == EmuState.RUNNING ||\n"
+        "                    MainActivityRuntime.eState.value == EmuState.PAUSED\n"
+        "                if (gameOnScreen && !showLibrary.value) {"
+    )
+    window_replacement = (
+        "                val gameOnScreen = MainActivityRuntime.eState.value == EmuState.RUNNING ||\n"
+        "                    MainActivityRuntime.eState.value == EmuState.PAUSED\n"
+        "                if (gameOnScreen && !showLibrary.value && !overlayVisible.value && inGameScreen.value == null) {\n"
+        "                    TouchStationControllerWarning(\n"
+        "                        Modifier.align(Alignment.TopCenter).padding(top = 12.dp),\n"
+        "                    )\n"
+        "                }\n"
+        "                if (gameOnScreen && !showLibrary.value) {"
+    )
+    text = replace_once(text, window_marker, window_replacement, "in-game controller disconnect warning")
+    window.write_text(text, encoding="utf-8")
+
+
 def patch_launcher_vector(app_dir: Path) -> None:
     """Replace the legacy launcher vector with a plain black square."""
     path = app_dir / "src/main/res/drawable/touchstation_icon.xml"
@@ -1468,6 +1975,7 @@ def main() -> None:
     patch_touch_controls(app_dir)
     patch_in_game_settings_button(app_dir)
     patch_in_game_settings_exit(app_dir)
+    patch_touchstation_runtime_features(app_dir)
     patch_pause_menu_exit(app_dir)
     patch_boot_splash_branding(app_dir)
     write_launcher_icons(app_dir)
