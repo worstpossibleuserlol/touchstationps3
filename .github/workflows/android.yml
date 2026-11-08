@@ -10,10 +10,11 @@ on:
 permissions:
   contents: write
 
-# Keep release builds queued so the latest branding fix can finish.
+# Never cancel a native Android build just because another commit arrives.
+# Runs for this release lane queue and finish in order.
 concurrency:
   group: touchstation-finale-release
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-arm64:
