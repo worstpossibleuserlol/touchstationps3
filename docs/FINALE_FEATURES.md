@@ -57,7 +57,7 @@ This release combines the diagnostics and settings tools from the earlier TouchS
 ## Stability, storage and reporting
 
 41. **Android crash/exit history** — displays process exit reasons exposed by Android.
-42. **Crash and launch report export** — prepares a shareable diagnostic report.
+42. **Downloadable TouchStation.log** — captures this app process's available logcat output plus a device/game diagnostic snapshot, then saves it to Downloads on Android 10+; no system-wide logs are collected.
 43. **Safe-mode startup/recovery** — retains the existing frontend recovery path.
 44. **Safe frontend relaunch** — only offers the relaunch action when the emulator reports STOPPED.
 45. **Last-known settings recovery** — retains a recovery point for supported settings.
@@ -80,3 +80,35 @@ TouchStation is the product-facing app identity. Unneeded upstream social and we
 ## APK size
 
 The APK is built from the actual application, dependencies, native engine libraries and enabled assets. It is not padded with unused files or arbitrary data to hit a byte target. The APK download is kept separate from the larger corresponding-source archive and its checksum.
+
+
+## TouchStation Finale stability update
+
+The Finale Android frontend now includes the following user-facing stability tools:
+
+1. Download `TouchStation.log` to Downloads (Android 10+) or app-specific Documents on older Android versions.
+2. Share the exported log through Android's share sheet.
+3. Capture a game-error snapshot when the bridge supplies an error notice. Full process-death tombstones are not guaranteed.
+4. Classify and count explicit FIFO error messages.
+5. Persist the last 30 game-error notices locally.
+6. Swipe an error banner upward to hide it.
+7. Dismissal hides the banner only; it does not resume a stopped game.
+8. Keep critical-error wording and event history visible in diagnostics.
+9. Show plain-language explanations for common FIFO, shader, memory, PPU and SPU messages.
+10. Show a relevant next-step suggestion for common errors.
+11. No live FIFO stall watchdog is claimed: the bundled native bridge exposes no queue-depth or command-progress counter.
+12. No native FIFO timeout or queue reset is claimed: those controls must be implemented in the native PS3 core.
+13. No GPU-fence synchronization health check is claimed without native fence telemetry.
+14. No RSX command-stream validator is claimed without native command instrumentation.
+15. No automatic GPU queue recovery is attempted; an unsafe reset could corrupt emulator state.
+16. Existing per-game settings profiles remain isolated from global settings.
+17. Existing cache inventory is read-only; no cache files are deleted automatically.
+18. Existing Android memory reporting is retained; low-memory status is evidence, not a guarantee of successful emulation.
+19. Existing Android thermal reporting is retained; elevated status is surfaced without fabricating GPU telemetry.
+20. Existing exact-title-ID desktop compatibility lookup remains a reference only and is not represented as a Dimensity 7100 compatibility guarantee.
+
+### FIFO fix boundary
+
+The visible `Dead FIFO commands queue state has been detected` message comes from the native PS3 graphics/emulation path. The current workflow packages pinned prebuilt ARM64 native libraries; this Android-side patch can record the message, retain its history, export app-process logs and guide a safe relaunch. It cannot honestly claim to repair the underlying RSX FIFO queue, GPU fences or native command scheduler. A real core fix requires a targeted change to the matching native source, a rebuilt ARM64 engine library, and game-specific validation. The app does not suppress the native failure or pretend that dismissing its banner recovers the game.
+
+The log export is user-initiated and stays on-device until the user explicitly shares it. The logcat capture is limited to TouchStation's own process and may be unavailable on some Android builds; the diagnostic snapshot is still included and the export reports the limitation.
