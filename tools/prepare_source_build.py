@@ -1659,17 +1659,27 @@ def patch_touchstation_runtime_features(app_dir: Path) -> None:
         "                    MainActivityRuntime.eState.value == EmuState.PAUSED\n"
         "                if (gameOnScreen && !showLibrary.value) {"
     )
-    window_replacement = (
-        "                val gameOnScreen = MainActivityRuntime.eState.value == EmuState.RUNNING ||\n"
-        "                    MainActivityRuntime.eState.value == EmuState.PAUSED\n"
-        "                if (gameOnScreen && !showLibrary.value && !overlayVisible.value && inGameScreen.value == null) {\n"
-        "                    TouchStationControllerWarning(\n"
-        "                        Modifier.align(Alignment.TopCenter).padding(top = 12.dp),\n"
-        "                    )\n"
-        "                }\n"
-        "                if (gameOnScreen && !showLibrary.value) {"
+    text = replace_once(
+        text,
+        window_marker,
+        window_marker,
+        "window game-state anchor",
     )
-    text = replace_once(text, window_marker, window_replacement, "in-game controller disconnect warning")
+    warning_marker = (
+        "                KeyboardExtraKeys()\n\n"
+        "            if (showLibrary.value && MainActivityRuntime.eState.value == EmuState.RUNNING && !overlayVisible.value) {"
+    )
+    warning_replacement = (
+        "                KeyboardExtraKeys()\n\n"
+        "            // Draw above the game surface and artwork so the disconnect warning stays visible.\n"
+        "            if (gameOnScreen && !showLibrary.value && !overlayVisible.value && inGameScreen.value == null) {\n"
+        "                TouchStationControllerWarning(\n"
+        "                    Modifier.align(Alignment.TopCenter).padding(top = 12.dp),\n"
+        "                )\n"
+        "            }\n\n"
+        "            if (showLibrary.value && MainActivityRuntime.eState.value == EmuState.RUNNING && !overlayVisible.value) {"
+    )
+    text = replace_once(text, warning_marker, warning_replacement, "top-layer controller disconnect warning")
     window.write_text(text, encoding="utf-8")
 
 
