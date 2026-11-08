@@ -1,40 +1,58 @@
-# TouchStation 7.0.0 Release
+# TouchStation 8.0.0 Release
 
 TouchStation is an Android ARM64 distribution built from the ARMSX3 Android PS3 emulator application. Its native emulator core is provided by the pinned upstream ARMSX3 release, which is derived from RPCS3. TouchStation is a downstream project, not a PS3 emulator core written from scratch.
 
-## 7.0.0 Release
+## 8.0.0 Release
 
-- **TouchStation Control Center:** a consolidated device diagnostics panel inside Performance settings.
-- **Native in-game performance OSD:** automatically enabled for existing installations on first 7.0.0 game launch, displayed in the top-left corner, and configurable from the new PPU Monitor panel.
-- **Live in-game metrics:** native FPS, host CPU utilization, guest PPU/SPU/RSX utilization, PPU/SPU thread counts, RSX load, framerate graph and frametime graph. The native OSD reads these values from the emulator core rather than the Android bridge's unimplemented FPS getter.
-- **Dedicated PPU Monitor:** shows the selected PPU decoder, configured PPU threads, LLVM compile-thread limit, LLVM precompilation state, native compile notifications, and controls the in-game overlay.
-- **Live performance monitoring:** rolling CPU, GPU and FPS graphs, plus app memory. CPU readings are device-wide; GPU readings depend on counters exposed by the Android driver; FPS is shown only when the native bridge returns a real reading.
-- **Thermal and battery information:** Android thermal-severity status, battery level and battery-sensor temperature. Battery temperature is not the SoC temperature. Android thermal status is a severity level, not a temperature measurement.
-- **Device and graphics information:** SoC/hardware identity, Android version, RAM, app PSS, free internal storage, and Vulkan feature information reported by Android.
-- **Diagnostic sharing:** export a text report containing device, system, core-initialization, current-game, controller, thermal and memory information, or open the structured TouchStation bug-report form.
-- **Controller status:** physical gamepad hot-plug monitoring, connection status, and an in-game disconnect warning.
+- **PPU Monitor 2.0:** selected PPU decoder, configured threads, LLVM compile-thread limit, precompilation state, and native in-game PPU activity where exposed.
+- **SPU Monitor:** SPU decoder selection, block size, preferred threads, maximum SPURS threads, SPU cache, loop detection and accurate DMA configuration.
+- **RSX Graphics Monitor:** selected GPU profile, emulated RSX workload from the native in-game overlay, and an explicit distinction between guest RSX workload and physical Android GPU utilization.
+- **Advanced overlay controls:** show/hide, position, opacity, text size, framerate graph and frametime graph controls.
+- **One-press pause-menu overlay toggle:** the in-game pause menu includes a Performance Overlay action. Select it to hide the overlay; select it again to show the full overlay. No Settings navigation is required.
+- **Per-game overlay mode:** overlay Full/Off preference is stored per game when a title is active. The global setting is the fallback. Position, opacity, size and graph preferences use the existing global/per-game settings store.
+- **TouchStation 8.0 Monitoring Suite:** combines PPU, SPU and RSX configuration diagnostics, connected physical controller count, current-game identity, settings scope, compatibility metadata availability, and support shortcuts.
+- **Controller Center integration:** retains the upstream Controller Manager's button mapping, player assignment, hotkeys, vibration option and saved controller profiles. The monitoring suite also reports the connected physical controller count.
+- **Game compatibility and profiles:** retains upstream library compatibility metadata and per-game emulator settings. Device-specific compatibility ratings are not invented; they require an actual game/device test.
+- **Crash and diagnostics integration:** retains the TouchStation Control Center's exportable device diagnostic report and structured bug-report entry point.
+- **System stability integration:** retains Android thermal-severity status, battery level and battery-sensor temperature, RAM, app PSS, free storage and Vulkan feature reporting in the Control Center.
+- **Audio and display integration:** retains the upstream Audio, Renderer and Overlay settings rather than creating duplicate configuration layers.
+- **Existing features remain:** game scanning, search, covers, recently played, favourites/categories, per-game settings, firmware installation/management, shader compilation controls, advanced settings, controller hot-plug detection and in-game disconnect warnings.
 - **Controller-only gameplay:** virtual touchscreen gameplay controls remain disabled. Touch input is retained for menus and settings.
-- **Existing upstream management features are retained:** game-folder scanning, game search, cover art, recent games, favourites and categories, per-game settings, firmware installation/management, and the upstream game compatibility metadata.
 
-Unsupported Android/driver metrics remain **N/A**; TouchStation does not invent host-GPU utilization, PPU activity, or SoC temperature. The Android FPS tile remains N/A because the pinned Java bridge has no direct getter, but the native in-game OSD obtains FPS from the emulator's own frame counter.
+## Telemetry and compatibility notes
 
-## Control Center location
+TouchStation reports only values supplied by the Android OS, GPU driver or native emulator core. Unsupported fields remain **N/A** rather than displaying made-up numbers.
 
-Open **Settings → Performance**. The live Performance Monitor appears first, followed by the TouchStation Control Center. The control center refreshes device diagnostics every 2.5 seconds. Use **Export diagnostic report** to share a report with a support contact, or **Report a Bug** to open the repository's structured issue form.
+The native in-game overlay supplies FPS and the guest PPU/SPU/RSX activity information it exposes. Guest RSX workload is not the same as the phone's physical Mali/Adreno/Xclipse GPU utilization. Physical GPU utilization depends on readable Android driver counters. Separate PPU/SPU instruction breakdowns and exception counters are not exposed by the pinned Android bridge and are not fabricated.
 
-The existing performance monitor reports:
-- CPU load sampled from Linux `/proc/stat`.
-- GPU utilization only when a supported kernel driver counter is readable by the app.
-- FPS only when the pinned native bridge supplies a valid frame-rate reading.
-- TouchStation process memory and rolling 60-second graphs.
+Android thermal status is a severity level, not a SoC temperature. Battery temperature is from the battery sensor and must not be interpreted as SoC temperature.
 
-Some Android devices restrict GPU utilization counters and thermal information. These fields correctly show N/A when unavailable. The native in-game OSD separately reports the emulated PS3 RSX workload; RSX load is not the phone's Mali/Adreno utilization.
+Compatibility metadata from the upstream library is retained. TouchStation does not claim a phone can run a specific PS3 title until that game has been tested on the relevant device, driver and build.
 
-## PPU Monitor and in-game performance overlay
+## Overlay controls
 
-Open **Settings → Performance → TouchStation PPU Monitor**. The overlay switch enables the native RPCS3 high-detail OSD and places it at the top-left while a game is running. It displays FPS, host CPU utilization, guest PPU/SPU/RSX utilization, PPU/SPU thread counts, RSX load, and both framerate and frametime graphs. The first 7.0.0 game launch migrates existing installs to the new enabled default; the user's subsequent Full/Off choice is saved across launches.
+There are two ways to control the in-game performance overlay:
 
-The PPU panel also shows the selected PPU decoder, configured PPU thread count, LLVM compile-thread limit and precompilation state. Active PPU/SPU thread counts and guest utilization come from the native in-game OSD. Separate PPU instruction and exception counters are not exposed by the pinned Android bridge and are labelled N/A rather than fabricated. Host GPU utilization remains dependent on readable Android driver counters in the separate Performance Monitor.
+1. **While playing:** open the in-game pause menu and select **Performance Overlay**. This switches directly between visible and hidden without opening Settings.
+2. **Persistent configuration:** open **Settings → Performance → TouchStation PPU Monitor 2.0**. Configure visibility, position, opacity, text size, framerate graph and frametime graph.
+
+The Full/Off preference is saved per game while a game is active. If no per-game preference exists, TouchStation uses the global preference. The other visual settings use the existing Global/Game settings scope.
+
+## Monitoring Suite
+
+Open **Settings → Performance → TouchStation 8.0 Monitoring Suite**.
+
+- **PPU:** use the PPU Monitor 2.0 above for decoder/recompiler details and overlay controls.
+- **SPU:** inspect the configured decoder, block mode, thread settings, cache and related options.
+- **RSX:** inspect the selected GPU profile and use the native in-game overlay for guest RSX activity.
+- **Controller:** see the current connected physical-controller count. Open the upstream Controller Manager for button mapping, profiles, player assignment and hotkeys.
+- **Game and compatibility:** inspect the current title/serial and whether the settings scope is Global or per-game. Compatibility metadata remains in the upstream game library.
+- **Stability and diagnostics:** use the TouchStation Control Center above for thermal, memory, storage, Vulkan and diagnostic report information.
+- **Audio and display:** use the upstream Audio, Renderer and Overlay tabs for the full supported configuration.
+
+## Control Center
+
+Open **Settings → Performance → TouchStation Control Center**. Device diagnostics refresh every 2.5 seconds. Use **Export diagnostic report** to share a report containing device, system, core-initialization, current-game, controller, thermal and memory information, or use **Report a Bug** to open the structured repository issue form.
 
 ## Emulator engine and firmware
 
@@ -45,12 +63,13 @@ Users provide their own official PS3 system update package (PUP) and game files 
 ## Build and release
 
 The GitHub Actions workflow:
+
 1. Checks out the pinned ARMSX3 Android application source.
-2. stages the matching ARM64 native libraries from the upstream release;
-3. applies TouchStation branding, controller-only gameplay, advanced settings, monitoring and Control Center patches;
-4. builds the ARM64 release APK;
-5. verifies app version, native libraries, launcher artwork, APK signature and alignment;
-6. uploads the APK artifact and publishes the `v6.0.0` GitHub release when all checks pass.
+2. Stages the matching ARM64 native libraries from the upstream release.
+3. Applies TouchStation branding, controller-only gameplay, advanced settings, monitoring, Control Center, PPU/SPU/RSX suite and pause-menu overlay controls.
+4. Builds the ARM64 release APK.
+5. Verifies app version, native libraries, launcher artwork, APK signature and alignment.
+6. Uploads the APK artifact and publishes the `v8.0.0` GitHub release when all checks pass.
 
 The release workflow is the authoritative APK build path. The upstream source revision and native library release are intentionally pinned for reproducibility.
 
@@ -58,7 +77,7 @@ The release workflow is the authoritative APK build path. The upstream source re
 
 The navigation drawer includes direct links to the TouchStation GitHub repository, the structured **Report a Bug** issue form, and **About TouchStation**. About shows project attribution and explains that gameplay requires a physical controller.
 
-While a game is running, the pause menu provides access to Options and All Settings. A touch-only gear also opens the in-game Settings screen without taking over a gamepad button. **Y** opens the pause-menu Options tab; **L1/R1** cycle tabs and **B** backs out.
+While a game is running, the pause menu provides Options, the Performance Overlay quick toggle and All Settings. A touch-only gear also opens the in-game Settings screen without taking over a gamepad button. **Y** opens the pause-menu Options tab; **L1/R1** cycle tabs and **B** backs out.
 
 ## License and credits
 
