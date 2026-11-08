@@ -30,7 +30,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -65,10 +64,10 @@ private const val TOUCHSTATION_FINALE_COMPAT_SYNC_KEY = "touchstation.finale.com
  */
 object TouchStationFinaleCompatibilityStore {
     val revision = mutableIntStateOf(0)
-    private val statusById = mutableStateMapOf<String, String>()
+    private val statusById = mutableStateOf<Map<String, String>>(emptyMap())
 
     fun replace(database: JSONObject?) {
-        statusById.clear()
+        val next = LinkedHashMap<String, String>()
         val results = database?.optJSONObject("results")
         if (results != null) {
             val keys = results.keys()
@@ -76,17 +75,18 @@ object TouchStationFinaleCompatibilityStore {
                 val id = keys.next()
                 val status = results.optJSONObject(id)?.optString("status")?.takeIf { it.isNotBlank() }
                 if (status != null) {
-                    statusById[touchStationFinaleNormaliseId(id)] = status
+                    next[touchStationFinaleNormaliseId(id)] = status
                 }
             }
         }
+        statusById.value = next
         revision.intValue++
     }
 
     fun statusFor(serial: String?): String? {
         revision.intValue
         if (serial.isNullOrBlank()) return null
-        return statusById[touchStationFinaleNormaliseId(serial)]
+        return statusById.value[touchStationFinaleNormaliseId(serial)]
     }
 
     fun rankFor(serial: String?): Int? = when (statusFor(serial)?.lowercase(Locale.ROOT)) {
@@ -94,8 +94,7 @@ object TouchStationFinaleCompatibilityStore {
         "ingame" -> 4
         "intro" -> 3
         "loadable" -> 2
-        "nothing" -> 1
-        "unplayable" -> 0
+        "nothing" -> 0
         else -> null
     }
 
