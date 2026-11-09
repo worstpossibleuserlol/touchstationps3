@@ -169,6 +169,17 @@ def patch_runtime(path: Path) -> None:
             WindowImpl.overlayVisible.value = false""",
         "duplicate stop queue suppression")
     source = replace_once(source,
+        """                onReturnedToLibrary()
+                return
+            }
+            if (!queueShutdown) {""",
+        """                onReturnedToLibrary()
+                finishToLauncherIfRequested()
+                return
+            }
+            if (!queueShutdown) {""",
+        "already-stopped close exit handling")
+    source = replace_once(source,
         """            val doAutosave = saveAutosave
             vmStopControl.execute {
                 println("@@ANDROID_STOP_JAVA@@ begin saveAutosave=$doAutosave forced=$saveAutosave restart=$restartAfterStop")
