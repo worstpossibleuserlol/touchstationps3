@@ -266,7 +266,7 @@ The Advanced Suite adds the following product-facing feature areas. Android-side
 46. **Automatic device detection** — reports Android manufacturer/model, hardware and supported ABI.
 47. **Battery/balanced/performance profiles** — applies user-selected emulator settings profiles and verifies supported values. These do not overclock the phone or guarantee higher FPS.
 48. **Keep-screen-on control** — keeps the display awake while TouchStation is in use; it does not create a background emulation service.
-49. **Storage manager** — reports bounded app files/cache/code-cache inventory and app-private free space; game and firmware folders are excluded.
+49. **Storage manager** — reports bounded app cache/code-cache inventory and app-private free space; it does not recurse through filesDir or game/firmware folders.
 50. **Advanced diagnostics dashboard** — combines compatibility, game observations, controller notes, process exits, memory, thermal, storage and settings history in a shareable report.
 
 ### Evidence and native-core limits
