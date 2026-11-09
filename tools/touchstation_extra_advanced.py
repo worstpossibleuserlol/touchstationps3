@@ -69,7 +69,7 @@ def patch_settings_history(app_dir: Path) -> None:
             updated,
         )
 """
-    text = replace_once(text, save_anchor, save_anchor + "\\n" + history_call.rstrip("\\n"), "settings history record call")
+    text = replace_once(text, save_anchor, save_anchor + "\n" + history_call.rstrip("\n"), "settings history record call")
     path.write_text(text, encoding="utf-8")
 
 
