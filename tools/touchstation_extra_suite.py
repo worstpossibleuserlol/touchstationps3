@@ -320,7 +320,7 @@ object TouchStationExtraCrashLoopGuard {
             val count = synchronized(lock) {
                 val times = (recent(application, now) + now).takeLast(20)
                 application.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                    .putString(KEY_TIMES, times.joinToString(",")).apply()
+                    .putString(KEY_TIMES, times.joinToString(",")).commit()
                 times.size
             }
             TouchStationFinaleReliability.recordEvent(
