@@ -34,7 +34,7 @@ def patch_runtime(path: Path) -> None:
             eState.value == EmuState.STOPPED &&
                 !vmStopInProgress &&
                 !vmRunLoopActive &&
-                !nativeReady.value || runCatching { !NativeApp.hasActiveVM() }.getOrDefault(false)""",
+                (!nativeReady.value || runCatching { !NativeApp.hasActiveVM() }.getOrDefault(false))""",
         "native-aware VM idle predicate")
     source = replace_once(source,
         """        fun exitApp() {
