@@ -53,7 +53,7 @@ def patch_runtime(path: Path) -> None:
                     val restartNow = synchronized(vmLifecycleLock) {
                         vmRunLoopActive = false
                         // Keep the latch set until native shutdown has returned AND reported idle.
-                        if (vmShutdownCallReturned) vmStopInProgress = false
+                        if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false
                         if (vmRestartAfterStop) {""",
         "run-loop completion ordering")
     source = replace_once(source,
@@ -166,9 +166,20 @@ def patch_runtime(path: Path) -> None:
                         error.javaClass.simpleName + ": " + (error.message ?: "no message"),
                     )
                 }
-                val stillActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
-                synchronized(vmLifecycleLock) {
-                    if (!stillActive) vmShutdownCallReturned = true
+                // The flag records return from shutdown(), not proof that the VM is idle.
+                synchronized(vmLifecycleLock) { vmShutdownCallReturned = true }
+                var stillActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+                // Allow a bounded hand-off for the run loop and native active flag to settle.
+                // Never interrupt a native worker or assume that a timeout means it is safe.
+                for (attempt in 0 until 50) {
+                    if (!stillActive && !vmRunLoopActive) break
+                    try {
+                        Thread.sleep(100L)
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        break
+                    }
+                    stillActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
                 }
 """,
         "safe native shutdown worker")

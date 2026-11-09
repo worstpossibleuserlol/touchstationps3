@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DOC = (ROOT / "docs" / "EXTRA_100_BUGFIXES.md").read_text(encoding="utf-8")
 TEMPLATE = (ROOT / "tools" / "templates" / "TouchStationExtraShutdownSuite.kt").read_text(encoding="utf-8")
 
-RUNTIME_FIXTURE = """package com.armsx2.runtime
+RUNTIME_FIXTURE = r'''package com.armsx2.runtime
 import com.armsx2.ui.WindowImpl
 @Volatile private var vmStopInProgress = false
         @Volatile private var vmRestartAfterStop = false
@@ -86,7 +86,7 @@ fun stop(saveAutosave: Boolean = false, restartAfterStop: Boolean = false) {
         }
 
         fun restart() {
-"""
+'''
 .replace("__NATIVE_ACTIVE__", "$" + "{NativeApp.hasActiveVM()}")
 .replace("__STATE__", "$" + "{eState.value}");
 
@@ -105,7 +105,8 @@ class ShutdownBugfixTests(unittest.TestCase):
             result = path.read_text(encoding="utf-8")
             self.assertIn("var queueShutdown = false", result)
             self.assertIn("duplicate-stop-coalesced", result)
-            self.assertIn("if (vmShutdownCallReturned) vmStopInProgress = false", result)
+            self.assertIn("if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false", result)
+            self.assertIn("for (attempt in 0 until 50)", result)
             self.assertNotIn("vmRunLoopActive = false\n                        vmStopInProgress = false", result)
             self.assertIn("autosave-failed-shutdown-continuing", result)
             self.assertIn("runCatching { NativeApp.shutdown() }", result)
