@@ -131,7 +131,7 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("bios-vm-run-loop-exited", result)
             self.assertEqual(result.count("if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false"), 2)
             self.assertIn("else if (!vmStopInProgress)", result)
-            self.assertIn("onReturnedToLibrary()\\n                finishToLauncherIfRequested()\\n                return", result)
+            self.assertIn("onReturnedToLibrary()\n                finishToLauncherIfRequested()\n                return", result)
             self.assertIn("autosave-failed-shutdown-continuing", result)
             self.assertIn("runCatching { NativeApp.shutdown() }", result)
             self.assertIn("shutdown-timeout-observed", result)
