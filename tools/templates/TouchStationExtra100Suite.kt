@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.BatteryManager
+import android.os.Build
 import android.os.PowerManager
 import android.os.StatFs
 import android.provider.OpenableColumns
@@ -193,9 +194,9 @@ private fun extra100CaptureMetrics(context: Context, serial: String?): String {
     }.getOrDefault(-1)
     val storageMb = runCatching { StatFs(context.filesDir.absolutePath).availableBytes / (1024L * 1024L) }
         .getOrDefault(-1L)
-    val thermal = runCatching {
+    val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) runCatching {
         (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.currentThermalStatus
-    }.getOrNull() ?: -1
+    }.getOrNull() ?: -1 else -1
     val record = JSONObject().put("timestamp", System.currentTimeMillis())
         .put("serial", extra100GameId(serial)).put("availableRamMb", availableMb)
         .put("batteryPercent", battery).put("appStorageFreeMb", storageMb).put("thermalStatus", thermal)
