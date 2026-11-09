@@ -1641,7 +1641,7 @@ def verification_callback() -> str:
                     apply(updated)
                     InGameOverlay.reloadSettings()
                     val saved = InGameOverlay.settingsState.value
-                    saved.toJson().toString() == updated.toJson().toString()
+                    val verified = saved.toJson().toString() == updated.toJson().toString()
                     if (verified) {
                         com.armsx2.runtime.MainActivityRuntime.surface.value?.applyOutputScale()
                     }
