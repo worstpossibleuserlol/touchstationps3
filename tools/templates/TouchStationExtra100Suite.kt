@@ -36,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.nativeKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
@@ -166,17 +165,24 @@ private fun extra100CopyAndVerify(context: Context, source: Uri, destination: Ur
     val expected = digest.digest().joinToString("") { "%02x".format(it) }
     val actual = extra100Digest(context, destination)
     check(expected == actual) { "Destination checksum differs from source" }
-    "Copied and re-read $bytes bytes. SHA-256 verified: $actual"
+    return "Copied and re-read $bytes bytes. SHA-256 verified: $actual"
 }
 
 private fun extra100ControllerSummary(): String {
-    val devices = InputDevice.getDeviceIds().mapNotNull { InputDevice.getDevice(it) }
-        .filter { device ->
-            (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-                (device.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+    val descriptions = mutableListOf<String>()
+    val deviceIds: IntArray = InputDevice.getDeviceIds()
+    for (id: Int in deviceIds) {
+        val device: InputDevice? = InputDevice.getDevice(id)
+        if (device != null) {
+            val sources: Int = device.sources
+            val isController =
+                (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+            if (isController) descriptions.add(device.name + " · id=" + device.id + " · sources=" + sources)
         }
-    return if (devices.isEmpty()) "No Android gamepad/joystick input device is currently reported."
-    else devices.joinToString("\n") { it.name + " · id=" + it.id + " · sources=" + it.sources }
+    }
+    return if (descriptions.isEmpty()) "No Android gamepad/joystick input device is currently reported."
+    else descriptions.joinToString("\n")
 }
 
 private fun extra100CaptureMetrics(context: Context, serial: String?): String {
@@ -418,8 +424,7 @@ fun TouchStationExtra100Suite(settings: Settings) {
                     .focusRequester(focusRequester)
                     .onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown) {
-                            lastInput.value = "Android key code " + event.nativeKeyEvent.keyCode +
-                                " · label " + event.nativeKeyEvent.displayLabel
+                            lastInput.value = "Compose controller key: " + event.key.toString()
                             true
                         } else false
                     }.focusable().padding(10.dp),
