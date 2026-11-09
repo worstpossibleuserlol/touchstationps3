@@ -76,6 +76,11 @@ class ExtraAdvancedTests(unittest.TestCase):
 
     def test_compose_row_helper_is_annotated(self):
         self.assertIn("@Composable\nprivate fun extraAdvancedRow", SOURCE)
+        self.assertIn("import com.armsx2.reliability.TouchStationExtraCrashLoopGuard", SOURCE)
+        self.assertIn("import com.armsx2.reliability.TouchStationFinaleReliability", SOURCE)
+        self.assertIn("import com.armsx2.reliability.TouchStationFinaleRuntimeGuard", SOURCE)
+        self.assertIn("val deviceIds: IntArray = InputDevice.getDeviceIds()", SOURCE)
+        self.assertNotIn("InputDevice.getDeviceIds().mapNotNull", SOURCE)
 
     def test_settings_search_covers_serialized_settings_and_storage_scan_is_bounded_off_ui(self):
         self.assertIn("extraAdvancedSettingGuide(settings)", SOURCE)
