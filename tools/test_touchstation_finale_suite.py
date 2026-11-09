@@ -289,6 +289,39 @@ fun GameErrorBanner() {
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
 
+    def test_runtime_guard_is_a_separate_thread_safe_android_module(self) -> None:
+        source = FINALE.RUNTIME_GUARD_KOTLIN_SOURCE
+        for marker in (
+            "ConcurrentHashMap",
+            "putIfAbsent",
+            "TouchStation-Finale-Watchdog",
+            "operation-watchdog",
+            "no native or worker thread was forcibly interrupted",
+            "libarmsx3-core.so",
+            "libarmsx3-jni.so",
+            "fun nativeCoreHealth",
+            "fun memoryPressure",
+            "Android process thread count",
+            "not a PPU/SPU worker count",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, source)
+
+    def test_finale_long_running_actions_use_operation_watchdog(self) -> None:
+        source = FINALE.KOTLIN_SOURCE
+        for marker in (
+            "TouchStationFinaleRuntimeGuard.begin",
+            "TouchStationFinaleRuntimeGuard.finish",
+            "compatibility-refresh",
+            "game-integrity",
+            "diagnostic-log-export",
+            "Native core health",
+            "Tracked Android operations",
+            "Memory pressure",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, source)
+
     def test_application_reliability_patcher_is_idempotency_guarded(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             app = Path(temporary)
