@@ -206,14 +206,20 @@ private fun extraAdvancedProcessExits(context: Context): String {
 private fun extraAdvancedLaunchRisk(context: Context): String {
     val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
     val memory = ActivityManager.MemoryInfo()
-    runCatching { manager?.getMemoryInfo(memory) }
+    val memoryAvailable = runCatching {
+        if (manager == null) false else {
+            manager.getMemoryInfo(memory)
+            true
+        }
+    }.getOrDefault(false)
     val storage = runCatching { StatFs(context.filesDir.absolutePath).availableBytes }.getOrDefault(-1L)
     val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) runCatching {
         (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.currentThermalStatus
     }.getOrNull() else null
     val risks = mutableListOf<String>()
-    if (memory.lowMemory || memory.availMem <= memory.threshold) risks += "Android reports low memory"
+    if (memoryAvailable && (memory.lowMemory || memory.availMem <= memory.threshold)) risks += "Android reports low memory"
     if (storage in 0L until 1024L * 1024L * 1024L) risks += "less than 1 GiB app-private storage free"
+    if (!memoryAvailable) risks += "Android memory snapshot unavailable"
     if (thermal != null && thermal >= PowerManager.THERMAL_STATUS_SEVERE) risks += "elevated thermal severity"
     if (TouchStationExtraCrashLoopGuard.status(context).startsWith("SAFE MODE")) risks += "recent app crash loop"
     if (!ARMSX3.initialized || !MainActivityRuntime.nativeReady.value) risks += "native runtime not ready"
@@ -365,6 +371,26 @@ private fun extraAdvancedApplyProfile(candidate: Settings, onApply: (Settings) -
     return runCatching { onApply(candidate) }.getOrDefault(false)
 }
 
+private fun extraAdvancedResolutionRecommendation(context: Context): String {
+    val ram = runCatching {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            ?: return@runCatching -1L
+        val info = ActivityManager.MemoryInfo()
+        manager.getMemoryInfo(info)
+        info.availMem / (1024L * 1024L)
+    }.getOrDefault(-1L)
+    val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) runCatching {
+        (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.currentThermalStatus
+    }.getOrNull() else null
+    return when {
+        ram < 0L -> "memory unavailable; keep current scaler and test conservatively"
+        ram < 1536L || (thermal != null && thermal >= PowerManager.THERMAL_STATUS_SEVERE) ->
+            "consider 540 output scale and retest; no internal RSX resolution change"
+        ram < 3072L -> "consider 720 output scale if frame pacing is poor"
+        else -> "retain current output scale unless measured frame pacing suggests a change"
+    }
+}
+
 private fun extraAdvancedDisplay(context: Context): String = runCatching {
     val manager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
     val refresh = manager?.getDisplay(Display.DEFAULT_DISPLAY)?.refreshRate
@@ -440,12 +466,16 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
     val availableRamMb = runCatching {
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         val info = ActivityManager.MemoryInfo()
-        manager?.getMemoryInfo(info)
-        info.availMem / (1024L * 1024L)
-    }.getOrDefault(0L)
-    val ppuRecommendation = if (availableRamMb in 1L..3072L) {
-        minOf(1, Runtime.getRuntime().availableProcessors()).coerceAtLeast(1)
-    } else minOf(2, Runtime.getRuntime().availableProcessors()).coerceAtLeast(1)
+        if (manager == null) -1L else {
+            manager.getMemoryInfo(info)
+            info.availMem / (1024L * 1024L)
+        }
+    }.getOrDefault(-1L)
+    val ppuRecommendation = when {
+        availableRamMb < 0L || availableRamMb <= 3072L ->
+            minOf(1, Runtime.getRuntime().availableProcessors()).coerceAtLeast(1)
+        else -> minOf(2, Runtime.getRuntime().availableProcessors()).coerceAtLeast(1)
+    }
     val report = extraAdvancedReport(context, settings, serial)
 
     if (showResetDialog.value) {
@@ -483,8 +513,12 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
             extraAdvancedRow("03 · Crash reason analyzer", extraAdvancedProcessExits(context).lineSequence().firstOrNull().orEmpty())
             extraAdvancedRow("04 · Safe game boot", "Conservative profile is available below; explicit user action required")
             extraAdvancedRow("05 · Automatic configuration recovery", TouchStationFinaleSettingsRollback.description())
-            extraAdvancedRow("06 · Game session watchdog", TouchStationFinaleRuntimeGuard.activeSummary())
-            extraAdvancedRow("07 · Memory pressure protection", if (availableRamMb < 1024L) "LOW — less than 1 GiB available" else "$availableRamMb MB Android-reported available RAM")
+            extraAdvancedRow("06 · Game session watchdog", "Android-operation watchdog only; " + TouchStationFinaleRuntimeGuard.activeSummary())
+            extraAdvancedRow("07 · Memory pressure protection", when {
+                availableRamMb < 0L -> "N/A — Android memory snapshot unavailable"
+                availableRamMb < 1024L -> "LOW — less than 1 GiB available"
+                else -> "$availableRamMb MB Android-reported available RAM"
+            })
             extraAdvancedRow("08 · Thermal protection", extraAdvancedThermal(context))
             extraAdvancedRow("09 · Crash history per game", extraAdvancedCrashHistory(context, serial))
             extraAdvancedRow("10 · Stability score", extraAdvancedTestSummary(context, serial))
@@ -548,7 +582,7 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
             extraAdvancedRow("36 · Shader compilation failure recovery", "Preserve caches and export logs; native retry API=N/A")
             extraAdvancedRow("37 · Shader cache version manager", "Native shader cache version metadata=N/A")
             extraAdvancedRow("38 · GPU driver compatibility profiles", "Device fingerprint=" + extraAdvancedDeviceId().take(64) + "; exact driver version=N/A")
-            extraAdvancedRow("39 · Dynamic resolution recommendations", "Android output scaler=" + settings.hwScaler + "; internal RSX resolution unchanged")
+            extraAdvancedRow("39 · Dynamic resolution recommendations", "Current Android output scaler=" + settings.hwScaler + "; " + extraAdvancedResolutionRecommendation(context) + "; internal RSX resolution unchanged")
             extraAdvancedRow("40 · Frame pacing optimizer", "Display=" + extraAdvancedDisplay(context) + "; use native in-game FPS/frametime overlay")
 
             Text("41–50 · App settings and user experience", style = MaterialTheme.typography.titleMedium)
@@ -608,6 +642,17 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
                 else "Safe game boot profile was not confirmed."
             }, enabled = game != null && gameScope, modifier = Modifier.fillMaxWidth()) {
                 Text("Apply safe game boot profile")
+            }
+            OutlinedButton(onClick = {
+                val scope = if (gameScope) SettingsScope.Game else SettingsScope.Global
+                val restored = TouchStationFinaleSettingsRollback.restore(scope, serial)
+                actionMessage.value = when {
+                    restored == null -> "No matching rollback checkpoint exists."
+                    extraAdvancedApplyProfile(restored, onApply) -> "Previous configuration restored and read-back verified."
+                    else -> "Rollback was not confirmed by settings validation/read-back."
+                }
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text("Restore last known configuration")
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
