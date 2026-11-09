@@ -29,6 +29,61 @@ def patch_runtime(path: Path) -> None:
         "        @Volatile private var vmRestartAfterStop = false",
         "shutdown state fields")
     source = replace_once(source,
+        """        fun isVmIdle(): Boolean = eState.value == EmuState.STOPPED && !vmStopInProgress && !vmRunLoopActive""",
+        """        fun isVmIdle(): Boolean =
+            eState.value == EmuState.STOPPED &&
+                !vmStopInProgress &&
+                !vmRunLoopActive &&
+                runCatching { !NativeApp.hasActiveVM() }.getOrDefault(false)""",
+        "native-aware VM idle predicate")
+    source = replace_once(source,
+        """        fun exitApp() {
+            if (eState.value == EmuState.STOPPED && !vmStopInProgress && !vmRunLoopActive) {""",
+        """        fun exitApp() {
+            val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+            if (eState.value == EmuState.STOPPED && !vmStopInProgress && !vmRunLoopActive && !nativeActive) {""",
+        "native-aware app exit predicate")
+    source = replace_once(source,
+        """        fun start() {
+            synchronized(vmLifecycleLock) {
+                if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED) {
+                    vmRestartAfterStop = true
+                    return
+                }
+                vmRunLoopActive = true
+                vmRestartQueued = false
+            }
+
+            invoke {""",
+        """        fun start() {
+            val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+            val shouldStart = synchronized(vmLifecycleLock) {
+                if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED || nativeActive) {
+                    vmRestartAfterStop = true
+                    false
+                } else {
+                    vmRunLoopActive = true
+                    vmRestartQueued = false
+                    true
+                }
+            }
+            if (!shouldStart) {
+                // If flags say STOPPED but the native core is still active (or its
+                // state query failed), request a serialized stop before any relaunch.
+                if (nativeActive) stop(restartAfterStop = true)
+                return
+            }
+
+            invoke {""",
+        "native-aware game start gate")
+    source = replace_once(source,
+        """            val shouldStart = synchronized(vmLifecycleLock) {
+                if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED) {""",
+        """            val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+            val shouldStart = synchronized(vmLifecycleLock) {
+                if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED || nativeActive) {""",
+        "native-aware BIOS start gate")
+    source = replace_once(source,
         """                    eState.value = EmuState.STOPPED
                     // The game's RPCN session goes with it (see onStart).
                     com.armsx2.online.OnlineSession.release(com.armsx2.Pasx2Application.appContext)
