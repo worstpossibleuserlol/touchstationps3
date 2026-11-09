@@ -130,7 +130,7 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/touchstation_extra_suite.py tools/test_touchstation_extra_suite.py tools/touchstation_extra_advanced.py tools/test_touchstation_extra_advanced.py tools/add_gpl_modification_notices.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/touchstation_extra_suite.py tools/test_touchstation_extra_suite.py tools/touchstation_extra_advanced.py tools/test_touchstation_extra_advanced.py tools/touchstation_extra_100.py tools/test_touchstation_extra_100.py tools/add_gpl_modification_notices.py
 
       - name: Run TouchStation Finale patcher regression tests
         run: python3 tools/test_touchstation_finale_suite.py
@@ -140,6 +140,9 @@ jobs:
 
       - name: Run TouchStation Extra advanced regression tests
         run: python3 tools/test_touchstation_extra_advanced.py
+
+      - name: Run TouchStation Extra 100-feature regression tests
+        run: python3 tools/test_touchstation_extra_100.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
@@ -169,6 +172,8 @@ jobs:
           python tools/touchstation_extra_suite.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_extra_advanced.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_extra_100.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/add_gpl_modification_notices.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
@@ -209,10 +214,10 @@ jobs:
           # Package the exact patched source and all build scripts for GPL source distribution.
           mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/docs" "$UPSTREAM/touchstation-build/.github/workflows"
           cp LICENSE README.md THIRD_PARTY_NOTICES.md SOURCE_DISTRIBUTION.md "$UPSTREAM/touchstation-build/"
-          cp docs/FINALE_FEATURES.md "$UPSTREAM/touchstation-build/docs/"
+          cp docs/FINALE_FEATURES.md docs/EXTRA_100_FEATURES.md "$UPSTREAM/touchstation-build/docs/"
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           mkdir -p "$UPSTREAM/touchstation-build/tools/templates"
-          cp tools/templates/TouchStationExtraAdvancedSuite.kt "$UPSTREAM/touchstation-build/tools/templates/"
+          cp tools/templates/TouchStationExtraAdvancedSuite.kt tools/templates/TouchStationExtra100Suite.kt "$UPSTREAM/touchstation-build/tools/templates/"
           cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
           tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
             -czf "$RUNNER_TEMP/TouchStation-Version-Extra-corresponding-source.tar.gz" \
@@ -234,6 +239,8 @@ jobs:
           grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/reliability/TouchStationExtraCrashLoopGuard.kt" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStationExtraAdvancedSuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/tools/templates/TouchStationExtraAdvancedSuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/tools/templates/TouchStationExtra100Suite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_100_FEATURES.md" "$RUNNER_TEMP/source-archive-entries.txt"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
           DRAWER="$APP/src/main/java/com/armsx2/navigation/NavigationDrawer.kt"
@@ -267,6 +274,11 @@ jobs:
           INGAME_OVERLAY="$APP/src/main/java/com/armsx2/ui/InGameOverlay.kt"
           test -s "$ADVANCED_SUITE"
           grep -Fq 'TouchStationExtraAdvancedSuite(' "$PERF_TAB"
+          EXTRA100_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStationExtra100Suite.kt"
+          test -s "$EXTRA100_SUITE"
+          grep -Fq 'TouchStationExtra100Suite(settings = s)' "$PERF_TAB"
+          grep -Fq 'SHA-256 verified' "$EXTRA100_SUITE"
+          grep -Fq 'user-controlled playtime' "$EXTRA100_SUITE"
           grep -Fq 'TouchStationExtraSettingsHistory.record(' "$INGAME_OVERLAY"
           grep -Fq 'Run Extra preflight and diagnostics' "$EXTRA_SUITE"
           grep -Fq 'Reset settings to defaults' "$ADVANCED_SUITE"
