@@ -57,9 +57,12 @@ def patch_runtime(path: Path) -> None:
             invoke {""",
         """        fun start() {
             val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+            var staleNativeSession = false
             val shouldStart = synchronized(vmLifecycleLock) {
                 if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED || nativeActive) {
                     vmRestartAfterStop = true
+                    staleNativeSession = nativeActive && !vmStopInProgress && !vmRunLoopActive &&
+                        eState.value == EmuState.STOPPED
                     false
                 } else {
                     vmRunLoopActive = true
@@ -68,9 +71,9 @@ def patch_runtime(path: Path) -> None:
                 }
             }
             if (!shouldStart) {
-                // If flags say STOPPED but the native core is still active (or its
-                // state query failed), request a serialized stop before any relaunch.
-                if (nativeActive) stop(restartAfterStop = true)
+                // Only request a stop for a stale native session whose frontend flags
+                // otherwise claim idle. Do not stop a legitimately running game.
+                if (staleNativeSession) stop(restartAfterStop = true)
                 return
             }
 
