@@ -52,6 +52,9 @@ class ExtraPatchTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 EXTRA.patch_application(Path(tmp))
 
+    def test_crash_loop_count_is_committed_before_original_crash_handler(self):
+        self.assertIn('.putString(KEY_TIMES, times.joinToString(",")).commit()', EXTRA.EXTRA_CRASH_LOOP_KOTLIN_SOURCE)
+
     def test_extra_row_helper_is_compose_annotated(self):
         self.assertIn("@Composable\nprivate fun extraRow", EXTRA.EXTRA_KOTLIN_SOURCE)
 
