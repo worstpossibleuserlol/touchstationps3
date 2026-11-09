@@ -75,7 +75,7 @@ class ExtraAdvancedTests(unittest.TestCase):
                 self.assertIn(marker, SOURCE)
 
     def test_compose_row_helper_is_annotated(self):
-        self.assertIn("@Composable\\nprivate fun extraAdvancedRow", SOURCE)
+        self.assertIn("@Composable\nprivate fun extraAdvancedRow", SOURCE)
 
     def test_native_telemetry_limits_are_explicit(self):
         for marker in (
