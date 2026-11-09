@@ -163,5 +163,7 @@ The follow-up audit found two additional frontend defects and adds regression co
 - **BIOS/system-menu stop path:** startBios() had a separate finally block that cleared vmStopInProgress without waiting for NativeApp.shutdown() to return and the native VM to report idle. It now uses the same native-idle gate as the game run loop.
 - **Restart-intent clobbering:** a duplicate ordinary stop request could set vmRestartAfterStop = false while a restart was already pending. A duplicate stop now preserves the in-flight restart intent; a fresh stop can still clear a stale request.
 - **Regression coverage:** the shutdown patch test fixture now includes both game and BIOS run-loop completion paths and asserts both use the native-idle gate.
+- **Already-stopped external close:** the early-return path now calls finishToLauncherIfRequested(), so a close request from an external frontend is not silently ignored if the guest stopped just before the close action.
+- **Late-recovery report accuracy:** the diagnostics report now treats shutdown-late-idle-recovered as a successful completion, instead of continuing to warn that the same session never completed.
 
 These changes are frontend lifecycle safeguards. They do not repair a native-core hang or prove GTA IV/GTA SA stability on the target handset.
