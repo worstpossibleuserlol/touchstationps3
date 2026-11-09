@@ -39,7 +39,8 @@ class ExtraPatchTests(unittest.TestCase):
 
     def test_application_hook(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "Pasx2Application.kt"
+            path = Path(tmp) / "src/main/java/com/armsx2/Pasx2Application.kt"
+            path.parent.mkdir(parents=True)
             path.write_text(
                 "package com.armsx2\nimport com.armsx2.reliability.TouchStationFinaleReliability\nfun boot() {\n    TouchStationFinaleReliability.install(this)\n}\n",
                 encoding="utf-8",
