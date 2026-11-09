@@ -105,6 +105,7 @@ class ShutdownBugfixTests(unittest.TestCase):
             result = path.read_text(encoding="utf-8")
             self.assertIn("var queueShutdown = false", result)
             self.assertIn("duplicate-stop-coalesced", result)
+            self.assertIn("val nativeStillActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)", result)
             self.assertIn("if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false", result)
             self.assertIn("for (attempt in 0 until 50)", result)
             self.assertNotIn("vmRunLoopActive = false\n                        vmStopInProgress = false", result)

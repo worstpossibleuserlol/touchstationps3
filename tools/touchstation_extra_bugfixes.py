@@ -50,6 +50,7 @@ def patch_runtime(path: Path) -> None:
                             it.javaClass.simpleName + ": " + (it.message ?: "no message"),
                         )
                     }
+                    val nativeStillActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
                     val restartNow = synchronized(vmLifecycleLock) {
                         vmRunLoopActive = false
                         // Keep the latch set until native shutdown has returned AND reported idle.
