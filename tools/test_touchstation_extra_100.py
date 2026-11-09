@@ -43,7 +43,7 @@ class Extra100Tests(unittest.TestCase):
         self.assertNotIn("InputDevice.getDeviceIds().mapNotNull", SOURCE)
 
     def test_game_file_validation_does_not_claim_full_integrity(self):
-        self.assertIn("bounded read-only signature inspection", SOURCE)
+        self.assertIn("Bounded read-only signature inspection", SOURCE)
         self.assertIn("not a full PS3 image", SOURCE)
         self.assertIn("7F504B47", SOURCE)
         self.assertIn("ISO9660 volume descriptor", SOURCE)
