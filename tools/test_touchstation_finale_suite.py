@@ -114,6 +114,7 @@ fun PerformanceTab() {
             result = source.read_text(encoding="utf-8")
             self.assertEqual(result.count("TouchStationFinaleSuite("), 1)
             self.assertIn("saved.toJson().toString() == updated.toJson().toString()", result)
+            self.assertIn("val verified = saved.toJson().toString() == updated.toJson().toString()", result)
             with self.assertRaises(SystemExit):
                 FINALE.patch_performance_tab(app)
 
