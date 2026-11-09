@@ -82,7 +82,7 @@ class ExtraAdvancedTests(unittest.TestCase):
         self.assertIn("settings.toJson()", SOURCE)
         self.assertIn("withContext(Dispatchers.IO)", SOURCE)
         self.assertNotIn("size(context.filesDir)", SOURCE)
-        self.assertIn("TouchStationExtraSettingsHistory.record", SOURCE)
+        self.assertIn("object TouchStationExtraSettingsHistory", SOURCE)
 
     def test_native_telemetry_limits_are_explicit(self):
         for marker in (
