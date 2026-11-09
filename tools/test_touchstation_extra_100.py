@@ -36,6 +36,10 @@ class Extra100Tests(unittest.TestCase):
         self.assertIn('MessageDigest.getInstance("SHA-256")', SOURCE)
         self.assertIn("val actual = extra100Digest(context, destination)", SOURCE)
         self.assertIn("check(expected == actual)", SOURCE)
+        self.assertIn('return "Copied and re-read $bytes bytes. SHA-256 verified: $actual"', SOURCE)
+        self.assertNotIn("nativeKeyEvent", SOURCE)
+        self.assertIn("val deviceIds: IntArray = InputDevice.getDeviceIds()", SOURCE)
+        self.assertNotIn("InputDevice.getDeviceIds().mapNotNull", SOURCE)
 
     def test_game_file_validation_does_not_claim_full_integrity(self):
         self.assertIn("metadata/readability check", SOURCE)
