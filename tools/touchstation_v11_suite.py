@@ -75,16 +75,21 @@ private fun touchStation11ExitReason(context: Context): String {
         val exit = manager?.getHistoricalProcessExitReasons(context.packageName, 0, 6)
             ?.firstOrNull() ?: return@runCatching "No historical Android process exit reported"
         val reason = when (exit.reason) {
-            ApplicationExitInfo.REASON_CRASH -> "Java crash"
-            ApplicationExitInfo.REASON_CRASH_NATIVE -> "Native crash"
+            ApplicationExitInfo.REASON_EXIT_SELF -> "App exited itself"
+            ApplicationExitInfo.REASON_USER_REQUESTED -> "User-requested process removal (not evidence of a crash)"
+            ApplicationExitInfo.REASON_USER_STOPPED -> "User stopped the app"
+            ApplicationExitInfo.REASON_SIGNALED -> "Process terminated by a signal"
+            ApplicationExitInfo.REASON_CRASH -> "Java/Kotlin app crash"
+            ApplicationExitInfo.REASON_CRASH_NATIVE -> "Native app crash"
             ApplicationExitInfo.REASON_ANR -> "Application not responding"
             ApplicationExitInfo.REASON_LOW_MEMORY -> "Low-memory termination"
             ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "Excessive resource use"
-            else -> "Android exit reason " + exit.reason
+            ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "Dependent process died"
+            else -> "Other Android process exit (reason " + exit.reason + ")"
         }
-        reason + " · " +
-            android.text.format.DateFormat.format("yyyy-MM-dd HH:mm:ss", exit.timestamp) +
-            (exit.description?.takeIf { it.isNotBlank() }?.let { " · " + it } ?: "")
+        val detail = exit.description?.takeIf { it.isNotBlank() }?.let { " · Android detail: " + it } ?: ""
+        "Android app-process history (not a PS3 guest-game crash record) · " + reason + " · " +
+            android.text.format.DateFormat.format("yyyy-MM-dd HH:mm:ss", exit.timestamp) + detail
     }.getOrDefault("Android exit history unavailable")
 }
 
