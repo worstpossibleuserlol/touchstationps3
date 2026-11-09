@@ -52,6 +52,9 @@ class ExtraPatchTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 EXTRA.patch_application(Path(tmp))
 
+    def test_extra_row_helper_is_compose_annotated(self):
+        self.assertIn("@Composable\\nprivate fun extraRow", EXTRA.EXTRA_KOTLIN_SOURCE)
+
     def test_feature_coverage_and_native_limits(self):
         for marker in (
             "PPU execution diagnostics", "PPU module validator", "PPU thread-state monitor",
