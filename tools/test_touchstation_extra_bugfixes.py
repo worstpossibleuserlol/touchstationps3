@@ -61,7 +61,7 @@ fun stop(saveAutosave: Boolean = false, restartAfterStop: Boolean = false) {
                 if (doAutosave)
                     NativeApp.saveAutosaveState()
                 NativeApp.shutdown()
-                println("@@ANDROID_STOP_JAVA@@ shutdown_return active=__NATIVE_ACTIVE__ runLoop=$vmRunLoopActive state=__STATE__")
+                println("@@ANDROID_STOP_JAVA@@ shutdown_return active=${NativeApp.hasActiveVM()} runLoop=$vmRunLoopActive state=${eState.value}")
                 if (!vmRunLoopActive && (eState.value == EmuState.STOPPED || !NativeApp.hasActiveVM())) {
                     eState.value = EmuState.STOPPED
                     var restartQueued = false
