@@ -294,6 +294,9 @@ fun GameErrorBanner() {
         for marker in (
             "ConcurrentHashMap",
             "putIfAbsent",
+            "SystemClock.elapsedRealtime",
+            "ScheduledFuture",
+            "AtomicLong",
             "TouchStation-Finale-Watchdog",
             "operation-watchdog",
             "no native or worker thread was forcibly interrupted",
@@ -301,7 +304,7 @@ fun GameErrorBanner() {
             "libarmsx3-jni.so",
             "fun nativeCoreHealth",
             "fun memoryPressure",
-            "Android process thread count",
+            "approximate Android process thread count",
             "not a PPU/SPU worker count",
         ):
             with self.subTest(marker=marker):
@@ -318,6 +321,7 @@ fun GameErrorBanner() {
             "Native core health",
             "Tracked Android operations",
             "Memory pressure",
+            "kotlinx.coroutines.CancellationException",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
