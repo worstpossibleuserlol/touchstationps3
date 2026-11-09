@@ -11,7 +11,9 @@ This update targets the reported issue: GTA IV reaches **Stopping**, then TouchS
 5. Adds a 20-second warning-only watchdog; it never force-kills native threads.
 6. Adds a diagnostics panel to refresh, record observed outcomes and share the shutdown report.
 
-A late-idle watcher now recovers the app-side stop latch if the native VM reports idle after the initial five-second settle window. Failed native-state queries remain UNKNOWN/active, and delayed callbacks are tied to the stop generation so an old timer cannot unlock a later session. The watcher stops after five minutes and retains the lock if the native core still reports active.\n\nThese are app/frontend safeguards, not a guarantee that GTA IV will run or that a native SIGSEGV is fixed.
+A late-idle watcher now recovers the app-side stop latch if the native VM reports idle after the initial five-second settle window. Failed native-state queries remain UNKNOWN/active, and delayed callbacks are tied to the stop generation so an old timer cannot unlock a later session. The watcher stops after five minutes and retains the lock if the native core still reports active.
+
+These are app/frontend safeguards, not a guarantee that GTA IV will run or that a native SIGSEGV is fixed.
 
 ## Status labels
 
@@ -152,3 +154,14 @@ A late-idle watcher now recovers the app-side stop latch if the native VM report
 The workflow uses a pinned prebuilt ARM64 emulator release. This update does not rebuild native PPU, SPU, RSX, Vulkan or GPU engine code. Items labelled **NATIVE CORE REQUIRED** are integration requirements, not implemented native fixes. A Kotlin watchdog cannot safely cancel a stuck native shutdown or recover from a native SIGSEGV. Native repair requires source-level changes, a matching ARM64 rebuild and real-device testing.
 
 The 100 checks are not proof of 100 successful real-game tests. The GTA IV shutdown test must still be run on the target device.
+
+
+## Follow-up lifecycle audit
+
+The follow-up audit found two additional frontend defects and adds regression coverage:
+
+- **BIOS/system-menu stop path:** startBios() had a separate finally block that cleared vmStopInProgress without waiting for NativeApp.shutdown() to return and the native VM to report idle. It now uses the same native-idle gate as the game run loop.
+- **Restart-intent clobbering:** a duplicate ordinary stop request could set vmRestartAfterStop = false while a restart was already pending. A duplicate stop now preserves the in-flight restart intent; a fresh stop can still clear a stale request.
+- **Regression coverage:** the shutdown patch test fixture now includes both game and BIOS run-loop completion paths and asserts both use the native-idle gate.
+
+These changes are frontend lifecycle safeguards. They do not repair a native-core hang or prove GTA IV/GTA SA stability on the target handset.
