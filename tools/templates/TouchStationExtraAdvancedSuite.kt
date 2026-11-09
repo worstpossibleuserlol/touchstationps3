@@ -46,6 +46,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val EXTRA_ADVANCED_PREFS = "touchstation-extra-advanced"
 private const val EXTRA_SETTINGS_HISTORY_KEY = "settingsHistory"
@@ -263,14 +265,14 @@ private fun extraAdvancedStorage(context: Context): String = runCatching {
         }
         return total
     }
-    val files = size(context.filesDir)
+    // Only scan app-owned cache directories. Do not recurse through filesDir because
+    // firmware or other user-managed data may live there.
     val cache = size(context.cacheDir)
     val code = size(context.codeCacheDir)
     val free = StatFs(context.filesDir.absolutePath).availableBytes
-    "App files=" + files / (1024L * 1024L) + " MB; cache=" +
-        cache / (1024L * 1024L) + " MB; code cache=" +
-        code / (1024L * 1024L) + " MB; free=" +
-        free / (1024L * 1024L) + " MB (bounded scan; game/firmware folders excluded)"
+    "App cache=" + cache / (1024L * 1024L) + " MB; code cache=" +
+        code / (1024L * 1024L) + " MB; app-private filesystem free=" +
+        free / (1024L * 1024L) + " MB (bounded cache scan; files/firmware/game folders untouched)"
 }.getOrDefault("Storage inventory unavailable")
 
 private fun extraAdvancedControllers(): List<String> = runCatching {
@@ -336,21 +338,43 @@ private fun extraAdvancedLoadProfile(context: Context, serial: String?, gameScop
         Settings.fromJson(JSONObject(raw))
     }.getOrNull()
 
-private fun extraAdvancedSettingGuide(): List<Pair<String, String>> = listOf(
-    "PPU decoder" to "CPU emulation backend. Live instruction profiling and automatic fallback are native-core features.",
-    "PPU threads" to "Maximum configured PPU execution threads. More threads do not automatically mean faster emulation.",
-    "LLVM compile threads" to "Controls concurrent PPU LLVM compilation jobs; more jobs can increase memory use.",
-    "SPU decoder" to "Selects the configured SPU emulation backend; compare real game results before changing it.",
-    "SPU block size" to "Safe, Mega or Giga compilation mode. Safer settings may be slower.",
-    "SPU cache" to "Controls the supported SPU cache option. Native cache internals are not exposed here.",
-    "LLVM precompile" to "Allows supported PPU modules to compile ahead of execution; startup time and memory use may rise.",
-    "Shader mode" to "Controls the available shader recompilation mode; live job counters are not exposed.",
-    "MSAA" to "Multisample anti-aliasing quality setting; higher values can increase GPU cost.",
-    "Output scaler" to "Android presentation output scale. It does not change the game's internal RSX resolution.",
-    "GPU profile" to "Configured renderer profile. Physical GPU utilization remains driver-dependent.",
-    "RSX FIFO accuracy" to "Graphics command fetch policy. Changing it can affect stability and performance.",
-    "Driver wake-up delay" to "Native graphics scheduling delay; use per-game overrides and preserve a rollback point."
-)
+private fun extraAdvancedSettingGuide(settings: Settings): List<Pair<String, String>> {
+    val descriptions = listOf(
+        "ppuDecoder" to "CPU emulation backend. Live instruction profiling and automatic fallback are native-core features.",
+        "ppuThreads" to "Maximum configured PPU execution threads. More threads do not automatically mean faster emulation.",
+        "llvmThreads" to "Controls concurrent PPU LLVM compilation jobs; more jobs can increase memory use.",
+        "spuDecoder" to "Selects the configured SPU emulation backend; compare real game results before changing it.",
+        "spuBlockSize" to "Safe, Mega or Giga compilation mode. Safer settings may be slower.",
+        "spuCache" to "Controls the supported SPU cache option. Native cache internals are not exposed here.",
+        "llvmPrecompile" to "Allows supported PPU modules to compile ahead of execution; startup time and memory use may rise.",
+        "shaderMode" to "Controls the available shader recompilation mode; live job counters are not exposed.",
+        "msaaMode" to "Multisample anti-aliasing quality setting; higher values can increase GPU cost.",
+        "hwScaler" to "Android presentation output scale. It does not change the game's internal RSX resolution.",
+        "gpuProfile" to "Configured renderer profile. Physical GPU utilization remains driver-dependent.",
+        "fifo" to "Graphics command fetch policy. Changing it can affect stability and performance.",
+        "wake" to "Native graphics scheduling delay; use per-game overrides and preserve a rollback point."
+    )
+    val json = settings.toJson()
+    val keys = json.keys()
+    val result = mutableListOf<Pair<String, String>>()
+    while (keys.hasNext()) {
+        val key = keys.next()
+        val value = json.opt(key)?.toString()?.take(80) ?: "N/A"
+        val description = descriptions.firstOrNull { key.contains(it.first, ignoreCase = true) }?.second
+            ?: when {
+                key.contains("audio", ignoreCase = true) -> "Audio configuration field. Change only when troubleshooting sound or timing."
+                key.contains("video", ignoreCase = true) || key.contains("renderer", ignoreCase = true) ->
+                    "Graphics or renderer configuration field. Changes can affect compatibility and performance."
+                key.contains("controller", ignoreCase = true) || key.contains("input", ignoreCase = true) ->
+                    "Controller/input configuration field. Check your physical controller mapping after changes."
+                key.contains("shader", ignoreCase = true) -> "Shader configuration field; private native shader telemetry is unavailable."
+                key.contains("ps3", ignoreCase = true) -> "PS3 engine configuration field; use conservative values and verify game behavior."
+                else -> "Saved emulator configuration field. Consult the relevant upstream setting description before changing it."
+            }
+        result += key to ("Current: " + value + ". " + description)
+    }
+    return result.sortedBy { it.first.lowercase(Locale.ROOT) }
+}
 
 private fun extraAdvancedShare(context: Context, subject: String, text: String) {
     runCatching {
@@ -397,7 +421,12 @@ private fun extraAdvancedDisplay(context: Context): String = runCatching {
     refresh?.takeIf { it > 0f }?.let { java.lang.String.format(Locale.US, "%.1f Hz", it) } ?: "N/A"
 }.getOrDefault("N/A")
 
-private fun extraAdvancedReport(context: Context, settings: Settings, serial: String?): String = buildString {
+private fun extraAdvancedReport(
+    context: Context,
+    settings: Settings,
+    serial: String?,
+    storageSummary: String,
+): String = buildString {
     appendLine("TouchStation Extra advanced diagnostics")
     appendLine("Game ID: " + (serial ?: "N/A"))
     appendLine("Device: " + Build.MANUFACTURER + " " + Build.MODEL)
@@ -417,7 +446,7 @@ private fun extraAdvancedReport(context: Context, settings: Settings, serial: St
     appendLine("Android process exits:\n" + extraAdvancedProcessExits(context))
     appendLine("Thermal: " + extraAdvancedThermal(context))
     appendLine("Battery: " + extraAdvancedBattery(context))
-    appendLine("Storage: " + extraAdvancedStorage(context))
+    appendLine("Storage: " + storageSummary)
     appendLine("Controllers: " + extraAdvancedControllers().joinToString().ifBlank { "None detected" })
     appendLine("Settings change history: " + TouchStationExtraSettingsHistory.summary(context))
     appendLine("Native PPU/SPU/RSX execution counters, worker states, command traces, GPU fences and physical GPU utilization remain N/A when not exported by the core.")
@@ -444,11 +473,15 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
     val actionMessage = remember { mutableStateOf("No advanced settings action performed.") }
     val showResetDialog = remember { mutableStateOf(false) }
     val keepScreenOn = remember { mutableStateOf(prefs.getBoolean("keepScreenOnWhileEmulating", false)) }
-    val observations = extraAdvancedReadTests(context, serial)
     val controllers = extraAdvancedControllers()
-    val settingMatches = extraAdvancedSettingGuide().filter {
+    val storageSummary = remember(context) { mutableStateOf("App cache inventory has not been refreshed yet.") }
+    val settingMatches = extraAdvancedSettingGuide(settings).filter {
         search.value.isBlank() || it.first.contains(search.value, true) || it.second.contains(search.value, true)
     }.take(12)
+
+    LaunchedEffect(context) {
+        storageSummary.value = withContext(Dispatchers.IO) { extraAdvancedStorage(context) }
+    }
 
     LaunchedEffect(keepScreenOn.value) {
         prefs.edit().putBoolean("keepScreenOnWhileEmulating", keepScreenOn.value).apply()
@@ -477,8 +510,6 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
             minOf(1, Runtime.getRuntime().availableProcessors()).coerceAtLeast(1)
         else -> minOf(2, Runtime.getRuntime().availableProcessors()).coerceAtLeast(1)
     }
-    val report = extraAdvancedReport(context, settings, serial)
-
     if (showResetDialog.value) {
         AlertDialog(
             onDismissRequest = { showResetDialog.value = false },
@@ -599,7 +630,7 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
             extraAdvancedRow("46 · Automatic device detection", Build.MANUFACTURER + " " + Build.MODEL + " · " + Build.HARDWARE + " · " + Build.SUPPORTED_ABIS.firstOrNull())
             extraAdvancedRow("47 · Battery and performance modes", extraAdvancedBattery(context) + "; apply a profile below")
             extraAdvancedRow("48 · Background activity controls", "Keep screen awake while using TouchStation")
-            extraAdvancedRow("49 · Storage manager", extraAdvancedStorage(context))
+            extraAdvancedRow("49 · Storage manager", storageSummary.value)
             extraAdvancedRow("50 · Diagnostics dashboard", "Crash risk, compatibility, observations, controllers, memory, thermal, storage and settings")
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -692,7 +723,7 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
             }
             OutlinedButton(onClick = {
                 extraAdvancedShare(context, "TouchStation Extra compatibility report",
-                    extraAdvancedReport(context, settings, serial))
+                    extraAdvancedReport(context, settings, serial, storageSummary.value))
                 actionMessage.value = "Opened Android share sheet for the report."
             }, modifier = Modifier.fillMaxWidth()) { Text("Export compatibility and diagnostic report") }
 
