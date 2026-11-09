@@ -37,17 +37,7 @@ def patch_performance_tab(app_dir: Path) -> None:
                     apply(updated)
                     InGameOverlay.reloadSettings()
                     val saved = InGameOverlay.settingsState.value
-                    saved.hwScaler == updated.hwScaler &&
-                        saved.gpuProfile == updated.gpuProfile &&
-                        saved.ps3.ppuThreads == updated.ps3.ppuThreads &&
-                        saved.ps3.llvmThreads == updated.ps3.llvmThreads &&
-                        saved.ps3.preferredSpuThreads == updated.ps3.preferredSpuThreads &&
-                        saved.ps3.spuBlockSize == updated.ps3.spuBlockSize &&
-                        saved.ps3.spuXFloat == updated.ps3.spuXFloat &&
-                        saved.ps3.shaderMode == updated.ps3.shaderMode &&
-                        saved.ps3.msaaMode == updated.ps3.msaaMode &&
-                        saved.ps3.spuCache == updated.ps3.spuCache &&
-                        saved.ps3.llvmPrecompile == updated.ps3.llvmPrecompile
+                    saved.toJson().toString() == updated.toJson().toString()
                 }.getOrDefault(false)
             },
         )
