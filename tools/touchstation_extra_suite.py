@@ -404,7 +404,7 @@ def patch_performance_tab(app_dir: Path) -> None:
 
 
 def patch_application(app_dir: Path) -> None:
-    path = app_dir / "Pasx2Application.kt"
+    path = app_dir / "src/main/java/com/armsx2/Pasx2Application.kt"
     text = path.read_text(encoding="utf-8")
     call = "TouchStationExtraCrashLoopGuard.install(this)"
     if call in text:
@@ -444,6 +444,7 @@ def main() -> None:
     if new_ui.exists() or new_guard.exists():
         raise SystemExit("Extra Kotlin source already exists; refusing to overwrite")
     patch_version(app_dir)
+    reliability_dir.mkdir(parents=True, exist_ok=True)
     new_ui.write_text(EXTRA_KOTLIN_SOURCE, encoding="utf-8")
     new_guard.write_text(EXTRA_CRASH_LOOP_KOTLIN_SOURCE, encoding="utf-8")
     patch_performance_tab(settings_dir)
