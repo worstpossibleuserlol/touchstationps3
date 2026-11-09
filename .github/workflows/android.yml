@@ -1,4 +1,4 @@
-name: TouchStation Version Finale Build
+name: TouchStation Extra Build
 
 on:
   push:
@@ -130,10 +130,13 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/add_gpl_modification_notices.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/touchstation_extra_suite.py tools/test_touchstation_extra_suite.py tools/add_gpl_modification_notices.py
 
       - name: Run TouchStation Finale patcher regression tests
         run: python3 tools/test_touchstation_finale_suite.py
+
+      - name: Run TouchStation Extra patcher regression tests
+        run: python3 tools/test_touchstation_extra_suite.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
@@ -159,6 +162,8 @@ jobs:
           python tools/touchstation_v11_suite.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_finale_suite.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_extra_suite.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/add_gpl_modification_notices.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
@@ -203,12 +208,12 @@ jobs:
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
           tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
-            -czf "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz" \
+            -czf "$RUNNER_TEMP/TouchStation-Version-Extra-corresponding-source.tar.gz" \
             -C "$RUNNER_TEMP" armsx3-source
-          sha256sum "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz" \
-            > "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz.sha256"
-          test -s "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz"
-          tar -tzf "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz" \
+          sha256sum "$RUNNER_TEMP/TouchStation-Version-Extra-corresponding-source.tar.gz" \
+            > "$RUNNER_TEMP/TouchStation-Version-Extra-corresponding-source.tar.gz.sha256"
+          test -s "$RUNNER_TEMP/TouchStation-Version-Extra-corresponding-source.tar.gz"
+          tar -tzf "$RUNNER_TEMP/TouchStation-Version-Extra-corresponding-source.tar.gz" \
             > "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/TOUCHSTATION_MODIFICATIONS.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/tools/add_gpl_modification_notices.py" "$RUNNER_TEMP/source-archive-entries.txt"
@@ -218,6 +223,8 @@ jobs:
           grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStation11ReliabilitySuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStationFinaleSuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/reliability/TouchStationFinaleRuntimeGuard.kt" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStationExtraDiagnostics.kt" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/reliability/TouchStationExtraCrashLoopGuard.kt" "$RUNNER_TEMP/source-archive-entries.txt"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
           DRAWER="$APP/src/main/java/com/armsx2/navigation/NavigationDrawer.kt"
@@ -241,6 +248,14 @@ jobs:
           grep -Fq 'no native or worker thread was forcibly interrupted' "$RUNTIME_GUARD"
           grep -Fq 'TouchStation11ReliabilitySuite(' "$PERF_TAB"
           grep -Fq 'TouchStationFinaleSuite(' "$PERF_TAB"
+          EXTRA_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStationExtraDiagnostics.kt"
+          EXTRA_CRASH_GUARD="$APP/src/main/java/com/armsx2/reliability/TouchStationExtraCrashLoopGuard.kt"
+          test -s "$EXTRA_SUITE"
+          test -s "$EXTRA_CRASH_GUARD"
+          grep -Fq 'TouchStationExtraDiagnostics(' "$PERF_TAB"
+          grep -Fq 'TouchStationExtraCrashLoopGuard.install(this)' "$APP/src/main/java/com/armsx2/Pasx2Application.kt"
+          grep -Fq 'Three or more uncaught crashes within 10 minutes' "$EXTRA_CRASH_GUARD"
+          grep -Fq 'GPU fence/synchronization telemetry=N/A' "$EXTRA_SUITE"
           HOME="$APP/src/main/java/com/armsx2/ui/home/HomeScreen.kt"
           HOME_VM="$APP/src/main/java/com/armsx2/ui/home/HomeViewModel.kt"
           grep -Fq 'StatusChip("PC: $status")' "$HOME"
@@ -359,7 +374,7 @@ jobs:
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
           grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
 
-      - name: Build TouchStation Version Finale Release
+      - name: Build TouchStation Version Extra Release
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
@@ -447,8 +462,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='TouchStation Finale'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='1200'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='TouchStation Extra'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='1300'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -504,43 +519,43 @@ jobs:
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-Version-Finale-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-Version-Extra-arm64.apk"
 
-      - name: Upload TouchStation Version Finale APK and checksum (small download)
+      - name: Upload TouchStation Version Extra APK and checksum (small download)
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-Version-Finale-arm64
+          name: TouchStation-Version-Extra-arm64
           path: |
-            ${{ runner.temp }}/TouchStation-Version-Finale-arm64.apk
-            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-Version-Extra-arm64.apk
+            ${{ runner.temp }}/TouchStation-Version-Extra-corresponding-source.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
 
       - name: Upload corresponding source as a separate download
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-Version-Finale-corresponding-source
+          name: TouchStation-Version-Extra-corresponding-source
           path: |
-            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz
-            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-Version-Extra-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-Version-Extra-corresponding-source.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish TouchStation Version Finale Release
+      - name: Publish TouchStation Version Extra Release
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: vfinale
-          name: TouchStation Version Finale Release
+          tag_name: vextra
+          name: TouchStation Version Extra Release
           make_latest: true
           prerelease: false
           overwrite_files: true
           files: |
-            ${{ runner.temp }}/TouchStation-Version-Finale-arm64.apk
-            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz
-            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-Version-Extra-arm64.apk
+            ${{ runner.temp }}/TouchStation-Version-Extra-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-Version-Extra-corresponding-source.tar.gz.sha256
           body: |
-            TouchStation Version Finale Release for Android ARM64.
+            TouchStation Version Extra Release for Android ARM64.
 
             - Added PPU cache validation and conservative PPU thread recommendations. Live PPU compilation job counters and structured native recompiler exceptions remain N/A when the pinned bridge does not export them.
             - Added SPU configuration/workload diagnostics and read-only PPU, SPU and shader cache inventory.
@@ -558,7 +573,7 @@ jobs:
 
             Download size: the APK artifact is separate from the 525 MB corresponding-source archive. The APK artifact keeps the small 139-byte source SHA-256 file; the matching source archive and its checksum are available in a separate download.
 
-            Corresponding source: download TouchStation-Version-Finale-corresponding-source.tar.gz from the separate source artifact or release asset and verify it with the accompanying .sha256 file.
+            Corresponding source: download TouchStation-Version-Extra-corresponding-source.tar.gz from the separate source artifact or release asset and verify it with the accompanying .sha256 file.
 
             Licensing: TouchStation's downstream work is distributed under GPL-2.0-only. The matching corresponding source remains available separately from the APK artifact. Upstream notices and independent third-party licenses are retained. See THIRD_PARTY_NOTICES.md and SOURCE_DISTRIBUTION.md in the source archive.
 
