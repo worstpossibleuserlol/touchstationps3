@@ -1,17 +1,17 @@
-# TouchStation Version Finale
+# TouchStation Extra
 
 
 
-## TouchStation Version Finale
+## TouchStation Extra
 
-Version Finale brings the 50-point feature set together with a new compatibility centre and device-specific tools:
+Version Extra brings the 50-point feature set together with a new compatibility centre and device-specific tools:
 
 - **Official compatibility sync:** downloads the official RPCS3 compatibility export on request, caches it, and matches PS3 games by exact title ID.
 - **Library compatibility index:** searches the cached PS3 library by game title or ID and displays official status, test date and update metadata when present.
 - **Separate handset test record:** records what you observed on this particular device. It never converts an unknown result into a Playable rating.
 - **GTA IV conservative profile:** applies supported settings only to GTA IV while the active settings scope is per-game. It uses Accurate SPU XFloat, Safe SPU block size, asynchronous shader recompilation, MSAA off, SPU cache and LLVM precompilation, one LLVM compile thread and at most two PPU threads.
 - **Device readiness panel:** reports Android/ABI, SoC identity when exposed, CPU core count, available RAM, app PSS, free app-private storage, thermal severity, physical controllers and native-runtime readiness.
-- **Finale report export:** combines the current device, game ID, official compatibility result, local test result and configured PS3 settings in a shareable report.
+- **Extra diagnostics export:** combines the current device, game ID, official compatibility result, local test result and configured PS3 settings in a shareable report.
 
 The official compatibility data is for desktop RPCS3 and is not a device-specific guarantee. The GTA IV profile is not a game patch, native-core change or promise that GTA IV will boot. The PS3 game remains limited by the native core, device CPU/GPU, driver and game-specific compatibility.
 
