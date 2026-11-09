@@ -225,7 +225,7 @@ private fun gameLabHistorySummary(context: Context, serial: String?): String {
         }
     }
     return history.length().toString() + " saved sessions · " + stable + " user-marked stable · " +
-        failed + " user-marked failed · remaining inconclusive. Not a compatibility percentage."
+        failed + " user-marked failed · remaining inconclusive. not a compatibility percentage."
 }
 
 private fun gameLabRegressionSummary(context: Context, serial: String?, settings: Settings): String {
