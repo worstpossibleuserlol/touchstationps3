@@ -17,6 +17,7 @@ import android.provider.MediaStore
 import android.os.Debug
 import android.os.PowerManager
 import android.os.StatFs
+import android.os.SystemClock
 import android.view.InputDevice
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,7 @@ import com.armsx2.config.SettingsScope
 import com.armsx2.config.CoreSettingOverrides
 import com.armsx2.runtime.MainActivityRuntime
 import com.armsx2.reliability.TouchStationFinaleReliability
+import com.armsx2.reliability.TouchStationFinaleRuntimeGuard
 import com.armsx2.ui.InGameOverlay
 import com.armsx3.HttpClient
 import com.armsx3.core.ARMSX3
@@ -659,7 +661,8 @@ fun TouchStationFinaleSuite(
         device.value = withContext(Dispatchers.IO) { touchStationFinaleDeviceSnapshot(context) }
         reliabilitySnapshot.value = withContext(Dispatchers.IO) {
             TouchStationFinaleReliability.snapshot(context) + "\n" +
-                TouchStationFinaleReliability.startupSelfTest(context, settings)
+                TouchStationFinaleReliability.startupSelfTest(context, settings) + "\n" +
+                TouchStationFinaleRuntimeGuard.nativeCoreHealth(context, ARMSX3.initialized, MainActivityRuntime.nativeReady.value)
         }
         database.value = withContext(Dispatchers.IO) { touchStationFinaleReadCache(context) }
         TouchStationFinaleCompatibilityStore.replace(database.value)
@@ -701,6 +704,9 @@ fun TouchStationFinaleSuite(
         appendLine("Physical controllers: " + (deviceSnapshot?.controllers?.joinToString().orEmpty().ifBlank { "None detected" }))
         appendLine("PS3 engine initialized: " + engineReady)
         appendLine("Native runtime ready: " + nativeReady)
+        appendLine("Native core health: " + TouchStationFinaleRuntimeGuard.nativeCoreHealth(context, engineReady, nativeReady))
+        appendLine("Tracked Android operations: " + TouchStationFinaleRuntimeGuard.activeSummary())
+        appendLine("Memory pressure: " + TouchStationFinaleRuntimeGuard.memoryPressure(context))
         appendLine("Game: " + gameTitle)
         appendLine("Game ID: " + (serial ?: "N/A"))
         appendLine("Recorded game errors: " + TouchStationFinaleErrorHistory.eventCount())
@@ -783,14 +789,27 @@ fun TouchStationFinaleSuite(
                     onClick = {
                         if (!busy.value) {
                             scope.launch {
-                                busy.value = true
-                                val result = touchStationFinaleFetchCompatibility(context)
-                                if (result.first != null) {
-                                    database.value = result.first
-                                    TouchStationFinaleCompatibilityStore.replace(result.first)
+                                val ticket = TouchStationFinaleRuntimeGuard.begin(context, "compatibility-refresh", 60_000L)
+                                if (ticket == null) {
+                                    message.value = "A compatibility refresh is already active."
+                                } else {
+                                    busy.value = true
+                                    var succeeded = false
+                                    try {
+                                        val result = touchStationFinaleFetchCompatibility(context)
+                                        if (result.first != null) {
+                                            database.value = result.first
+                                            TouchStationFinaleCompatibilityStore.replace(result.first)
+                                            succeeded = true
+                                        }
+                                        message.value = result.second
+                                    } catch (error: Exception) {
+                                        message.value = "Compatibility refresh failed: " + (error.message ?: "unknown error")
+                                    } finally {
+                                        TouchStationFinaleRuntimeGuard.finish(context, "compatibility-refresh", ticket, succeeded)
+                                        busy.value = false
+                                    }
                                 }
-                                message.value = result.second
-                                busy.value = false
                             }
                         }
                     },
@@ -1005,6 +1024,9 @@ fun TouchStationFinaleSuite(
 
             TouchStationFinaleSection("05 · Reliability, recovery and preflight") {
                 TouchStationFinaleRow("Application lifecycle", TouchStationFinaleReliability.lifecycleStatus())
+                TouchStationFinaleRow("Native core health", TouchStationFinaleRuntimeGuard.nativeCoreHealth(context, engineReady, nativeReady))
+                TouchStationFinaleRow("Tracked Android operations", TouchStationFinaleRuntimeGuard.activeSummary())
+                TouchStationFinaleRow("Memory pressure", TouchStationFinaleRuntimeGuard.memoryPressure(context))
                 TouchStationFinaleRow("Memory trend", TouchStationFinaleReliability.memoryTrend(context))
                 TouchStationFinaleRow("Crash report", TouchStationFinaleReliability.latestCrashSummary(context))
                 TouchStationFinaleRow("App cache inventory", TouchStationFinaleReliability.inspectDirectory(context.cacheDir))
@@ -1024,16 +1046,27 @@ fun TouchStationFinaleSuite(
                     onClick = {
                         if (!integrityBusy.value && game != null) {
                             scope.launch {
-                                integrityBusy.value = true
-                                gameSourceStatus.value = withContext(Dispatchers.IO) {
-                                    TouchStationFinaleReliability.inspectGameUri(context, game.uri)
+                                val ticket = TouchStationFinaleRuntimeGuard.begin(context, "game-integrity", 180_000L)
+                                if (ticket == null) {
+                                    gameSourceStatus.value = "A game integrity operation is already active."
+                                } else {
+                                    integrityBusy.value = true
+                                    var succeeded = false
+                                    try {
+                                        gameSourceStatus.value = withContext(Dispatchers.IO) {
+                                            TouchStationFinaleReliability.inspectGameUri(context, game.uri)
+                                        }
+                                        gameHashStatus.value = withContext(Dispatchers.IO) {
+                                            TouchStationFinaleReliability.sha256GameUri(context, game.uri, 256L * 1024L * 1024L)
+                                        }
+                                        succeeded = true
+                                    } catch (error: Exception) {
+                                        gameSourceStatus.value = "Game integrity check failed: " + (error.message ?: "unknown error")
+                                    } finally {
+                                        TouchStationFinaleRuntimeGuard.finish(context, "game-integrity", ticket, succeeded)
+                                        integrityBusy.value = false
+                                    }
                                 }
-                                gameHashStatus.value = withContext(Dispatchers.IO) {
-                                    TouchStationFinaleReliability.sha256GameUri(
-                                        context, game.uri, 256L * 1024L * 1024L,
-                                    )
-                                }
-                                integrityBusy.value = false
                             }
                         }
                     },
@@ -1121,16 +1154,27 @@ fun TouchStationFinaleSuite(
                 onClick = {
                     if (!logBusy.value) {
                         scope.launch {
-                            logBusy.value = true
-                            val result = runCatching {
-                                val contents = touchStationFinaleCollectLog(context, report)
-                                logContents.value = contents
-                                touchStationFinaleSaveLog(context, contents)
-                            }.getOrElse {
-                                false to ("Log export failed: " + (it.message ?: "unknown error"))
+                            val ticket = TouchStationFinaleRuntimeGuard.begin(context, "diagnostic-log-export", 45_000L)
+                            if (ticket == null) {
+                                logMessage.value = "A diagnostic export is already active."
+                            } else {
+                                logBusy.value = true
+                                var succeeded = false
+                                try {
+                                    val result = runCatching {
+                                        val contents = touchStationFinaleCollectLog(context, report)
+                                        logContents.value = contents
+                                        touchStationFinaleSaveLog(context, contents)
+                                    }.getOrElse {
+                                        false to ("Log export failed: " + (it.message ?: "unknown error"))
+                                    }
+                                    succeeded = result.first
+                                    logMessage.value = result.second
+                                } finally {
+                                    TouchStationFinaleRuntimeGuard.finish(context, "diagnostic-log-export", ticket, succeeded)
+                                    logBusy.value = false
+                                }
                             }
-                            logMessage.value = result.second
-                            logBusy.value = false
                         }
                     }
                 },
@@ -1464,6 +1508,118 @@ object TouchStationFinaleReliability {
 }
 '''
 
+RUNTIME_GUARD_KOTLIN_SOURCE = r'''package com.armsx2.reliability
+
+import android.app.ActivityManager
+import android.content.Context
+import android.os.SystemClock
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
+
+private class TouchStationActiveOperation(
+    val token: Long,
+    val startedAt: Long,
+    @Volatile var timeout: ScheduledFuture<*>? = null,
+)
+
+/**
+ * Android-side operation coordination and health checks.
+ * Timeouts record evidence only; they never interrupt native emulator worker threads.
+ */
+object TouchStationFinaleRuntimeGuard {
+    private val sequence = AtomicLong(0)
+    private val active = ConcurrentHashMap<String, TouchStationActiveOperation>()
+    private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task, "TouchStation-Finale-Watchdog").apply { isDaemon = true }
+    }
+
+    fun begin(context: Context, operation: String, timeoutMs: Long): Long? {
+        val key = operation.trim().filter { it.isLetterOrDigit() || it == '-' }.take(80)
+        if (key.isBlank() || timeoutMs !in 1L..600_000L) return null
+        val ticket = TouchStationActiveOperation(sequence.incrementAndGet(), SystemClock.elapsedRealtime())
+        if (active.putIfAbsent(key, ticket) != null) {
+            TouchStationFinaleReliability.recordEvent(context, "operation-guard", "Rejected overlapping operation: " + key)
+            return null
+        }
+        ticket.timeout = try {
+            scheduler.schedule({
+                if (active[key]?.token == ticket.token) {
+                    TouchStationFinaleReliability.recordEvent(
+                        context, "operation-watchdog",
+                        key + " exceeded " + timeoutMs + " ms; no native or worker thread was forcibly interrupted.",
+                    )
+                }
+            }, timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (error: Exception) {
+            active.remove(key, ticket)
+            TouchStationFinaleReliability.recordEvent(context, "operation-watchdog", "Could not schedule watchdog for " + key)
+            return null
+        }
+        TouchStationFinaleReliability.recordEvent(context, "operation", "Started " + key)
+        return ticket.token
+    }
+
+    fun finish(context: Context, operation: String, token: Long, succeeded: Boolean) {
+        val key = operation.trim().filter { it.isLetterOrDigit() || it == '-' }.take(80)
+        val ticket = active[key] ?: return
+        if (ticket.token != token || !active.remove(key, ticket)) return
+        ticket.timeout?.cancel(false)
+        val elapsed = (SystemClock.elapsedRealtime() - ticket.startedAt).coerceAtLeast(0L)
+        TouchStationFinaleReliability.recordEvent(
+            context, "operation",
+            key + (if (succeeded) " completed" else " finished with an error") + " after " + elapsed + " ms",
+        )
+    }
+
+    fun activeSummary(): String {
+        if (active.isEmpty()) return "No tracked Android operations are running."
+        val now = SystemClock.elapsedRealtime()
+        return active.entries.sortedBy { it.key }.joinToString("; ") { entry ->
+            entry.key + " running for " + (now - entry.value.startedAt).coerceAtLeast(0L) + " ms"
+        }
+    }
+
+    fun nativeCoreHealth(context: Context, engineInitialized: Boolean, nativeRuntimeReady: Boolean): String {
+        val directory = context.applicationInfo.nativeLibraryDir
+            ?.takeIf { it.isNotBlank() }?.let { File(it) }
+        val required = listOf("libarmsx3-core.so", "libarmsx3-jni.so")
+        val missing = required.filter { name ->
+            val library = directory?.let { File(it, name) }
+            library == null || !library.isFile || library.length() <= 0L
+        }
+        val libraries = if (missing.isEmpty()) "required core/JNI libraries present"
+            else "missing or empty: " + missing.joinToString()
+        val threads = runCatching { Thread.getAllStackTraces().size }.getOrDefault(-1)
+        return "Native library directory: " + (directory?.absolutePath ?: "unavailable") +
+            "; " + libraries +
+            "; ARMSX3 initialized: " + engineInitialized +
+            "; native runtime ready: " + nativeRuntimeReady +
+            "; Android process thread count: " + (if (threads >= 0) threads.toString() else "N/A") +
+            " (not a PPU/SPU worker count)."
+    }
+
+    fun memoryPressure(context: Context): String {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            ?: return "N/A — Android ActivityManager unavailable"
+        val memory = ActivityManager.MemoryInfo()
+        if (runCatching { manager.getMemoryInfo(memory) }.isFailure) return "N/A — Android memory snapshot failed"
+        val availableMb = memory.availMem / (1024L * 1024L)
+        val thresholdMb = memory.threshold / (1024L * 1024L)
+        return when {
+            memory.lowMemory || memory.availMem <= memory.threshold ->
+                "CRITICAL — " + availableMb + " MB available; Android reports low memory"
+            memory.availMem <= memory.threshold * 2L ->
+                "ELEVATED — " + availableMb + " MB available; OS threshold " + thresholdMb + " MB"
+            else -> "NORMAL — " + availableMb + " MB available; OS threshold " + thresholdMb + " MB"
+        }
+    }
+}
+'''
+
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
     if count != 1:
@@ -1754,6 +1910,10 @@ def main() -> None:
     if reliability_path.exists():
         raise SystemExit("TouchStation Finale reliability module already exists; refusing to overwrite")
     reliability_path.write_text(RELIABILITY_KOTLIN_SOURCE, encoding="utf-8")
+    runtime_guard_path = reliability_dir / "TouchStationFinaleRuntimeGuard.kt"
+    if runtime_guard_path.exists():
+        raise SystemExit("TouchStation Finale runtime guard already exists; refusing to overwrite")
+    runtime_guard_path.write_text(RUNTIME_GUARD_KOTLIN_SOURCE, encoding="utf-8")
     patch_application_reliability(app_dir)
 
     required_markers = [
@@ -1775,6 +1935,13 @@ def main() -> None:
         "Physical controllers",
         "Engine initialized",
         "GPU utilization",
+        "TouchStationFinaleRuntimeGuard.begin",
+        "compatibility-refresh",
+        "game-integrity",
+        "diagnostic-log-export",
+        "nativeCoreHealth",
+        "activeSummary",
+        "memoryPressure",
     ]
     missing = [marker for marker in required_markers if marker not in KOTLIN_SOURCE]
     reliability_markers = [
@@ -1800,6 +1967,13 @@ def main() -> None:
         missing.append("Official compatibility API endpoint")
     if "touchStationFinaleNormaliseId" not in KOTLIN_SOURCE:
         missing.append("Exact title-ID normalizer")
+    runtime_guard_markers = [
+        "ConcurrentHashMap", "putIfAbsent", "TouchStation-Finale-Watchdog",
+        "operation-watchdog", "no native or worker thread was forcibly interrupted",
+        "libarmsx3-core.so", "libarmsx3-jni.so", "fun memoryPressure",
+    ]
+    missing.extend("runtime guard: " + marker for marker in runtime_guard_markers
+                   if marker not in RUNTIME_GUARD_KOTLIN_SOURCE)
     if missing:
         raise SystemExit("Missing Finale source markers: " + ", ".join(missing))
     print("Applied TouchStation Finale suite, modular crash/lifecycle diagnostics, bounded logs, and file/settings validation.")
