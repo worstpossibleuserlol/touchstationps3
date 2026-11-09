@@ -423,6 +423,7 @@ private fun extraAdvancedReport(context: Context, settings: Settings, serial: St
     appendLine("Native PPU/SPU/RSX execution counters, worker states, command traces, GPU fences and physical GPU utilization remain N/A when not exported by the core.")
 }
 
+@Composable
 private fun extraAdvancedRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
