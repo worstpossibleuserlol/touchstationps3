@@ -38,7 +38,7 @@ class ExtraAdvancedTests(unittest.TestCase):
             path.write_text(
                 "package com.armsx2.ui\nimport com.armsx2.runtime.MainActivityRuntime\n"
                 "fun saveSettings(updated: Settings) {\n    val previous = settingsState.value\n"
-                "    ConfigStore.save(settingsScope.value, currentSerial.value, updated, previous)\n}\n",
+                "        ConfigStore.save(settingsScope.value, currentSerial.value, updated, previous)\n}\n",
                 encoding="utf-8",
             )
             ADV.patch_settings_history(Path(tmp))
