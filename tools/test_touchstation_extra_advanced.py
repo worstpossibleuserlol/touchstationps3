@@ -46,6 +46,7 @@ class ExtraAdvancedTests(unittest.TestCase):
             self.assertIn("TouchStationExtraSettingsHistory.record(", result)
             self.assertIn("previous,", result)
             self.assertIn("updated,", result)
+            self.assertLess(result.index("ConfigStore.save("), result.index("TouchStationExtraSettingsHistory.record("))
             with self.assertRaises(SystemExit):
                 ADV.patch_settings_history(Path(tmp))
 
