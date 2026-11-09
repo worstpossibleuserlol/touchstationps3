@@ -77,6 +77,13 @@ class ExtraAdvancedTests(unittest.TestCase):
     def test_compose_row_helper_is_annotated(self):
         self.assertIn("@Composable\nprivate fun extraAdvancedRow", SOURCE)
 
+    def test_settings_search_covers_serialized_settings_and_storage_scan_is_bounded_off_ui(self):
+        self.assertIn("extraAdvancedSettingGuide(settings)", SOURCE)
+        self.assertIn("settings.toJson()", SOURCE)
+        self.assertIn("withContext(Dispatchers.IO)", SOURCE)
+        self.assertNotIn("size(context.filesDir)", SOURCE)
+        self.assertIn("TouchStationExtraSettingsHistory.record", SOURCE)
+
     def test_native_telemetry_limits_are_explicit(self):
         for marker in (
             "native instruction counters=N/A", "native worker distribution=N/A",
