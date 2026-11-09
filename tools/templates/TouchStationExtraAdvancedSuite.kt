@@ -41,6 +41,9 @@ import com.armsx2.config.Settings
 import com.armsx2.config.SettingsScope
 import com.armsx2.runtime.MainActivityRuntime
 import com.armsx2.ui.InGameOverlay
+import com.armsx2.reliability.TouchStationExtraCrashLoopGuard
+import com.armsx2.reliability.TouchStationFinaleReliability
+import com.armsx2.reliability.TouchStationFinaleRuntimeGuard
 import com.armsx3.core.ARMSX3
 import org.json.JSONArray
 import org.json.JSONObject
@@ -276,14 +279,19 @@ private fun extraAdvancedStorage(context: Context): String = runCatching {
 }.getOrDefault("Storage inventory unavailable")
 
 private fun extraAdvancedControllers(): List<String> = runCatching {
-    InputDevice.getDeviceIds().mapNotNull { id ->
-        InputDevice.getDevice(id)?.takeIf {
-            !it.isVirtual && (
-                (it.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-                (it.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
-            )
-        }?.name
-    }.distinct()
+    val found = mutableListOf<String>()
+    val deviceIds: IntArray = InputDevice.getDeviceIds()
+    for (id: Int in deviceIds) {
+        val device: InputDevice? = InputDevice.getDevice(id)
+        if (device != null && !device.isVirtual) {
+            val sources: Int = device.sources
+            val isController =
+                (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+            if (isController) found.add(device.name)
+        }
+    }
+    found.distinct()
 }.getOrDefault(emptyList())
 
 private fun extraAdvancedCompatibilityConfidence(context: Context, serial: String?): String {
