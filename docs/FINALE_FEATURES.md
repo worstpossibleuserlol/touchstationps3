@@ -131,3 +131,16 @@ The Finale source patcher now generates a dedicated `com.armsx2.reliability.Touc
 These are Android-side reliability aids. The app does not automatically restart a failed game or reset native worker threads. The pinned prebuilt native engine exposes no trustworthy PPU/SPU task counters, RSX FIFO queue depth, GPU fences, shader-cache internals or safe native FIFO recovery API. These remain marked unavailable and require native-source changes, rebuilt ARM64 libraries and real-device testing.
 
 The OS owns Bluetooth pairing/reconnection; TouchStation can enumerate connected physical input devices but cannot force a reconnect. PSS trends are diagnostic hints, not proof of a memory leak. The app-cache inventory does not inspect private shader-cache internals or delete files. Large game images are not hashed automatically.
+
+
+## Finale runtime guard and native health checks
+
+The Android-side reliability layer now has a separate `TouchStationFinaleRuntimeGuard` module:
+
+- A thread-safe keyed operation gate prevents duplicate compatibility refreshes, game-source integrity jobs and diagnostic exports from running concurrently.
+- A daemon watchdog records when one of those operations exceeds its configured deadline. It reports elapsed work and keeps the operation visible in the diagnostics panel; it does not cancel, interrupt or reset any emulator/native worker.
+- Native health checks verify that the packaged `libarmsx3-core.so` and `libarmsx3-jni.so` files are present and non-empty, and display the existing engine/runtime readiness flags. This checks packaging visibility, not full native correctness.
+- Memory pressure is classified from Android's `ActivityManager.MemoryInfo` low-memory flag and OS threshold. It is a device-pressure warning, not a guarantee of emulator stability.
+- The current active-operation list, native-library health and memory-pressure reading are included in the Finale diagnostics and export report.
+
+The watchdog protects Android-managed operations; it is not a PPU/SPU execution watchdog. Native PPU task progress, SPU worker validation, RSX command-stream validation, GPU-fence synchronization and private shader-cache validation still require instrumentation in a rebuilt native core. The existing PSS trend remains a diagnostic trend only and must not be described as a confirmed memory-leak detector.
