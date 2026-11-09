@@ -113,7 +113,7 @@ fun PerformanceTab() {
             FINALE.patch_performance_tab(app)
             result = source.read_text(encoding="utf-8")
             self.assertEqual(result.count("TouchStationFinaleSuite("), 1)
-            self.assertIn("saved.ps3.spuXFloat == updated.ps3.spuXFloat", result)
+            self.assertIn("saved.toJson().toString() == updated.toJson().toString()", result)
             with self.assertRaises(SystemExit):
                 FINALE.patch_performance_tab(app)
 
