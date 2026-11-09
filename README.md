@@ -167,7 +167,7 @@ The GitHub Actions workflow:
 3. Applies TouchStation branding, controller-only gameplay, advanced settings, monitoring, Control Center, PPU/SPU/RSX suite and pause-menu overlay controls.
 4. Builds the ARM64 release APK.
 5. Verifies app version, native libraries, launcher artwork, APK signature and alignment.
-6. Uploads the APK plus the small source checksum as one artifact, publishes the corresponding-source archive as a separate artifact, and publishes the `vfinale` GitHub release when all checks pass.
+6. Uploads the APK plus the small source checksum as one artifact, publishes the corresponding-source archive as a separate artifact, and publishes the `vextra` GitHub release when all checks pass.
 
 The release workflow is the authoritative APK build path. The upstream source revision and native library release are intentionally pinned for reproducibility.
 
@@ -180,3 +180,12 @@ While a game is running, the pause menu provides Options, the Performance Overla
 ## License and credits
 
 The emulator distribution is governed by GPL-2.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for upstream source and third-party notices.
+
+
+## TouchStation Extra Advanced Suite
+
+The Extra Advanced Suite adds 50 further feature areas spanning crash-risk advisories, Android process-exit analysis, per-game user test history, device-specific profiles, PPU/SPU configuration advice, RSX/FIFO error guidance, output scaling recommendations, searchable settings help, settings profile slots, settings reset/history, battery-focused presets, keep-screen-on controls and an expanded diagnostics report.
+
+The suite distinguishes verified Android/app data from manual handset observations and desktop compatibility references. PPU/SPU native worker counters, RSX command traces, GPU fences, physical GPU utilization, shader-cache internals and guest-game crash callbacks remain N/A where the pinned native bridge does not expose them. Per-game stability indexes are based on user-entered observations and are not compatibility ratings.
+
+Open **Settings → Performance → TouchStation Extra · Advanced suite** for the advanced feature panel. Three settings-profile slots are stored per handset and Global/per-game scope. The settings-change history is recorded through the central settings save path. A confirmed reset restores upstream defaults for the active scope; it does not delete games, firmware or saves.
