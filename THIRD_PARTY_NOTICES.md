@@ -21,6 +21,10 @@ All upstream copyright, license, and attribution notices are retained. TouchStat
 
 The APK also contains third-party components and Android platform libraries under their respective licenses. Their upstream license and copyright files are retained in the source tree where supplied. This notice does not relicense independent third-party components under GPL where their own licenses say otherwise; consult each component's included license.
 
+## Online compatibility reference data
+
+The Finale compatibility panel can download the public RPCS3 desktop compatibility export from `https://rpcs3.net/compatibility/?api=v1&export` when the user requests an update. The response is cached in the app's private storage and is matched by PS3 title ID. These records describe desktop RPCS3 test results; they are not TouchStation or device-specific test results. The compatibility website and its database remain third-party services and are not represented as TouchStation-owned data.
+
 ## Sony firmware and games
 
 No PlayStation 3 firmware, commercial game, PSN license, encryption key, or copyrighted game asset is bundled. Users must provide system software and game files they are legally entitled to use. PlayStation is a trademark of Sony Interactive Entertainment. TouchStation is independent and is not affiliated with Sony, ARMSX2, or RPCS3.

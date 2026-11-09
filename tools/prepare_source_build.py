@@ -1084,7 +1084,7 @@ internal const val ReportBugUrl = "https://github.com/worstpossibleuserlol/touch
 
 
 def patch_touchstation_about(app_dir: Path) -> None:
-    """Brand About with TouchStation details and correctly attribute the upstream engine."""
+    """Brand About as TouchStation and route third-party acknowledgements to legal notices."""
     path = app_dir / "src/main/java/com/armsx2/ui/about/AboutScreen.kt"
     text = path.read_text(encoding="utf-8")
 
@@ -1094,7 +1094,7 @@ def patch_touchstation_about(app_dir: Path) -> None:
     old_urls = """private const val RepositoryUrl = "https://github.com/ARMSX2/ARMSX3"
 private const val Rpcs3RepositoryUrl = "https://github.com/RPCS3/rpcs3"""
     new_urls = """private const val TouchStationRepositoryUrl = "https://github.com/worstpossibleuserlol/touchstationps3"
-private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
+private const val ThirdPartyNoticesUrl = "https://github.com/worstpossibleuserlol/touchstationps3/blob/main/THIRD_PARTY_NOTICES.md"""
     text = replace_once(text, old_urls, new_urls, "About repository links")
     text = replace_once(
         text,
@@ -1111,7 +1111,7 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
     text = replace_once(
         text,
         'str("about.tagline"),',
-        '"A downstream Android ARM64 distribution of ARMSX3, using its RPCS3-derived PS3 emulation engine.",',
+        '"PS3 emulation, game library and controller tools for Android ARM64.",',
         "About TouchStation description",
     )
 
@@ -1177,10 +1177,10 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
     def upstream_card(match: re.Match[str]) -> str:
         indent = match.group(1)
         return "\n".join((
-            indent + 'title = "Upstream emulator base",',
-            indent + 'repository = "ARMSX2/ARMSX3",',
-            indent + 'description = "Android frontend and ARM64 engine distribution used by TouchStation.",',
-            indent + 'glyph = "PS3",',
+            indent + 'title = "Third-party notices & licenses",',
+            indent + 'repository = "THIRD_PARTY_NOTICES.md",',
+            indent + 'description = "Licenses and acknowledgements for third-party components in this build.",',
+            indent + 'glyph = "©",',
         ))
 
     text, upstream_count = upstream_pattern.subn(upstream_card, text)
@@ -1189,15 +1189,15 @@ private const val UpstreamRepositoryUrl = "https://github.com/ARMSX2/ARMSX3"""
             f"Expected two upstream About cards; found {upstream_count}"
         )
     if text.count("uriHandler.openUri(Rpcs3RepositoryUrl)") != 2:
-        raise SystemExit("Expected two original upstream card actions")
+        raise SystemExit("Expected two original third-party notices card actions")
     text = text.replace(
         "uriHandler.openUri(Rpcs3RepositoryUrl)",
-        "uriHandler.openUri(UpstreamRepositoryUrl)",
+        "uriHandler.openUri(ThirdPartyNoticesUrl)",
     )
 
     attribution_marker = "                    // Every third-party component in the APK and its license: BSD, MIT, Apache-2.0"
     attribution = """                    Text(
-                        "TouchStation is an independent downstream project. Its PS3 emulation engine is provided through ARMSX3 and derives from RPCS3. TouchStation is not affiliated with Sony or the upstream projects.",
+                        "TouchStation is the product-facing app identity. This distribution includes third-party open-source components that retain their original licenses and required notices. See Third-party Notices for source and acknowledgements.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -1973,6 +1973,37 @@ def patch_boot_splash_branding(app_dir: Path) -> None:
 
 
 
+def patch_kotlin_compiler_mirror(source_dir: Path) -> None:
+    """Prefer a Maven Central mirror for the Kotlin compiler artifact that GitHub intermittently 504s."""
+    settings = source_dir / "settings.gradle.kts"
+    if not settings.is_file():
+        raise SystemExit(f"Missing Gradle settings file: {settings}")
+
+    text = settings.read_text(encoding="utf-8")
+    mirror_url = "https://maven.wso2.org/nexus/content/repositories/central/"
+    if mirror_url in text and 'includeModule("org.jetbrains.kotlin", "kotlin-compiler-embeddable")' in text:
+        return
+
+    marker = """        google()
+        mavenCentral()
+        // Discord Social SDK ships as a local .aar."""
+    replacement = f"""        google()
+        maven {{
+            name = "kotlinCompilerEmbeddableMirror"
+            url = uri("{mirror_url}")
+            content {{
+                includeModule("org.jetbrains.kotlin", "kotlin-compiler-embeddable")
+            }}
+        }}
+        mavenCentral()
+        // Discord Social SDK ships as a local .aar."""
+    if marker not in text:
+        raise SystemExit("Could not find the dependencyResolutionManagement repository anchor in settings.gradle.kts")
+    if text.count(marker) != 1:
+        raise SystemExit("Expected exactly one dependencyResolutionManagement repository anchor")
+    settings.write_text(text.replace(marker, replacement, 1), encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path, help="android/armsx3-ui source directory")
@@ -1987,6 +2018,7 @@ def main() -> None:
         if not required.is_file():
             raise SystemExit(f"Missing expected upstream source file: {required}")
 
+    patch_kotlin_compiler_mirror(args.source)
     patch_gradle(app_dir)
     patch_touchstation_drawer(app_dir)
     patch_touchstation_about(app_dir)

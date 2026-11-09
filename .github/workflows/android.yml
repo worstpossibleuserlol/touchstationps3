@@ -1,17 +1,20 @@
-name: TouchStation 9.0.0 Release
+name: TouchStation Version Finale Build
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main, feature/touchstation-10.0.0]
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# Keep release builds queued so the latest branding fix can finish.
+# Never cancel a native Android build just because another commit arrives.
+# Runs for this release lane queue and finish in order.
 concurrency:
-  group: touchstation-9-0-release
-  cancel-in-progress: true
+  group: touchstation-finale-release-mirrors
+  cancel-in-progress: false
 
 jobs:
   build-arm64:
@@ -66,14 +69,46 @@ jobs:
           test -f "$UPSTREAM/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           echo "Upstream source and submodules pinned to $COMMIT"
 
-      - name: Download matching upstream ARM64 native libraries
+      - name: Download and verify pinned upstream ARM64 native libraries
         shell: bash
         run: |
           set -euo pipefail
           UPSTREAM_APK="$RUNNER_TEMP/armsx3-1.6.4.apk"
-          curl --fail --location --retry 3 --retry-delay 2 \
-            "https://github.com/ARMSX2/ARMSX3/releases/download/1.6.4/ARMSX3-1.6.4-a15-armv8.2-sdk35.apk" \
-            --output "$UPSTREAM_APK"
+          DOWNLOAD_TMP="$RUNNER_TEMP/armsx3-1.6.4.download"
+          EXPECTED_SIZE="79216349"
+          EXPECTED_SHA256="e84d287e297dc0e8edc9e0fa9b9930b12a4fe38140e5b5dd585a1454fd22b708"
+          RELEASE_URL="https://github.com/ARMSX2/ARMSX3/releases/download/1.6.4/ARMSX3-1.6.4-a15-armv8.2-sdk35.apk"
+          ASSET_API_URL="https://api.github.com/repos/ARMSX2/ARMSX3/releases/assets/714709325"
+
+          verify_download() {
+            local file="$1"
+            [ -s "$file" ] || return 1
+            [ "$(stat -c '%s' "$file")" = "$EXPECTED_SIZE" ] || return 1
+            printf '%s  %s\n' "$EXPECTED_SHA256" "$file" | sha256sum --check --status
+          }
+
+          # GitHub's browser-download endpoint can transiently return HTTP 5xx.
+          # Retry transient failures, then fall back to the release asset API.
+          if curl --fail --show-error --location \
+              --connect-timeout 30 --max-time 900 \
+              --retry 8 --retry-all-errors --retry-delay 5 --retry-max-time 300 \
+              "$RELEASE_URL" --output "$DOWNLOAD_TMP" && verify_download "$DOWNLOAD_TMP"; then
+            mv "$DOWNLOAD_TMP" "$UPSTREAM_APK"
+          else
+            rm -f "$DOWNLOAD_TMP"
+            echo "Browser download failed or checksum did not match; trying the GitHub release asset API."
+            curl --fail --show-error --location \
+              --connect-timeout 30 --max-time 900 \
+              --retry 8 --retry-all-errors --retry-delay 5 --retry-max-time 300 \
+              -H "Accept: application/octet-stream" \
+              "$ASSET_API_URL" --output "$DOWNLOAD_TMP"
+            if ! verify_download "$DOWNLOAD_TMP"; then
+              echo "Downloaded upstream release asset has an unexpected size or SHA-256." >&2
+              exit 1
+            fi
+            mv "$DOWNLOAD_TMP" "$UPSTREAM_APK"
+          fi
+          echo "Verified upstream release asset size and SHA-256."
 
           unzip -Z1 "$UPSTREAM_APK" > "$RUNNER_TEMP/upstream-entries.txt"
           grep -Fxq "lib/arm64-v8a/libarmsx3-core.so" "$RUNNER_TEMP/upstream-entries.txt"
@@ -95,12 +130,22 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/add_gpl_modification_notices.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/add_gpl_modification_notices.py
+
+      - name: Run TouchStation Finale patcher regression tests
+        run: python3 tools/test_touchstation_finale_suite.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
+          set -Eeuo pipefail
+          trap 'status=$?; echo "::error::TouchStation source validation failed at workflow shell line ${LINENO} (exit ${status})"; exit "$status"' ERR
+          set -x
           python tools/prepare_source_build.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          SETTINGS="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/settings.gradle.kts"
+          grep -Fq 'name = "kotlinCompilerEmbeddableMirror"' "$SETTINGS"
+          grep -Fq 'includeModule("org.jetbrains.kotlin", "kotlin-compiler-embeddable")' "$SETTINGS"
+          grep -Fq 'maven.wso2.org/nexus/content/repositories/central/' "$SETTINGS"
           python tools/touchstation_control_center.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_v7_performance.py \
@@ -109,33 +154,108 @@ jobs:
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_v9_auto.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_v10_suite.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_v11_suite.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_finale_suite.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/add_gpl_modification_notices.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
 
-          # Package the exact patched source and all build scripts for GPL source distribution.
+          # The pinned upstream wrapper defaults to a 10-second distribution-download timeout.
+          # Keep the pinned Gradle version and SHA-256, but allow slow CI downloads to complete.
           UPSTREAM="$RUNNER_TEMP/armsx3-source"
-          mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/.github/workflows"
+          WRAPPER_PROPERTIES="$UPSTREAM/android/armsx3-ui/gradle/wrapper/gradle-wrapper.properties"
+          test -s "$WRAPPER_PROPERTIES"
+          # Point the packaged source at an independently hosted Gradle distribution mirror.
+          # The original 9.4.1 distribution SHA-256 remains pinned and checked by Gradle Wrapper.
+          python3 - "$WRAPPER_PROPERTIES" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          lines = path.read_text(encoding="utf-8").splitlines()
+          expected = "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.1-bin.zip"
+          mirror = "distributionUrl=https\\://mirrors.huaweicloud.com/gradle/gradle-9.4.1-bin.zip"
+          matches = [i for i, line in enumerate(lines) if line.startswith("distributionUrl=")]
+          if len(matches) != 1:
+              raise SystemExit("Expected exactly one Gradle distributionUrl property")
+          current = lines[matches[0]]
+          if current not in (expected, mirror):
+              raise SystemExit("Unexpected Gradle distribution URL; refusing an unreviewed wrapper change")
+          lines[matches[0]] = mirror
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+          if grep -q '^networkTimeout=' "$WRAPPER_PROPERTIES"; then
+            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$WRAPPER_PROPERTIES"
+          else
+            printf '\nnetworkTimeout=120000\n' >> "$WRAPPER_PROPERTIES"
+          fi
+          grep -Fq 'mirrors.huaweicloud.com/gradle/gradle-9.4.1-bin.zip' "$WRAPPER_PROPERTIES"
+          grep -Fxq 'distributionSha256Sum=2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb' "$WRAPPER_PROPERTIES"
+          grep -Fxq 'networkTimeout=120000' "$WRAPPER_PROPERTIES"
+
+          # Package the exact patched source and all build scripts for GPL source distribution.
+          mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/docs" "$UPSTREAM/touchstation-build/.github/workflows"
           cp LICENSE README.md THIRD_PARTY_NOTICES.md SOURCE_DISTRIBUTION.md "$UPSTREAM/touchstation-build/"
+          cp docs/FINALE_FEATURES.md "$UPSTREAM/touchstation-build/docs/"
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
           tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
-            -czf "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
+            -czf "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz" \
             -C "$RUNNER_TEMP" armsx3-source
-          sha256sum "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
-            > "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256"
-          test -s "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz"
-          tar -tzf "$RUNNER_TEMP/TouchStation-v9.0.0-corresponding-source.tar.gz" \
+          sha256sum "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz" \
+            > "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz.sha256"
+          test -s "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz"
+          tar -tzf "$RUNNER_TEMP/TouchStation-Version-Finale-corresponding-source.tar.gz" \
             > "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/TOUCHSTATION_MODIFICATIONS.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/tools/add_gpl_modification_notices.py" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/THIRD_PARTY_NOTICES.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/SOURCE_DISTRIBUTION.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/docs/FINALE_FEATURES.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStation11ReliabilitySuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/TouchStationFinaleSuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/android/armsx3-ui/app/src/main/java/com/armsx2/reliability/TouchStationFinaleRuntimeGuard.kt" "$RUNNER_TEMP/source-archive-entries.txt"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
           DRAWER="$APP/src/main/java/com/armsx2/navigation/NavigationDrawer.kt"
           ABOUT="$APP/src/main/java/com/armsx2/ui/about/AboutScreen.kt"
           EMULATION_MENU="$APP/src/main/java/com/armsx2/ui/emulation/EmulationMenuScreen.kt"
           RUNTIME="$APP/src/main/java/com/armsx2/runtime/MainActivityRuntime.kt"
+          V11_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation11ReliabilitySuite.kt"
+          FINALE_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStationFinaleSuite.kt"
+          RUNTIME_GUARD="$APP/src/main/java/com/armsx2/reliability/TouchStationFinaleRuntimeGuard.kt"
+          PERF_TAB="$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
+          test -s "$V11_SUITE"
+          test -s "$FINALE_SUITE"
+          test -s "$RUNTIME_GUARD"
+          grep -Fq 'TouchStationFinaleRuntimeGuard.begin' "$FINALE_SUITE"
+          grep -Fq 'TouchStationFinaleRuntimeGuard.finish' "$FINALE_SUITE"
+          grep -Fq 'TouchStation-Finale-Watchdog' "$RUNTIME_GUARD"
+          grep -Fq 'putIfAbsent' "$RUNTIME_GUARD"
+          grep -Fq 'libarmsx3-core.so' "$RUNTIME_GUARD"
+          grep -Fq 'libarmsx3-jni.so' "$RUNTIME_GUARD"
+          grep -Fq 'memoryPressure' "$RUNTIME_GUARD"
+          grep -Fq 'no native or worker thread was forcibly interrupted' "$RUNTIME_GUARD"
+          grep -Fq 'TouchStation11ReliabilitySuite(' "$PERF_TAB"
+          grep -Fq 'TouchStationFinaleSuite(' "$PERF_TAB"
+          HOME="$APP/src/main/java/com/armsx2/ui/home/HomeScreen.kt"
+          HOME_VM="$APP/src/main/java/com/armsx2/ui/home/HomeViewModel.kt"
+          grep -Fq 'StatusChip("PC: $status")' "$HOME"
+          grep -Fq 'TouchStationFinaleCompatibilityStore.loadCache(context)' "$HOME"
+          grep -Fq 'TouchStationFinaleCompatibilityStore.rankFor(it.serial) ?: -1' "$HOME_VM"
+          grep -Fq 'LaunchedEffect(compatibilityRevision, state.sort)' "$HOME"
+          grep -Fq 'Update official compatibility database' "$FINALE_SUITE"
+          grep -Fq 'Full library compatibility index' "$FINALE_SUITE"
+          grep -Fq "Reload cached library index" "$FINALE_SUITE"
+          grep -Fq 'Apply GTA IV per-game profile' "$FINALE_SUITE"
+          grep -Fq 'exact normalized PS3 title ID' "$FINALE_SUITE"
+          grep -Fq 'PPU compilation progress' "$V11_SUITE"
+          grep -Fq 'Auto Settings 3.0' "$V11_SUITE"
+          grep -Fq 'Back Up Active Game Profile' "$V11_SUITE"
+          grep -Fq 'Restore Last Known Settings' "$V11_SUITE"
 
           # Verify TouchStation-owned drawer links and About branding in the generated source.
           grep -Fq 'internal const val GithubUrl = "https://github.com/worstpossibleuserlol/touchstationps3"' "$DRAWER"
@@ -149,8 +269,11 @@ jobs:
           fi
           grep -Fq 'title = "About TouchStation"' "$ABOUT"
           grep -Fq 'TouchStation project' "$ABOUT"
-          grep -Fq 'Upstream emulator base' "$ABOUT"
-          grep -Fq 'TouchStation is an independent downstream project.' "$ABOUT"
+          grep -Fq 'Third-party notices & licenses' "$ABOUT"
+          ! grep -Fq 'repository = "ARMSX2/ARMSX3"' "$ABOUT"
+          ! grep -Fq 'title = "Upstream emulator base"' "$ABOUT"
+          grep -Fq "PS3 emulation, game library and controller tools for Android ARM64." "$ABOUT"
+          grep -Fq 'TouchStation is the product-facing app identity.' "$ABOUT"
           grep -Fq 'controllerId = "about.back"' "$ABOUT"
           grep -Fq '"about.project.$repository"' "$ABOUT"
           XMB="$APP/src/main/java/com/armsx2/ui/xmb/XmbHome.kt"
@@ -193,7 +316,14 @@ jobs:
           grep -Fq 'TouchStationPpuMonitor(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           grep -Fq 'TouchStation8MonitoringSuite(settings = s)' "$APP/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
           V9_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation9AutoOptimizationSuite.kt"
-          grep -Fq 'TouchStation 9.0 Auto Optimization Suite' "$V9_SUITE"
+          grep -Fq 'TouchStation 10.0 Auto Optimization Suite' "$V9_SUITE"
+          V10_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStation10StabilitySuite.kt"
+          grep -Fq 'TouchStation 10.0 PS3 Stability & Diagnostics Suite' "$V10_SUITE"
+          grep -Fq 'Apply PPU Thread Recommendation' "$V10_SUITE"
+          grep -Fq 'Run Game Launch Readiness Check' "$V10_SUITE"
+          grep -Fq 'Apply Safe Game Boot Profile' "$V10_SUITE"
+          grep -Fq 'Export TouchStation 10 Diagnostic Report' "$V10_SUITE"
+          grep -Fq 'touchstation.v10.lastApply' "$V9_SUITE"
           grep -Fq 'Automatic Device Detection' "$V9_SUITE"
           grep -Fq 'Auto Configuration Engine' "$V9_SUITE"
           grep -Fq 'Adaptive Resolution Guard' "$V9_SUITE"
@@ -229,13 +359,85 @@ jobs:
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"
           grep -Fq 'boot_splash_logo' "$APP/src/main/res/layout/activity_boot_splash.xml"
 
-      - name: Build TouchStation 8.0.0 Release
+      - name: Build TouchStation Version Finale Release
         working-directory: ${{ runner.temp }}/armsx3-source/android/armsx3-ui
         shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew --no-daemon --stacktrace :app:assembleGithubRelease
+
+          # Bootstrap from independent mirrors. The Huawei URL is the packaged default;
+          # Aliyun, NJU and MacPorts provide separate fallbacks rather than redirecting to
+          # the same GitHub release-asset endpoint that returned HTTP 504.
+          # distributionSha256Sum stays pinned in gradle-wrapper.properties for every source.
+          wrapper_properties="gradle/wrapper/gradle-wrapper.properties"
+          gradle_mirrors=(
+            "https://mirrors.huaweicloud.com/gradle/gradle-9.4.1-bin.zip"
+            "https://mirrors.aliyun.com/gradle/distributions/v9.4.1/gradle-9.4.1-bin.zip"
+            "https://mirrors.nju.edu.cn/gradle/gradle-9.4.1-bin.zip"
+            "https://vie.at.distfiles.macports.org/gradle/gradle-9.4.1-bin.zip"
+          )
+          gradle_ready=0
+          attempt=0
+          for gradle_url in "${gradle_mirrors[@]}"; do
+            attempt=$((attempt + 1))
+            python3 - "$wrapper_properties" "$gradle_url" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          url = sys.argv[2]
+          lines = path.read_text(encoding="utf-8").splitlines()
+          matches = [i for i, line in enumerate(lines) if line.startswith("distributionUrl=")]
+          if len(matches) != 1:
+              raise SystemExit("Expected exactly one Gradle distributionUrl property")
+          lines[matches[0]] = "distributionUrl=" + url.replace(":", r"\:")
+          if not any(line == "distributionSha256Sum=2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb" for line in lines):
+              raise SystemExit("Pinned Gradle 9.4.1 SHA-256 is missing or changed")
+          if not any(line == "networkTimeout=120000" for line in lines):
+              raise SystemExit("Gradle wrapper timeout is not the expected 120000 ms")
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+            echo "Gradle wrapper bootstrap attempt $attempt/4: $gradle_url"
+            if ./gradlew --no-daemon --version; then
+              gradle_ready=1
+              break
+            fi
+            echo "Mirror failed; trying the next independently hosted Gradle distribution."
+          done
+          if [ "$gradle_ready" -ne 1 ]; then
+            echo "Could not bootstrap the pinned Gradle 9.4.1 distribution from any verified mirror." >&2
+            exit 1
+          fi
+
+          # Retry only transient network failures from remote dependency repositories.
+          # A real compiler/source error is reported immediately and is never hidden.
+          build_succeeded=0
+          for attempt in 1 2 3; do
+            log_file="$RUNNER_TEMP/touchstation-gradle-build-$attempt.log"
+            echo "Android build attempt $attempt/3"
+            set +e
+            ./gradlew --no-daemon --stacktrace --console=plain :app:assembleGithubRelease >"$log_file" 2>&1
+            build_status=$?
+            set -e
+            cat "$log_file"
+            if [ "$build_status" -eq 0 ]; then
+              build_succeeded=1
+              break
+            fi
+            if ! grep -Eqi 'Received status code 5[0-9][0-9]|Gateway Time[- ]out|Read timed out|Connection reset|Temporary failure in name resolution' "$log_file"; then
+              echo "Gradle failed for a non-transient reason; not retrying." >&2
+              exit "$build_status"
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Gradle dependency downloads still fail after 3 attempts." >&2
+              exit "$build_status"
+            fi
+            delay=$((attempt * 20))
+            echo "Transient repository/network error; retrying in ${delay}s."
+            sleep "$delay"
+          done
+          test "$build_succeeded" -eq 1
 
       - name: Verify package, branding, icon, and native engine
         shell: bash
@@ -245,8 +447,8 @@ jobs:
           test -s "$APK"
           aapt dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
           grep -F "application-label:'TouchStation'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionName='9.0.0'" "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='900'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionName='TouchStation Finale'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='1200'" "$RUNNER_TEMP/badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/badging.txt"
 
           unzip -Z1 "$APK" > "$RUNNER_TEMP/final-entries.txt"
@@ -302,48 +504,62 @@ jobs:
           apksigner verify --verbose "$APK"
           zipalign -c -v 4 "$APK"
           ls -lh "$APK"
-          cp "$APK" "$RUNNER_TEMP/TouchStation-v9.0.0-arm64.apk"
+          cp "$APK" "$RUNNER_TEMP/TouchStation-Version-Finale-arm64.apk"
 
-      - name: Upload TouchStation 9.0.0 APK and corresponding source
+      - name: Upload TouchStation Version Finale APK and checksum (small download)
         uses: actions/upload-artifact@v4
         with:
-          name: TouchStation-v9.0.0-arm64
+          name: TouchStation-Version-Finale-arm64
           path: |
-            ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
-            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz
-            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-Version-Finale-arm64.apk
+            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish TouchStation 9.0.0 Release
+      - name: Upload corresponding source as a separate download
+        uses: actions/upload-artifact@v4
+        with:
+          name: TouchStation-Version-Finale-corresponding-source
+          path: |
+            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish TouchStation Version Finale Release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v9.0.0
-          name: TouchStation 9.0.0 Release
+          tag_name: vfinale
+          name: TouchStation Version Finale Release
           make_latest: true
           prerelease: false
           overwrite_files: true
           files: |
-            ${{ runner.temp }}/TouchStation-v9.0.0-arm64.apk
-            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz
-            ${{ runner.temp }}/TouchStation-v9.0.0-corresponding-source.tar.gz.sha256
+            ${{ runner.temp }}/TouchStation-Version-Finale-arm64.apk
+            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz
+            ${{ runner.temp }}/TouchStation-Version-Finale-corresponding-source.tar.gz.sha256
           body: |
-            TouchStation 9.0.0 Release for Android ARM64.
+            TouchStation Version Finale Release for Android ARM64.
 
-            - Added device detection for SoC, CPU cores, ABI, Android version, RAM, storage, display refresh rate, OpenGL ES renderer/vendor and Android-reported Vulkan feature level.
-            - Added one-tap Performance, Balanced and Quality automatic configurations. PPU and LLVM compile threads are selected conservatively; Safe SPU block size and MSAA Off are used as starting settings.
-            - Added an adaptive output-scaling guard based on Android thermal severity and available RAM. This changes the Android output surface, not the game's internal RSX resolution; the pinned native bridge does not expose a closed-loop frame-time callback.
-            - Added live thermal severity, available RAM, app PSS and free-storage diagnostics.
-            - Added per-game profile application through the upstream global/per-game settings system.
-            - Added a compatibility advisor for CPU requirement warnings, ABI, GPU/driver identification and existing upstream game metadata. Device-specific game compatibility remains Unknown until tested.
-            - Reused the existing native in-game FPS, frame-time and PPU/SPU/guest-RSX overlay. Physical GPU utilization and unsupported native counters remain N/A.
-            - Added a shader cache manager that removes only known compiled Vulkan/OpenGL cache files; it does not remove games, firmware, saves or configuration.
-            - Added a conservative Safe Recovery profile and shareable diagnostic report. It does not claim to intercept native process crashes.
-            - Added a bounded CPU smoke test; it is not presented as a GPU or PS3 game benchmark.
-            - Gameplay remains physical-controller-only. No on-screen gameplay controls are added; touch remains available for menus/settings.
+            - Added PPU cache validation and conservative PPU thread recommendations. Live PPU compilation job counters and structured native recompiler exceptions remain N/A when the pinned bridge does not export them.
+            - Added SPU configuration/workload diagnostics and read-only PPU, SPU and shader cache inventory.
+            - Added a game boot timeline, Android process-exit / launch evidence analyzer and exportable crash/launch report. Detailed native loader and FIFO traces remain unavailable unless exported by the core.
+            - Added on-demand official desktop compatibility database sync, exact PS3 title-ID matching, a searchable cached PS3 library index, test dates and update metadata.
+            - Added a separate per-handset test record and a conservative GTA IV per-game settings preset. Neither official desktop status nor the preset guarantees Android game compatibility.
+            - Added a device-readiness panel and report with SoC/ABI, CPU cores, available RAM, app PSS, free app storage, Android thermal severity and physical controller detection.
+            - The complete 50-point feature map is distributed in docs/FINALE_FEATURES.md.
+            - Added local user-recorded compatibility notes per game; these are not universal compatibility ratings.
+            - Added a safe frontend relaunch control that is enabled only when the emulator reports STOPPED.
+            - Reused the native in-game FPS and frametime graphs; Android-side UI does not fabricate per-frame values. Added RAM history, thermal warnings and memory pressure readings.
+            - Added Android-reported Vulkan feature information while leaving physical-device extension queries and physical GPU utilization N/A when not exposed by the driver/bridge.
+            - Added Auto Settings 3.0 with save/read-back verification, per-game settings backup/restore, controller device detection, storage inventory and a last-known settings recovery point.
+            - Diagnostic and cache inspection is read-only for game saves and firmware. Gameplay remains physical-controller-only; no on-screen gameplay controls are added.
 
-            Corresponding source: download TouchStation-v9.0.0-corresponding-source.tar.gz and verify it with the accompanying .sha256 file. The archive contains the exact pinned upstream source tree, submodules, TouchStation modifications, patch scripts and build workflow for this APK.
+            Download size: the APK artifact is separate from the 525 MB corresponding-source archive. The APK artifact keeps the small 139-byte source SHA-256 file; the matching source archive and its checksum are available in a separate download.
 
-            Licensing: TouchStation's downstream work is distributed under GPL-2.0-only. Upstream notices and independent third-party licenses are retained. See THIRD_PARTY_NOTICES.md and SOURCE_DISTRIBUTION.md in the source archive.
+            Corresponding source: download TouchStation-Version-Finale-corresponding-source.tar.gz from the separate source artifact or release asset and verify it with the accompanying .sha256 file.
+
+            Licensing: TouchStation's downstream work is distributed under GPL-2.0-only. The matching corresponding source remains available separately from the APK artifact. Upstream notices and independent third-party licenses are retained. See THIRD_PARTY_NOTICES.md and SOURCE_DISTRIBUTION.md in the source archive.
 
             Users must supply official firmware and game files they are legally entitled to use. The native engine remains the pinned upstream ARMSX3 build; this release adds TouchStation Android-side tools and does not claim a from-scratch PS3 core.
