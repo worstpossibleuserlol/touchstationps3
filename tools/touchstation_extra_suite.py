@@ -15,6 +15,7 @@ import android.os.Debug
 import android.os.StatFs
 import android.view.Display
 import androidx.compose.foundation.layout.Arrangement
+import androidx.core.content.edit
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +46,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
+
+private fun extraRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            value,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
 
 private fun extraLibraryReport(context: Context): String {
     val dir = File(context.applicationInfo.nativeLibraryDir.orEmpty())
@@ -168,40 +188,40 @@ fun TouchStationExtraDiagnostics(
             Text(report.value, style = MaterialTheme.typography.bodySmall)
 
             Text("01–10 · PPU and SPU", style = MaterialTheme.typography.titleMedium)
-            TouchStationFinaleRow("01 · PPU execution diagnostics", "Native counters/live execution state: N/A")
-            TouchStationFinaleRow("02 · PPU module validator", "Native module registry: N/A; package libraries: " + extraLibraryReport(context))
-            TouchStationFinaleRow("03 · PPU thread-state monitor", extraJvmThreads())
-            TouchStationFinaleRow("04 · PPU exception reporter", "Recorded game errors: " + TouchStationFinaleErrorHistory.eventCount() + "; latest: " + TouchStationFinaleErrorHistory.latestMessage().take(100))
-            TouchStationFinaleRow("05 · PPU cache integrity", extraCacheReport(context))
-            TouchStationFinaleRow("06 · SPU task diagnostics", "Native SPU task IDs/queue: N/A")
-            TouchStationFinaleRow("07 · SPU workload monitor", "Decoder=" + settings.ps3.spuDecoder + "; block=" + settings.ps3.spuBlockSize + "; preferred threads=" + settings.ps3.preferredSpuThreads)
-            TouchStationFinaleRow("08 · SPU timeout reporting", "Native task timeout=N/A; Android watchdog=" + TouchStationFinaleRuntimeGuard.activeSummary())
-            TouchStationFinaleRow("09 · SPU module validation", "Native SPU module registry: N/A")
-            TouchStationFinaleRow("10 · Native engine self-test", TouchStationFinaleRuntimeGuard.nativeCoreHealth(context, ARMSX3.initialized, MainActivityRuntime.nativeReady.value))
+            extraRow("01 · PPU execution diagnostics", "Native counters/live execution state: N/A")
+            extraRow("02 · PPU module validator", "Native module registry: N/A; package libraries: " + extraLibraryReport(context))
+            extraRow("03 · PPU thread-state monitor", extraJvmThreads())
+            extraRow("04 · PPU exception reporter", "Recorded game errors: " + TouchStationFinaleErrorHistory.eventCount() + "; latest: " + TouchStationFinaleErrorHistory.latestMessage().take(100))
+            extraRow("05 · PPU cache integrity", extraCacheReport(context))
+            extraRow("06 · SPU task diagnostics", "Native SPU task IDs/queue: N/A")
+            extraRow("07 · SPU workload monitor", "Decoder=" + settings.ps3.spuDecoder + "; block=" + settings.ps3.spuBlockSize + "; preferred threads=" + settings.ps3.preferredSpuThreads)
+            extraRow("08 · SPU timeout reporting", "Native task timeout=N/A; Android watchdog=" + TouchStationFinaleRuntimeGuard.activeSummary())
+            extraRow("09 · SPU module validation", "Native SPU module registry: N/A")
+            extraRow("10 · Native engine self-test", TouchStationFinaleRuntimeGuard.nativeCoreHealth(context, ARMSX3.initialized, MainActivityRuntime.nativeReady.value))
 
             Text("11–20 · RSX and graphics", style = MaterialTheme.typography.titleMedium)
-            TouchStationFinaleRow("11 · RSX command diagnostics", "Native command stream=N/A; FIFO errors=" + TouchStationFinaleErrorHistory.fifoFailureCount())
-            TouchStationFinaleRow("12 · FIFO queue health", "Error history available; live queue depth/progress=N/A")
-            TouchStationFinaleRow("13 · GPU synchronization", "GPU fence/synchronization telemetry=N/A")
-            TouchStationFinaleRow("14 · Shader compilation tracker", "Live shader job counters=N/A; known caches: " + extraCacheReport(context))
-            TouchStationFinaleRow("15 · Shader cache recovery", "Only orphaned TouchStation logcat temp file may be cleaned; emulator shader caches remain untouched")
-            TouchStationFinaleRow("16 · Vulkan capability checker", extraVulkan(context))
-            TouchStationFinaleRow("17 · Graphics driver report", extraGraphics(context))
-            TouchStationFinaleRow("18 · Frame pacing monitor", "Display=" + extraRefreshRate(context) + "; FPS/frametime use native in-game overlay")
-            TouchStationFinaleRow("19 · Resolution scaling profiles", "Output scaler=" + settings.hwScaler + "; GPU profile=" + settings.gpuProfile + "; internal RSX resolution unchanged")
-            TouchStationFinaleRow("20 · Graphics settings rollback", TouchStationFinaleSettingsRollback.description())
+            extraRow("11 · RSX command diagnostics", "Native command stream=N/A; FIFO errors=" + TouchStationFinaleErrorHistory.fifoFailureCount())
+            extraRow("12 · FIFO queue health", "Error history available; live queue depth/progress=N/A")
+            extraRow("13 · GPU synchronization", "GPU fence/synchronization telemetry=N/A")
+            extraRow("14 · Shader compilation tracker", "Live shader job counters=N/A; known caches: " + extraCacheReport(context))
+            extraRow("15 · Shader cache recovery", "Only orphaned TouchStation logcat temp file may be cleaned; emulator shader caches remain untouched")
+            extraRow("16 · Vulkan capability checker", extraVulkan(context))
+            extraRow("17 · Graphics driver report", extraGraphics(context))
+            extraRow("18 · Frame pacing monitor", "Display=" + extraRefreshRate(context) + "; FPS/frametime use native in-game overlay")
+            extraRow("19 · Resolution scaling profiles", "Output scaler=" + settings.hwScaler + "; GPU profile=" + settings.gpuProfile + "; internal RSX resolution unchanged")
+            extraRow("20 · Graphics settings rollback", TouchStationFinaleSettingsRollback.description())
 
             Text("21–30 · Stability, recovery and storage", style = MaterialTheme.typography.titleMedium)
-            TouchStationFinaleRow("21 · Game launch preflight", "Engine=" + ARMSX3.initialized + "; runtime=" + MainActivityRuntime.nativeReady.value + "; game=" + (game?.title ?: "none"))
-            TouchStationFinaleRow("22 · Boot failure classifier", TouchStationFinaleErrorHistory.explanation(TouchStationFinaleErrorHistory.latestMessage()))
-            TouchStationFinaleRow("23 · Crash-loop protection", TouchStationExtraCrashLoopGuard.status(context))
-            TouchStationFinaleRow("24 · Session recovery report", TouchStationFinaleSettingsRollback.description() + "; " + TouchStationFinaleReliability.lifecycleStatus())
-            TouchStationFinaleRow("25 · Memory allocation diagnostics", extraMemory(context) + "; native allocations=N/A")
-            TouchStationFinaleRow("26 · Cache cleanup manager", cleanupMessage.value)
-            TouchStationFinaleRow("27 · Storage health warnings", extraStorage(context))
-            TouchStationFinaleRow("28 · Android lifecycle protection", TouchStationFinaleReliability.lifecycleStatus())
-            TouchStationFinaleRow("29 · Automated regression suite", "Patcher tests run in this GitHub Actions build; this screen does not run native-core tests")
-            TouchStationFinaleRow("30 · Per-game stability profiles", "Game=" + (game?.title ?: "none") + "; scope=" + if (gameScope) "Game" else "Global")
+            extraRow("21 · Game launch preflight", "Engine=" + ARMSX3.initialized + "; runtime=" + MainActivityRuntime.nativeReady.value + "; game=" + (game?.title ?: "none"))
+            extraRow("22 · Boot failure classifier", TouchStationFinaleErrorHistory.explanation(TouchStationFinaleErrorHistory.latestMessage()))
+            extraRow("23 · Crash-loop protection", TouchStationExtraCrashLoopGuard.status(context))
+            extraRow("24 · Session recovery report", TouchStationFinaleSettingsRollback.description() + "; " + TouchStationFinaleReliability.lifecycleStatus())
+            extraRow("25 · Memory allocation diagnostics", extraMemory(context) + "; native allocations=N/A")
+            extraRow("26 · Cache cleanup manager", cleanupMessage.value)
+            extraRow("27 · Storage health warnings", extraStorage(context))
+            extraRow("28 · Android lifecycle protection", TouchStationFinaleReliability.lifecycleStatus())
+            extraRow("29 · Automated regression suite", "Patcher tests run in this GitHub Actions build; this screen does not run native-core tests")
+            extraRow("30 · Per-game stability profiles", "Game=" + (game?.title ?: "none") + "; scope=" + if (gameScope) "Game" else "Global")
 
             OutlinedButton(
                 onClick = {
