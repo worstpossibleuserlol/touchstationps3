@@ -123,15 +123,64 @@ private fun extra100InspectDocument(context: Context, uri: Uri): String = runCat
             if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
         }
     }
-    val readable = context.contentResolver.openInputStream(uri)?.use { input ->
-        val sample = ByteArray(4096)
-        input.read(sample) > 0
-    } ?: false
     val extension = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
     val candidate = extension in setOf("iso", "pkg", "rap", "edat", "self", "sprx", "bin")
+    val inspection = context.contentResolver.openInputStream(uri)?.use { input ->
+        val prefix = ByteArray(8)
+        var prefixCount = 0
+        while (prefixCount < prefix.size) {
+            val count = input.read(prefix, prefixCount, prefix.size - prefixCount)
+            if (count < 0) break
+            if (count > 0) prefixCount += count
+        }
+        val magic = prefix.copyOf(prefixCount).joinToString("") {
+            "%02X".format(Locale.ROOT, it.toInt() and 0xff)
+        }
+        var discMarker = ""
+        if (extension == "iso") {
+            var remaining = 32768L - prefixCount.toLong()
+            while (remaining > 0L) {
+                val skipped = input.skip(remaining)
+                if (skipped > 0L) remaining -= skipped
+                else {
+                    if (input.read() < 0) break
+                    remaining--
+                }
+            }
+            val marker = ByteArray(8)
+            var markerCount = 0
+            while (markerCount < marker.size) {
+                val count = input.read(marker, markerCount, marker.size - markerCount)
+                if (count < 0) break
+                if (count > 0) markerCount += count
+            }
+            if (markerCount >= 6) {
+                val iso = String(marker, 1, 5, Charsets.US_ASCII)
+                val udf = String(marker, 0, 5, Charsets.US_ASCII)
+                discMarker = when {
+                    iso == "CD001" -> "ISO9660 volume descriptor"
+                    udf in setOf("BEA01", "NSR02", "NSR03", "TEA01") -> "UDF volume recognition descriptor"
+                    else -> "no expected ISO9660/UDF marker at the sampled descriptor offset"
+                }
+            }
+        }
+        Pair(magic, discMarker)
+    } ?: error("Selected document cannot be opened")
+    val magic = inspection.first
+    val detected = when {
+        extension == "pkg" && magic.startsWith("7F504B47") -> "PKG header signature found"
+        extension == "pkg" -> "PKG extension found, but expected 7F504B47 header is missing"
+        extension in setOf("self", "sprx", "bin") && magic.startsWith("7F534345") -> "SELF/SCE header signature found"
+        extension == "iso" && inspection.second.startsWith("ISO9660") -> inspection.second
+        extension == "iso" && inspection.second.startsWith("UDF") -> inspection.second
+        extension == "iso" -> "ISO extension found, but a recognized sampled disc descriptor was not found"
+        else -> "header=" + magic + "; no supported container signature was confirmed"
+    }
+    val readable = magic.isNotBlank()
     "File: " + name + "; size=" + (if (size >= 0L) size.toString() + " bytes" else "not provided") +
         "; readable=" + readable + "; recognized extension candidate=" + candidate +
-        ". This is a metadata/readability check, not a full PS3 image, package or integrity validation."
+        "; sampled header=" + magic + "; signature result=" + detected +
+        ". Bounded read-only signature inspection only; not a full PS3 image, package, file-system or integrity validation."
 }.getOrDefault("Could not inspect the selected document. Check its permission and try again.")
 
 private fun extra100Digest(context: Context, uri: Uri): String {

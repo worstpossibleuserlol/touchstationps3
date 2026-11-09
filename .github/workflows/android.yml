@@ -130,7 +130,7 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/touchstation_extra_suite.py tools/test_touchstation_extra_suite.py tools/touchstation_extra_advanced.py tools/test_touchstation_extra_advanced.py tools/touchstation_extra_100.py tools/test_touchstation_extra_100.py tools/touchstation_extra_bugfixes.py tools/test_touchstation_extra_bugfixes.py tools/add_gpl_modification_notices.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/touchstation_extra_suite.py tools/test_touchstation_extra_suite.py tools/touchstation_extra_advanced.py tools/test_touchstation_extra_advanced.py tools/touchstation_extra_100.py tools/test_touchstation_extra_100.py tools/touchstation_extra_game_lab.py tools/test_touchstation_extra_game_lab.py tools/touchstation_extra_bugfixes.py tools/test_touchstation_extra_bugfixes.py tools/add_gpl_modification_notices.py
 
       - name: Run TouchStation Finale patcher regression tests
         run: python3 tools/test_touchstation_finale_suite.py
@@ -143,6 +143,9 @@ jobs:
 
       - name: Run TouchStation Extra 100-feature regression tests
         run: python3 tools/test_touchstation_extra_100.py
+
+      - name: Run TouchStation Extra Game Compatibility Lab regression tests
+        run: python3 tools/test_touchstation_extra_game_lab.py
 
       - name: Run TouchStation Extra shutdown bug-fix regression tests
         run: python3 tools/test_touchstation_extra_bugfixes.py
@@ -177,6 +180,8 @@ jobs:
           python tools/touchstation_extra_advanced.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_extra_100.py \
+            --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
+          python tools/touchstation_extra_game_lab.py \\
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_extra_bugfixes.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
@@ -219,10 +224,10 @@ jobs:
           # Package the exact patched source and all build scripts for GPL source distribution.
           mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/docs" "$UPSTREAM/touchstation-build/.github/workflows"
           cp LICENSE README.md THIRD_PARTY_NOTICES.md SOURCE_DISTRIBUTION.md "$UPSTREAM/touchstation-build/"
-          cp docs/FINALE_FEATURES.md docs/EXTRA_100_FEATURES.md docs/EXTRA_100_BUGFIXES.md "$UPSTREAM/touchstation-build/docs/"
+          cp docs/FINALE_FEATURES.md docs/EXTRA_100_FEATURES.md docs/EXTRA_100_BUGFIXES.md docs/EXTRA_GAME_COMPATIBILITY_70.md "$UPSTREAM/touchstation-build/docs/"
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           mkdir -p "$UPSTREAM/touchstation-build/tools/templates"
-          cp tools/templates/TouchStationExtraAdvancedSuite.kt tools/templates/TouchStationExtra100Suite.kt tools/templates/TouchStationExtraShutdownSuite.kt "$UPSTREAM/touchstation-build/tools/templates/"
+          cp tools/templates/TouchStationExtraAdvancedSuite.kt tools/templates/TouchStationExtra100Suite.kt tools/templates/TouchStationExtraGameLab.kt tools/templates/TouchStationExtraShutdownSuite.kt "$UPSTREAM/touchstation-build/tools/templates/"
           cp .github/workflows/android.yml "$UPSTREAM/touchstation-build/.github/workflows/"
           tar --exclude='.git' --exclude='*/.git' --exclude='*/build' --exclude='*/.gradle' \
             -czf "$RUNNER_TEMP/TouchStation-Version-Extra-corresponding-source.tar.gz" \
@@ -250,6 +255,8 @@ jobs:
           grep -Fq "armsx3-source/touchstation-build/tools/templates/TouchStationExtra100Suite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_100_FEATURES.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_100_BUGFIXES.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_GAME_COMPATIBILITY_70.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/tools/templates/TouchStationExtraGameLab.kt" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/tools/templates/TouchStationExtraShutdownSuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
 
           APP="$RUNNER_TEMP/armsx3-source/android/armsx3-ui/app"
@@ -287,6 +294,13 @@ jobs:
           EXTRA100_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStationExtra100Suite.kt"
           test -s "$EXTRA100_SUITE"
           grep -Fq 'TouchStationExtra100Suite(settings = s)' "$PERF_TAB"
+          GAME_LAB_SUITE="$APP/src/main/java/com/armsx2/ui/settings/TouchStationExtraGameLab.kt"
+          test -s "$GAME_LAB_SUITE"
+          grep -Fq 'TouchStationExtraGameLabSuite(' "$PERF_TAB"
+          grep -Fq 'BLES00229' "$GAME_LAB_SUITE"
+          grep -Fq 'Repeatable launch test' "$GAME_LAB_SUITE"
+          grep -Fq 'settingsSha256' "$GAME_LAB_SUITE"
+          grep -Fq 'guest crash callbacks remain unavailable' "$GAME_LAB_SUITE"
           grep -Fq 'val verified = saved.toJson().toString() == updated.toJson().toString()' "$PERF_TAB"
           grep -Fq 'TouchStationFinaleReliability' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationExtraAdvancedSuite.kt"
           grep -Fq 'TouchStationFinaleRuntimeGuard' "$APP/src/main/java/com/armsx2/ui/settings/TouchStationExtraAdvancedSuite.kt"
@@ -623,6 +637,9 @@ jobs:
             - Reused the native in-game FPS and frametime graphs; Android-side UI does not fabricate per-frame values. Added RAM history, thermal warnings and memory pressure readings.
             - Added Android-reported Vulkan feature information while leaving physical-device extension queries and physical GPU utilization N/A when not exposed by the driver/bridge.
             - Added Auto Settings 3.0 with save/read-back verification, per-game settings backup/restore, controller device detection, storage inventory and a last-known settings recovery point.
+            - Added the Game Compatibility Lab: BLES00229-only GTA IV conservative test profile, device-aware settings guidance, saved-profile comparison, repeatable per-game test sessions, settings/device fingerprints, interruption recovery and shareable evidence reports.
+            - Extended game-file preflight with bounded PKG/SELF and ISO9660/UDF header inspection. This remains a signature check, not a full integrity or compatibility validator.
+            - The 70-feature map distinguishes Android-side features from native-core work. Native PPU/SPU/RSX scheduling, traces and guest crash callbacks remain unavailable in the pinned prebuilt engine.
             - Diagnostic and cache inspection is read-only for game saves and firmware. Gameplay remains physical-controller-only; no on-screen gameplay controls are added.
 
             Download size: the APK artifact is separate from the 525 MB corresponding-source archive. The APK artifact keeps the small 139-byte source SHA-256 file; the matching source archive and its checksum are available in a separate download.
