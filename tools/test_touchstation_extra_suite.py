@@ -53,7 +53,7 @@ class ExtraPatchTests(unittest.TestCase):
                 EXTRA.patch_application(Path(tmp))
 
     def test_extra_row_helper_is_compose_annotated(self):
-        self.assertIn("@Composable\\nprivate fun extraRow", EXTRA.EXTRA_KOTLIN_SOURCE)
+        self.assertIn("@Composable\nprivate fun extraRow", EXTRA.EXTRA_KOTLIN_SOURCE)
 
     def test_feature_coverage_and_native_limits(self):
         for marker in (
