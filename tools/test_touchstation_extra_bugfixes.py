@@ -87,8 +87,6 @@ fun stop(saveAutosave: Boolean = false, restartAfterStop: Boolean = false) {
 
         fun restart() {
 '''
-.replace("__NATIVE_ACTIVE__", "$" + "{NativeApp.hasActiveVM()}")
-.replace("__STATE__", "$" + "{eState.value}");
 
 class ShutdownBugfixTests(unittest.TestCase):
     def test_audit_contains_exactly_100_numbered_checks(self):
