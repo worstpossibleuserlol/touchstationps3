@@ -20,6 +20,23 @@ RUNTIME_FIXTURE = r'''package com.armsx2.runtime
 import com.armsx2.ui.WindowImpl
 @Volatile private var vmStopInProgress = false
         @Volatile private var vmRestartAfterStop = false
+        fun isVmIdle(): Boolean = eState.value == EmuState.STOPPED && !vmStopInProgress && !vmRunLoopActive
+        fun exitApp() {
+            if (eState.value == EmuState.STOPPED && !vmStopInProgress && !vmRunLoopActive) {
+        fun start() {
+            synchronized(vmLifecycleLock) {
+                if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED) {
+                    vmRestartAfterStop = true
+                    return
+                }
+                vmRunLoopActive = true
+                vmRestartQueued = false
+            }
+
+            invoke {
+        fun startBios() {
+            val shouldStart = synchronized(vmLifecycleLock) {
+                if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED) {
 fun loopFinally() {
                     eState.value = EmuState.STOPPED
                     // The game's RPCN session goes with it (see onStart).
@@ -131,6 +148,9 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("bios-vm-run-loop-exited", result)
             self.assertEqual(result.count("if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false"), 2)
             self.assertIn("else if (!vmStopInProgress)", result)
+            self.assertIn("runCatching { !NativeApp.hasActiveVM() }.getOrDefault(false)", result)
+            self.assertIn("val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)", result)
+            self.assertIn("if (nativeActive) stop(restartAfterStop = true)", result)
             self.assertIn("onReturnedToLibrary()\n                finishToLauncherIfRequested()\n                return", result)
             self.assertIn("autosave-failed-shutdown-continuing", result)
             self.assertIn("runCatching { NativeApp.shutdown() }", result)
