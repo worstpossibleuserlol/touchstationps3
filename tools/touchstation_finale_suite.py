@@ -17,7 +17,6 @@ import android.provider.MediaStore
 import android.os.Debug
 import android.os.PowerManager
 import android.os.StatFs
-import android.os.SystemClock
 import android.view.InputDevice
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -316,7 +315,10 @@ private suspend fun touchStationFinaleFetchCompatibility(context: Context): Pair
                 .putLong(TOUCHSTATION_FINALE_COMPAT_SYNC_KEY, System.currentTimeMillis())
                 .apply()
             payload to "Official compatibility database updated."
-        }.getOrElse { null to ("Update failed: " + (it.message ?: "network or data error")) }
+        }.getOrElse { error ->
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            null to ("Update failed: " + (error.message ?: "network or data error"))
+        }
     }
 
 private fun touchStationFinaleDeviceSnapshot(context: Context): TouchStationFinaleDevice {
@@ -803,6 +805,8 @@ fun TouchStationFinaleSuite(
                                             succeeded = true
                                         }
                                         message.value = result.second
+                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                        throw cancelled
                                     } catch (error: Exception) {
                                         message.value = "Compatibility refresh failed: " + (error.message ?: "unknown error")
                                     } finally {
@@ -1060,6 +1064,8 @@ fun TouchStationFinaleSuite(
                                             TouchStationFinaleReliability.sha256GameUri(context, game.uri, 256L * 1024L * 1024L)
                                         }
                                         succeeded = true
+                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                        throw cancelled
                                     } catch (error: Exception) {
                                         gameSourceStatus.value = "Game integrity check failed: " + (error.message ?: "unknown error")
                                     } finally {
@@ -1161,12 +1167,14 @@ fun TouchStationFinaleSuite(
                                 logBusy.value = true
                                 var succeeded = false
                                 try {
-                                    val result = runCatching {
+                                    val result = try {
                                         val contents = touchStationFinaleCollectLog(context, report)
                                         logContents.value = contents
                                         touchStationFinaleSaveLog(context, contents)
-                                    }.getOrElse {
-                                        false to ("Log export failed: " + (it.message ?: "unknown error"))
+                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                        throw cancelled
+                                    } catch (error: Exception) {
+                                        false to ("Log export failed: " + (error.message ?: "unknown error"))
                                     }
                                     succeeded = result.first
                                     logMessage.value = result.second
@@ -1593,12 +1601,12 @@ object TouchStationFinaleRuntimeGuard {
         }
         val libraries = if (missing.isEmpty()) "required core/JNI libraries present"
             else "missing or empty: " + missing.joinToString()
-        val threads = runCatching { Thread.getAllStackTraces().size }.getOrDefault(-1)
+        val threads = runCatching { Thread.activeCount() }.getOrDefault(-1)
         return "Native library directory: " + (directory?.absolutePath ?: "unavailable") +
             "; " + libraries +
             "; ARMSX3 initialized: " + engineInitialized +
             "; native runtime ready: " + nativeRuntimeReady +
-            "; Android process thread count: " + (if (threads >= 0) threads.toString() else "N/A") +
+            "; approximate Android process thread count: " + (if (threads >= 0) threads.toString() else "N/A") +
             " (not a PPU/SPU worker count)."
     }
 
