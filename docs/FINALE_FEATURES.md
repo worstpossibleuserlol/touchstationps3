@@ -196,3 +196,83 @@ The pinned ARM64 engine remains a prebuilt upstream binary. TouchStation Extra d
 The watchdog in this release monitors Android-managed operations only. It does not kill or reset native threads. Crash-loop protection records uncaught application crashes and enables frontend safe mode on a subsequent launch; it cannot guarantee recovery from every native process termination. Cache cleanup is narrowly limited to a TouchStation-owned temporary log file and never deletes game files, firmware, save data or emulator shader caches.
 
 The Extra build uses version name **TouchStation Extra** and version code **1300**. The APK and corresponding-source archive remain separate downloads, and existing upstream notices, licensing and corresponding-source obligations remain intact.
+
+## TouchStation Extra — advanced 50-feature suite
+
+The Advanced Suite adds the following product-facing feature areas. Android-side features are implemented where the app APIs support them. Native-only telemetry is explicitly N/A.
+
+### 1–10: stability and crash prevention
+
+1. **Pre-launch crash-risk advisory** — checks low memory, free app storage, thermal severity, crash-loop state and native-runtime readiness. It is a checklist, not a crash probability.
+2. **Application crash detection** — reads Android historical process-exit records on Android 11+. These do not prove that a PS3 guest game crashed.
+3. **Crash reason analyzer** — classifies Android-reported ANR, Java/Kotlin crash, native app crash, low-memory termination and other exit reasons.
+4. **Safe game boot** — offers a conservative existing-settings profile for explicit application while Game settings scope is active.
+5. **Configuration recovery** — restores a matching Global or per-game checkpoint through the settings apply/read-back path.
+6. **Game-session watchdog evidence** — displays the Android operation watchdog; it does not monitor or reset native game threads.
+7. **Memory-pressure protection** — shows Android available memory and low-memory warnings where available.
+8. **Thermal protection** — reports Android thermal severity, not measured SoC temperature.
+9. **Per-game failure history** — stores the latest 30 user-entered boot, stable-session, crash or freeze observations per game and handset.
+10. **Stability observation index** — summarizes recorded stable-session and failure observations; it is not a benchmark or universal compatibility score.
+
+### 11–20: compatibility
+
+11. **Expanded compatibility lookup** — reuses the official desktop RPCS3 database and exact PS3 title-ID matching.
+12. **Compatibility confidence** — separates desktop-only references from user-entered handset observations and unknown/unverified results.
+13. **Device-specific game profile** — saves supported settings per handset fingerprint and game title ID.
+14. **Compatibility regression hint** — flags a user-recorded failure after an earlier gameplay/stable-session observation.
+15. **Boot-stage tracker** — lets users record boot start, menu, gameplay, stable session, crash or freeze; stages are manual observations because guest boot callbacks are not exposed.
+16. **Known-issue matching** — reuses the existing plain-language game-error classifier.
+17. **Per-game recommendations** — calculates a conservative PPU thread suggestion from Android CPU/RAM information, not a game benchmark.
+18. **Compatibility report generator** — exports device, title ID, test observations, error history and configuration through Android's share sheet.
+19. **Controller compatibility notes** — lists physical gamepads and saves a local detected-controller note; it does not test every button automatically.
+20. **Firmware/game-update warnings** — identifies that installed PUP and game-update versions are not exposed by the bridge and must be checked manually.
+
+### 21–26: PPU
+
+21. **PPU execution profiler surface** — shows configured PPU decoder/threads; native instruction counters remain N/A.
+22. **PPU LLVM monitor** — shows configured compile-thread count; live compilation progress remains N/A.
+23. **Interpreter fallback status** — shows the configured decoder and marks automatic native fallback unavailable.
+24. **PPU thread advisor** — recommends a conservative count from Android CPU cores and available memory.
+25. **PPU module diagnostics** — reports engine initialization; native module registry/load traces remain N/A.
+26. **PPU cache validation boundary** — identifies known read-only cache inventory and private native PPU-cache integrity as unavailable.
+
+### 27–32: SPU
+
+27. **SPU workload distribution surface** — shows configured SPU decoder/preferred threads; native worker distribution remains N/A.
+28. **SPU decoder comparison** — identifies the current decoder without claiming unmeasured game benchmarks.
+29. **SPU starvation detector status** — native worker scheduling telemetry remains N/A.
+30. **SPU compilation recovery status** — native retry/fallback APIs are not exposed; preserve caches and export diagnostics.
+31. **SPU cache management status** — shows the cache option; private native cache paths remain unavailable.
+32. **SPU performance advisor** — recommends Safe block size for stability and displays preferred-thread configuration.
+
+### 33–40: RSX and graphics
+
+33. **RSX command diagnostics** — combines recorded FIFO errors with N/A for live native command traces.
+34. **FIFO deadlock diagnostics** — reuses the existing FIFO error explanation and next-step guidance.
+35. **RSX synchronization monitor** — native GPU-fence/synchronization counters remain N/A.
+36. **Shader failure recovery guidance** — recommends preserving caches and exporting logs; native shader retry remains unavailable.
+37. **Shader cache version status** — private native shader-cache version metadata remains N/A.
+38. **GPU driver compatibility fingerprint** — keys profiles by handset/hardware/ABI; exact GPU driver version is N/A without a native query.
+39. **Dynamic output-scale recommendation** — suggests Android presentation scaling using available RAM/thermal severity; it does not change internal RSX resolution.
+40. **Frame-pacing guidance** — displays Android refresh rate and directs users to the native in-game FPS/frametime overlay.
+
+### 41–50: app settings and user experience
+
+41. **Searchable settings guide** — filters a glossary of documented PPU, SPU, shader, output and graphics settings.
+42. **Three-slot settings profiles** — saves/loads JSON profiles per device and Global/per-game scope, with validation and apply/read-back checks.
+43. **Confirmed settings reset** — restores upstream Settings() defaults for the active scope after confirmation; it does not delete games, firmware or saves.
+44. **Settings change history** — records changed top-level settings fields, timestamp, scope and game ID through the central saveSettings path.
+45. **Advanced setting descriptions** — explains PPU, SPU, shader, MSAA, output-scaler, GPU-profile and FIFO options.
+46. **Automatic device detection** — reports Android manufacturer/model, hardware and supported ABI.
+47. **Battery/balanced/performance profiles** — applies user-selected emulator settings profiles and verifies supported values. These do not overclock the phone or guarantee higher FPS.
+48. **Keep-screen-on control** — keeps the display awake while TouchStation is in use; it does not create a background emulation service.
+49. **Storage manager** — reports bounded app files/cache/code-cache inventory and app-private free space; game and firmware folders are excluded.
+50. **Advanced diagnostics dashboard** — combines compatibility, game observations, controller notes, process exits, memory, thermal, storage and settings history in a shareable report.
+
+### Evidence and native-core limits
+
+Per-game boot stages, crash/freeze observations and controller notes are user-entered, device-local evidence. The stability index summarizes these entries; it is not an automatic compatibility rating. Android process-exit history is application-wide and cannot prove that a guest game failed.
+
+The pinned ARM64 core remains a prebuilt upstream binary. Native PPU instruction profiling/fallback/module traces, SPU worker distribution/starvation/retry, RSX command-stream validation, live FIFO queue depth, GPU fences, private shader-cache metadata, exact GPU driver counters and physical GPU utilization remain unavailable until the native core exports those APIs and matching ARM64 libraries are rebuilt and tested.
+
+Settings profiles are device/scope separated. Applying a preset is user initiated, goes through the existing settings callback and is only reported as successful after supported read-back checks. Keep-screen-on is an Android window flag, not a background-service control. The storage scan is bounded and read-only.
