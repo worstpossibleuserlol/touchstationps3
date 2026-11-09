@@ -2,6 +2,12 @@
 
 
 
+## TouchStation Extra — 100-feature companion update
+
+The Extra 100 companion suite adds per-game favorites, categories, tags and notes; a searchable local metadata index; user-entered compatibility, firmware and update notes with status-change history; selected-document readability checks; single-file save backup/restore with SHA-256 read-back verification; Android controller key-event testing; user-controlled playtime tracking; Android performance snapshots and comparisons; app-side readiness checks; and a shareable diagnostic report.
+
+See [the 100-feature implementation map](docs/EXTRA_100_FEATURES.md). These are app-side tools: file metadata checks are not full ISO/package integrity tests; save-data transfer handles one user-selected document at a time; firmware/update notes are manually verified; and Android metrics are not PS3 guest metrics. The pinned prebuilt native core still does not expose live PPU/SPU/RSX counters, GPU-fence telemetry or guest-game crash callbacks.
+
 ## TouchStation Extra
 
 Version Extra brings the 50-point feature set together with a new compatibility centre and device-specific tools:
