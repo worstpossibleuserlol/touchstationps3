@@ -148,7 +148,7 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("bios-vm-run-loop-exited", result)
             self.assertEqual(result.count("if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false"), 2)
             self.assertIn("else if (!vmStopInProgress)", result)
-            self.assertIn("!nativeReady.value || runCatching { !NativeApp.hasActiveVM() }.getOrDefault(false)", result)
+            self.assertIn("(!nativeReady.value || runCatching { !NativeApp.hasActiveVM() }.getOrDefault(false))", result)
             self.assertIn("val nativeActive = nativeReady.value && runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)", result)
             self.assertIn("staleNativeSession = nativeActive && !vmStopInProgress && !vmRunLoopActive", result)
             self.assertIn("if (staleNativeSession) stop(restartAfterStop = true)", result)
