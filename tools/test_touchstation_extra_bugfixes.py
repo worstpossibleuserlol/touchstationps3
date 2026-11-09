@@ -131,6 +131,7 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("bios-vm-run-loop-exited", result)
             self.assertEqual(result.count("if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false"), 2)
             self.assertIn("else if (!vmStopInProgress)", result)
+            self.assertIn("onReturnedToLibrary()\\n                finishToLauncherIfRequested()\\n                return", result)
             self.assertIn("autosave-failed-shutdown-continuing", result)
             self.assertIn("runCatching { NativeApp.shutdown() }", result)
             self.assertIn("shutdown-timeout-observed", result)
@@ -153,6 +154,7 @@ class ShutdownBugfixTests(unittest.TestCase):
             "prefs.edit().putString(KEY_EVENTS, next.toString()).commit()",
             "native-shutdown-started",
             "shutdown-completed",
+            'stage == "shutdown-completed" || stage == "shutdown-late-idle-recovered"',
             "User observed an app crash back to Android home.",
             "User observed the app remain on the stopping screen.",
             "Share shutdown report",
