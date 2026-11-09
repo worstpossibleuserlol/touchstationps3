@@ -171,7 +171,7 @@ private fun extra100CopyAndVerify(context: Context, source: Uri, destination: Ur
 private fun extra100ControllerSummary(): String {
     val descriptions = mutableListOf<String>()
     val deviceIds: IntArray = InputDevice.getDeviceIds()
-    for (id: Int in deviceIds) {
+    for (id in deviceIds) {
         val device: InputDevice? = InputDevice.getDevice(id)
         if (device != null) {
             val sources: Int = device.sources
