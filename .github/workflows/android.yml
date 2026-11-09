@@ -2,7 +2,7 @@ name: TouchStation Extra Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/touchstation-extra]
   pull_request:
     branches: [main, feature/touchstation-10.0.0]
   workflow_dispatch:
