@@ -28,6 +28,13 @@ fun loopFinally() {
                         vmRunLoopActive = false
                         vmStopInProgress = false
                         if (vmRestartAfterStop) {
+fun biosFinally() {
+                    eState.value = EmuState.STOPPED
+                    com.armsx2.online.OnlineSession.release(com.armsx2.Pasx2Application.appContext)
+                    val restartNow = synchronized(vmLifecycleLock) {
+                        vmRunLoopActive = false
+                        vmStopInProgress = false
+                        if (vmRestartAfterStop) {
 """
 fun stop(saveAutosave: Boolean = false, restartAfterStop: Boolean = false) {
             val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(false)
@@ -121,6 +128,9 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("if (attempt >= 300)", result)
             self.assertIn("shutdown-late-idle-recovered", result)
             self.assertIn("late-idle-recovery-expired", result)
+            self.assertIn("bios-vm-run-loop-exited", result)
+            self.assertEqual(result.count("if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false"), 2)
+            self.assertIn("else if (!vmStopInProgress)", result)
             self.assertIn("autosave-failed-shutdown-continuing", result)
             self.assertIn("runCatching { NativeApp.shutdown() }", result)
             self.assertIn("shutdown-timeout-observed", result)
