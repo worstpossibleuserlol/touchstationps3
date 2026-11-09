@@ -89,6 +89,14 @@ class ExtraAdvancedTests(unittest.TestCase):
         self.assertNotIn("size(context.filesDir)", SOURCE)
         self.assertIn("object TouchStationExtraSettingsHistory", SOURCE)
 
+    def test_v11_exit_reason_distinguishes_user_removal_from_a_crash(self):
+        v11_source = (Path(__file__).parent / "touchstation_v11_suite.py").read_text(encoding="utf-8")
+        self.assertIn("ApplicationExitInfo.REASON_USER_REQUESTED", v11_source)
+        self.assertIn("not evidence of a crash", v11_source)
+        self.assertIn("not a PS3 guest-game crash record", v11_source)
+        self.assertIn("ApplicationExitInfo.REASON_CRASH_NATIVE", v11_source)
+        self.assertIn("Android detail:", v11_source)
+
     def test_native_telemetry_limits_are_explicit(self):
         for marker in (
             "native instruction counters=N/A", "native worker distribution=N/A",
