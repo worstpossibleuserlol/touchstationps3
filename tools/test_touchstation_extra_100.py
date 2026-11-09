@@ -48,6 +48,7 @@ class Extra100Tests(unittest.TestCase):
         self.assertIn("7F504B47", SOURCE)
         self.assertIn("ISO9660 volume descriptor", SOURCE)
         self.assertIn("UDF volume recognition descriptor", SOURCE)
+        self.assertIn("bounded read-only header signature checks", SOURCE)
 
     def test_native_metrics_are_not_fabricated(self):
         for marker in ("not PS3 guest CPU/GPU counters", "Analog axis calibration",

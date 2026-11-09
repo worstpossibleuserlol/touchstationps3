@@ -461,7 +461,7 @@ fun TouchStationExtra100Suite(settings: Settings) {
                 Text("Copy backup to a chosen destination")
             }
             Text(transferReport.value, style = MaterialTheme.typography.bodySmall)
-            Text("Transfers copy one user-selected document and verify SHA-256 after writing. They never overwrite emulator save folders automatically. File inspection checks readability and metadata only.",
+            Text("Transfers copy one user-selected document and verify SHA-256 after writing. They never overwrite emulator save folders automatically. File inspection performs bounded read-only header signature checks; it is not full structural or integrity validation.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Text("71–80 · Controller and input checks", style = MaterialTheme.typography.titleMedium)
