@@ -281,7 +281,7 @@ private fun extraAdvancedStorage(context: Context): String = runCatching {
 private fun extraAdvancedControllers(): List<String> = runCatching {
     val found = mutableListOf<String>()
     val deviceIds: IntArray = InputDevice.getDeviceIds()
-    for (id: Int in deviceIds) {
+    for (id in deviceIds) {
         val device: InputDevice? = InputDevice.getDevice(id)
         if (device != null && !device.isVirtual) {
             val sources: Int = device.sources
