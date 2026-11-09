@@ -44,7 +44,7 @@ object TouchStationExtraShutdownDiagnostics {
         for (index in 0 until events.length()) {
             val stage = events.optJSONObject(index)?.optString("stage").orEmpty()
             if (stage == "native-shutdown-started") lastStarted = index
-            if (stage == "shutdown-completed") lastCompleted = index
+            if (stage == "shutdown-completed" || stage == "shutdown-late-idle-recovered") lastCompleted = index
         }
         buildString {
             appendLine("Persisted shutdown events: " + events.length())
