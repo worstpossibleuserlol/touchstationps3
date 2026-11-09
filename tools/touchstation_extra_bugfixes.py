@@ -59,6 +59,37 @@ def patch_runtime(path: Path) -> None:
                         if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false
                         if (vmRestartAfterStop) {""",
         "run-loop completion ordering")
+    # BIOS/system-menu emulation has a separate run loop. It must use the same
+    # native-idle gate; otherwise exiting BIOS can clear the stop latch while
+    # NativeApp.shutdown() is still unwinding.
+    source = replace_once(source,
+        """                    eState.value = EmuState.STOPPED
+                    com.armsx2.online.OnlineSession.release(com.armsx2.Pasx2Application.appContext)
+                    val restartNow = synchronized(vmLifecycleLock) {
+                        vmRunLoopActive = false
+                        vmStopInProgress = false
+                        if (vmRestartAfterStop) {""",
+        """                    eState.value = EmuState.STOPPED
+                    TouchStationExtraShutdownDiagnostics.record(
+                        com.armsx2.Pasx2Application.appContext,
+                        "bios-vm-run-loop-exited",
+                        "The BIOS run loop returned; native shutdown completion is tracked separately.",
+                    )
+                    runCatching {
+                        com.armsx2.online.OnlineSession.release(com.armsx2.Pasx2Application.appContext)
+                    }.onFailure {
+                        TouchStationExtraShutdownDiagnostics.record(
+                            com.armsx2.Pasx2Application.appContext,
+                            "bios-online-session-cleanup-failed",
+                            it.javaClass.simpleName + ": " + (it.message ?: "no message"),
+                        )
+                    }
+                    val nativeStillActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+                    val restartNow = synchronized(vmLifecycleLock) {
+                        vmRunLoopActive = false
+                        if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false
+                        if (vmRestartAfterStop) {""",
+        "BIOS run-loop completion ordering")
     source = replace_once(source,
         """            val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(false)
             val shouldStop = synchronized(vmLifecycleLock) {""",
@@ -74,6 +105,19 @@ def patch_runtime(path: Path) -> None:
             )
             val shouldStop = synchronized(vmLifecycleLock) {""",
         "stop request tracking")
+    source = replace_once(source,
+        """                if (restartAfterStop)
+                    vmRestartAfterStop = true
+                else
+                    vmRestartAfterStop = false""",
+        """                if (restartAfterStop) {
+                    vmRestartAfterStop = true
+                } else if (!vmStopInProgress) {
+                    // A fresh non-restart stop may discard a stale request, but a
+                    // duplicate stop must not cancel a restart already in flight.
+                    vmRestartAfterStop = false
+                }""",
+        "restart request preservation")
     source = replace_once(source,
         """                if (vmStopInProgress) {
                     nativeActive
