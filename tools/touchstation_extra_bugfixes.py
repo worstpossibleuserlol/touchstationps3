@@ -426,6 +426,50 @@ def patch_runtime(path: Path) -> None:
         "shutdown completion diagnostics")
     path.write_text(source, encoding="utf-8")
 
+
+def patch_bridge(path: Path) -> None:
+    """Fail a boot that never leaves Stopped instead of reporting a false success."""
+    source = path.read_text(encoding="utf-8")
+    if 'lastBootError = "BootTimeout"' in source:
+        raise SystemExit("TouchStation Extra boot-timeout guard is already installed")
+    source = replace_once(
+        source,
+        """        while (!stopRequested && ARMSX3.getState() == EmulatorState.Stopped &&
+            settleMs < BOOT_SETTLE_TIMEOUT_MS
+        ) {
+            Thread.sleep(POLL_INTERVAL_MS)
+            settleMs += POLL_INTERVAL_MS
+        }
+
+        // stopRequested is the escape hatch, and it is not optional.""",
+        """        while (!stopRequested && ARMSX3.getState() == EmulatorState.Stopped &&
+            settleMs < BOOT_SETTLE_TIMEOUT_MS
+        ) {
+            Thread.sleep(POLL_INTERVAL_MS)
+            settleMs += POLL_INTERVAL_MS
+        }
+
+        // A successful BootResult is not proof that the VM actually started.
+        // If it never left Stopped within the bounded settle window, report a
+        // launch failure rather than starting pumps and returning true.
+        // Preserve user-requested stops and an already-armed native restart.
+        if (!stopRequested &&
+            ARMSX3.getState() == EmulatorState.Stopped &&
+            !restartPending()
+        ) {
+            lastBootError = "BootTimeout"
+            android.util.Log.e(
+                "ARMSX3",
+                "boot did not leave Stopped within \${BOOT_SETTLE_TIMEOUT_MS}ms",
+            )
+            return false
+        }
+
+        // stopRequested is the escape hatch, and it is not optional.""",
+        "native boot settle timeout",
+    )
+    path.write_text(source, encoding="utf-8")
+
 def patch_performance_tab(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
     if "TouchStationExtraShutdownSuite()" in source:
@@ -448,9 +492,10 @@ def main() -> None:
     settings_dir = app_dir / "src/main/java/com/armsx2/ui/settings"
     reliability_dir = app_dir / "src/main/java/com/armsx2/reliability"
     performance = settings_dir / "PerformanceTab.kt"
+    bridge = app_dir / "src/main/java/com/armsx3/Rpcs3Bridge.kt"
     diagnostics = reliability_dir / "TouchStationExtraShutdownDiagnostics.kt"
     suite = settings_dir / "TouchStationExtraShutdownSuite.kt"
-    for path in (runtime, performance):
+    for path in (runtime, performance, bridge):
         if not path.is_file():
             raise SystemExit("Required upstream source file is missing: " + str(path))
     if not TEMPLATE.is_file():
@@ -469,8 +514,9 @@ def main() -> None:
         kotlin[kotlin.index("/*SUITE-BEGIN*/") + len("/*SUITE-BEGIN*/"):kotlin.index("/*SUITE-END*/")].strip() + "\n",
         encoding="utf-8")
     patch_runtime(runtime)
+    patch_bridge(bridge)
     patch_performance_tab(performance)
-    print("Applied TouchStation Extra shutdown coalescing, lifecycle gating, persisted diagnostics and recovery UI.")
+    print("Applied TouchStation Extra shutdown/boot lifecycle safeguards, persisted diagnostics and recovery UI.")
 
 if __name__ == "__main__":
     main()

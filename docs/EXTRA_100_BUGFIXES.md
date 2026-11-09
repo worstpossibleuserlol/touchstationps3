@@ -165,5 +165,6 @@ The follow-up audit found two additional frontend defects and adds regression co
 - **Regression coverage:** the shutdown patch test fixture now includes both game and BIOS run-loop completion paths and asserts both use the native-idle gate.
 - **Already-stopped external close:** the early-return path now calls finishToLauncherIfRequested(), so a close request from an external frontend is not silently ignored if the guest stopped just before the close action.
 - **Late-recovery report accuracy:** the diagnostics report now treats shutdown-late-idle-recovered as a successful completion, instead of continuing to warn that the same session never completed.
+- **False boot success:** the native bridge previously returned success after its 10-second boot-settle wait even if the emulator never left Stopped. It now reports BootTimeout and returns false, while preserving a user stop or an armed restart. A passing BootResult alone is no longer treated as proof that the VM started.
 
 These changes are frontend lifecycle safeguards. They do not repair a native-core hang or prove GTA IV/GTA SA stability on the target handset.

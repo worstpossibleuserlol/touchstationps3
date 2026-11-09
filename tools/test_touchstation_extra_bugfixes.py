@@ -119,7 +119,43 @@ fun stop(saveAutosave: Boolean = false, restartAfterStop: Boolean = false) {
         fun restart() {
 '''
 
+BRIDGE_FIXTURE = r'''package com.armsx3
+private var stopRequested = false
+private var lastBootError: String? = null
+private const val BOOT_SETTLE_TIMEOUT_MS = 10_000L
+private const val POLL_INTERVAL_MS = 100L
+private fun restartPending(): Boolean = false
+fun bootFixture() {
+        var settleMs = 0L
+        while (!stopRequested && ARMSX3.getState() == EmulatorState.Stopped &&
+            settleMs < BOOT_SETTLE_TIMEOUT_MS
+        ) {
+            Thread.sleep(POLL_INTERVAL_MS)
+            settleMs += POLL_INTERVAL_MS
+        }
+
+        // stopRequested is the escape hatch, and it is not optional.
+        startRumblePump()
+}
+'''
+
+
 class ShutdownBugfixTests(unittest.TestCase):
+
+    def test_bridge_reports_boot_timeout_instead_of_false_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "Rpcs3Bridge.kt"
+            path.write_text(BRIDGE_FIXTURE, encoding="utf-8")
+            PATCH.patch_bridge(path)
+            result = path.read_text(encoding="utf-8")
+            self.assertIn('lastBootError = "BootTimeout"', result)
+            self.assertIn("return false", result)
+            self.assertIn("!stopRequested", result)
+            self.assertIn("!restartPending()", result)
+            self.assertLess(result.index('lastBootError = "BootTimeout"'), result.index("startRumblePump()"))
+            with self.assertRaises(SystemExit):
+                PATCH.patch_bridge(path)
+
     def test_audit_contains_exactly_100_numbered_checks(self):
         entries = re.findall(r"(?m)^\d+\. \*\*(?:IMPLEMENTED|EXISTING / CHECKED|MANUAL / DEVICE TEST|NATIVE CORE REQUIRED)\*\*", DOC)
         self.assertEqual(len(entries), 100)
