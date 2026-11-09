@@ -24,6 +24,8 @@ def patch_runtime(path: Path) -> None:
         "@Volatile private var vmStopInProgress = false\n"
         "        // Native shutdown and the VM run loop must both finish before this latch clears.\n"
         "        @Volatile private var vmShutdownCallReturned = false\n"
+        "        // Distinguishes delayed callbacks from a later stop operation.\n"
+        "        @Volatile private var vmStopGeneration = 0L\n"
         "        @Volatile private var vmRestartAfterStop = false",
         "shutdown state fields")
     source = replace_once(source,
@@ -60,8 +62,10 @@ def patch_runtime(path: Path) -> None:
     source = replace_once(source,
         """            val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(false)
             val shouldStop = synchronized(vmLifecycleLock) {""",
-        """            val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(false)
+        """            // A failed native-state query is UNKNOWN, not proof that the VM is idle.
+            val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
             var queueShutdown = false
+            var stopGeneration = 0L
             TouchStationExtraShutdownDiagnostics.record(
                 com.armsx2.Pasx2Application.appContext,
                 "stop-requested",
@@ -88,6 +92,8 @@ def patch_runtime(path: Path) -> None:
                 } else {
                     vmStopInProgress = true
                     vmShutdownCallReturned = false
+                    vmStopGeneration += 1
+                    stopGeneration = vmStopGeneration
                     queueShutdown = true
                     true
                 }""",
@@ -133,7 +139,7 @@ def patch_runtime(path: Path) -> None:
                 "The serialized VMStop executor accepted the shutdown task.",
             )
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (vmStopInProgress) {
+                if (vmStopInProgress && vmStopGeneration == stopGeneration) {
                     TouchStationExtraShutdownDiagnostics.record(
                         com.armsx2.Pasx2Application.appContext,
                         "shutdown-timeout-observed",
@@ -237,10 +243,70 @@ def patch_runtime(path: Path) -> None:
                         com.armsx2.Pasx2Application.appContext,
                         "shutdown-not-complete",
                         "nativeActive=" + stillActive + "; runLoopActive=" + vmRunLoopActive +
-                            "; stop latch retained; no force termination attempted.",
+                            "; stop latch retained; no force termination attempted; late recovery is scheduled.",
                     )
+                    scheduleLateNativeIdleRecovery(shutdownStartedAt, stopGeneration, 0)
                 }
             }
+        }
+
+        private fun scheduleLateNativeIdleRecovery(
+            shutdownStartedAt: Long,
+            stopGeneration: Long,
+            attempt: Int,
+        ) {
+            if (!vmStopInProgress || vmStopGeneration != stopGeneration) return
+            if (attempt >= 300) {
+                TouchStationExtraShutdownDiagnostics.record(
+                    com.armsx2.Pasx2Application.appContext,
+                    "late-idle-recovery-expired",
+                    "Native VM did not report idle within five minutes; stop latch retained. No native thread was force-killed.",
+                )
+                return
+            }
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (!vmStopInProgress || vmStopGeneration != stopGeneration) return@postDelayed
+                val stillActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+                if (stillActive || vmRunLoopActive) {
+                    scheduleLateNativeIdleRecovery(shutdownStartedAt, stopGeneration, attempt + 1)
+                    return@postDelayed
+                }
+                var completed = false
+                var restartQueued = false
+                val restartNow = synchronized(vmLifecycleLock) {
+                    if (!vmStopInProgress || vmStopGeneration != stopGeneration || vmRunLoopActive) {
+                        false
+                    } else {
+                        completed = true
+                        vmStopInProgress = false
+                        restartQueued = vmRestartQueued
+                        if (vmRestartAfterStop) {
+                            vmRestartAfterStop = false
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                }
+                if (!completed) return@postDelayed
+                TouchStationExtraShutdownDiagnostics.record(
+                    com.armsx2.Pasx2Application.appContext,
+                    "shutdown-late-idle-recovered",
+                    "Native VM finally reported idle after " +
+                        (SystemClock.elapsedRealtime() - shutdownStartedAt) + "ms; generation=" + stopGeneration,
+                )
+                if (restartNow) {
+                    start()
+                } else if (!restartQueued) {
+                    synchronized(vmLifecycleLock) {
+                        WindowImpl.toolbarVisible.value = true
+                        WindowImpl.showLibrary.value = false
+                        WindowImpl.overlayVisible.value = false
+                    }
+                    onReturnedToLibrary()
+                    finishToLauncherIfRequested()
+                }
+            }, 1_000L)
         }
 
         fun restart() {""",
