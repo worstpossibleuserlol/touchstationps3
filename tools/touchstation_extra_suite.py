@@ -47,6 +47,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
+@Composable
 private fun extraRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
