@@ -1,4 +1,4 @@
-# TouchStation Version Finale — feature map
+# TouchStation Extra — cumulative feature map
 
 This release combines the diagnostics and settings tools from the earlier TouchStation builds with the Finale compatibility, device-readiness and GTA IV profile panels. The 50 entries below describe product-facing capabilities across the full app. They are not 50 new native PS3-core features.
 
@@ -144,3 +144,55 @@ The Android-side reliability layer now has a separate `TouchStationFinaleRuntime
 - The current active-operation list, native-library health and memory-pressure reading are included in the Finale diagnostics and export report.
 
 The watchdog protects Android-managed operations; it is not a PPU/SPU execution watchdog. Native PPU task progress, SPU worker validation, RSX command-stream validation, GPU-fence synchronization and private shader-cache validation still require instrumentation in a rebuilt native core. The existing PSS trend remains a diagnostic trend only and must not be described as a confirmed memory-leak detector.
+
+
+## TouchStation Extra — 30-feature stability and diagnostics update
+
+TouchStation Extra builds on the previous releases and adds an Android-side diagnostics panel. The 30 entries below are represented in the Extra UI. Where the pinned native bridge does not provide a required hook, the UI explicitly reports N/A; it does not invent counters or claim native recovery.
+
+### PPU and SPU diagnostics
+
+1. **PPU execution diagnostics** — identifies live instruction counters and execution state as unavailable when the native bridge does not export them.
+2. **PPU module validator** — verifies that the packaged core and JNI libraries are present; native module-registry validation remains unavailable.
+3. **PPU thread-state monitor** — reports Android/JVM thread counts and states, not native PPU worker identities.
+4. **PPU exception reporter** — combines the bounded game-error history and available Android crash evidence.
+5. **PPU cache integrity** — inspects known app/code cache directories read-only; private native PPU cache internals remain unavailable.
+6. **SPU task diagnostics** — shows an explicit unavailable state for native task IDs and queue contents.
+7. **SPU workload monitor** — displays the actual configured SPU decoder, block size and preferred thread count.
+8. **SPU timeout reporting** — displays the Android operation watchdog; native SPU task timeouts remain unavailable.
+9. **SPU module validation** — reports native module-registry validation as unavailable.
+10. **Native engine self-test** — combines the existing startup self-tests, native-library presence, engine initialization and runtime readiness.
+
+### RSX and graphics diagnostics
+
+11. **RSX command diagnostics** — surfaces available FIFO error history; native command-stream traces remain unavailable.
+12. **FIFO queue health** — reports recorded FIFO errors and explicitly marks live queue depth/progress unavailable.
+13. **GPU synchronization diagnostics** — GPU-fence and synchronization counters remain unavailable without native instrumentation.
+14. **Shader compilation tracker** — reports that live shader job counters are unavailable and shows known app cache evidence.
+15. **Shader cache recovery** — offers cleanup of only an orphaned TouchStation logcat temporary file; it does not clear emulator shader caches.
+16. **Vulkan capability checker** — lists Vulkan features advertised by Android PackageManager; physical-device extension details remain unavailable.
+17. **Graphics driver report** — reports Android hardware and required GLES information; active native driver vendor/renderer details remain unavailable.
+18. **Frame pacing monitor** — reports display refresh rate and directs users to the existing native in-game FPS/frametime overlay.
+19. **Resolution scaling profiles** — shows the current Android output scaler and GPU profile without claiming to change internal RSX resolution.
+20. **Graphics settings rollback** — exposes the existing user-controlled settings checkpoint information.
+
+### Stability, recovery and storage
+
+21. **Game launch preflight** — combines game selection, engine initialization and native runtime readiness.
+22. **Boot failure classifier** — uses the existing plain-language game-error classifier.
+23. **Crash-loop protection** — counts uncaught app crashes in a rolling ten-minute window and enables the existing safe mode after three or more.
+24. **Session recovery report** — displays the settings checkpoint and lifecycle status.
+25. **Memory allocation diagnostics** — reports Android available RAM and process PSS; native allocation breakdowns remain unavailable.
+26. **Cache cleanup manager** — deletes only an orphaned app-owned `TouchStation-logcat.tmp` file after a user action.
+27. **Storage health warnings** — warns below 3 GiB app-private free space and marks below 1 GiB critical.
+28. **Android lifecycle protection** — surfaces the existing Android activity lifecycle tracking.
+29. **Automated regression suite** — adds dedicated patcher tests to the Extra GitHub Actions workflow; this is not a native emulator test suite.
+30. **Per-game stability profiles** — applies a conservative existing-settings preset only when a game is selected, Game scope is active, safe mode is off and settings read-back succeeds.
+
+### Native-core boundary
+
+The pinned ARM64 engine remains a prebuilt upstream binary. TouchStation Extra does not rebuild or modify native PPU, SPU, RSX, Vulkan or GPU scheduling code. Consequently, live PPU execution/module/exception counters, SPU task queues and worker states, RSX command-stream validation, FIFO queue depth, GPU fences, shader compilation counters, physical GPU utilization and native memory allocation traces remain N/A until the native core exports those APIs and matching ARM64 libraries are rebuilt and tested.
+
+The watchdog in this release monitors Android-managed operations only. It does not kill or reset native threads. Crash-loop protection records uncaught application crashes and enables frontend safe mode on a subsequent launch; it cannot guarantee recovery from every native process termination. Cache cleanup is narrowly limited to a TouchStation-owned temporary log file and never deletes game files, firmware, save data or emulator shader caches.
+
+The Extra build uses version name **TouchStation Extra** and version code **1300**. The APK and corresponding-source archive remain separate downloads, and existing upstream notices, licensing and corresponding-source obligations remain intact.
