@@ -78,6 +78,13 @@ fun stop(saveAutosave: Boolean = false, restartAfterStop: Boolean = false) {
                     if (restartNow) {
                         start()
                     } else if (!restartQueued) {
+                        synchronized(vmLifecycleLock) {
+                            WindowImpl.toolbarVisible.value = true
+                            WindowImpl.showLibrary.value = false
+                            WindowImpl.overlayVisible.value = false
+                        }
+                        // Clear the current-game pointer (so Settings reverts to Global scope) and
+                        // hand rotation back to the launcher. Shared with the other terminal paths.
                         onReturnedToLibrary()
                         finishToLauncherIfRequested()
                     }
