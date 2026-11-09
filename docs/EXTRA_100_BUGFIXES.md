@@ -11,7 +11,7 @@ This update targets the reported issue: GTA IV reaches **Stopping**, then TouchS
 5. Adds a 20-second warning-only watchdog; it never force-kills native threads.
 6. Adds a diagnostics panel to refresh, record observed outcomes and share the shutdown report.
 
-These are app/frontend safeguards, not a guarantee that GTA IV will run or that a native SIGSEGV is fixed.
+A late-idle watcher now recovers the app-side stop latch if the native VM reports idle after the initial five-second settle window. Failed native-state queries remain UNKNOWN/active, and delayed callbacks are tied to the stop generation so an old timer cannot unlock a later session. The watcher stops after five minutes and retains the lock if the native core still reports active.\n\nThese are app/frontend safeguards, not a guarantee that GTA IV will run or that a native SIGSEGV is fixed.
 
 ## Status labels
 
@@ -24,7 +24,7 @@ These are app/frontend safeguards, not a guarantee that GTA IV will run or that 
 3. **IMPLEMENTED** — isolate autosave failure so it does not prevent the shutdown call.
 4. **IMPLEMENTED** — record stop request, queue, native start, native return and completion stages.
 5. **IMPLEMENTED** — persist the last reached stage before invoking native shutdown.
-6. **IMPLEMENTED** — observe a 20-second shutdown delay without forcibly interrupting native threads.
+6. **IMPLEMENTED** — observe a 20-second shutdown delay tied to a stop-generation token, then poll for late native-idle completion for up to five minutes without forcibly interrupting native threads.
 7. **IMPLEMENTED** — do not claim shutdown completion while the native VM still reports active.
 8. **IMPLEMENTED** — retain evidence of native shutdown exceptions and incomplete shutdowns.
 9. **IMPLEMENTED** — protect lifecycle reconciliation from a Java-side online-session cleanup exception.
