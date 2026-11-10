@@ -43,7 +43,7 @@ class ExtraCompatibilityTests(unittest.TestCase):
     def test_gta_iv_profile_requires_exact_bles00229_serial(self):
         self.assertIn('game?.serial?.equals("BLES00229", ignoreCase = true) == true', TEMPLATE)
         self.assertIn("Apply GTA IV BLES00229 Profile", TEMPLATE)
-        self.assertIn("gtaIv, true", TEMPLATE)
+        self.assertIn("extraCompatibilityCandidate(settings, snapshot.value, true, true)", TEMPLATE)
         self.assertIn("Hidden for other games", TEMPLATE)
 
     def test_android_preflight_reports_device_evidence_without_claiming_guest_telemetry(self):
@@ -70,6 +70,20 @@ class ExtraCompatibilityTests(unittest.TestCase):
         general = general.split("## 1–20 · Universal / other PS3 games", 1)[1]
         self.assertEqual(len(re.findall(r"(?m)^\d+\. ", general)), 20)
         self.assertEqual(len(re.findall(r"(?m)^\d+\. ", gta.split("## Native-core boundary", 1)[0])), 20)
+
+    def test_gta_iv_diagnostic_snapshot_captures_settings_and_failure_stage(self):
+        for marker in (
+            "failureStage",
+            "extraCompatibilitySettingsFingerprint",
+            "Settings SHA-256:",
+            "Capture GTA IV diagnostic snapshot",
+            "PPU instruction/module trace: NOT EXPOSED BY PINNED NATIVE CORE",
+            "SPU worker queue, scheduling and starvation counters: NOT EXPOSED BY PINNED NATIVE CORE",
+            "RSX command queue and GPU-fence trace: NOT EXPOSED BY PINNED NATIVE CORE",
+            "Guest save-state schema/checksum validation: NOT EXPOSED BY PINNED NATIVE CORE",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, TEMPLATE)
 
     def test_native_core_boundaries_are_explicit(self):
         for marker in ("NATIVE CORE REQUIRED", "prebuilt ARM64", "not claimed as fixed", "device testing", "PPU", "SPU", "RSX"):
