@@ -110,8 +110,8 @@ class Extra100Tests(unittest.TestCase):
     def test_document_permissions_and_playtime_lifecycle_are_hardened(self):
         self.assertIn('takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)', SOURCE)
         self.assertGreaterEqual(SOURCE.count('extra100PersistReadPermission(context, uri)'), 3)
-        self.assertIn('prefs.getString("selectedSaveUri", null)', SOURCE)
-        self.assertIn('prefs.getString("selectedRestoreUri", null)', SOURCE)
+        self.assertIn('extra100RestorePersistedReadUri(context, "selectedSaveUri")', SOURCE)
+        self.assertIn('extra100RestorePersistedReadUri(context, "selectedRestoreUri")', SOURCE)
         self.assertIn('putString("selectedSaveUri", uri.toString())', SOURCE)
         self.assertIn('putString("selectedRestoreUri", uri.toString())', SOURCE)
         self.assertIn('LaunchedEffect(serial, sessionStart.value)', SOURCE)
