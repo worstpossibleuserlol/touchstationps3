@@ -172,3 +172,11 @@ These changes are frontend lifecycle safeguards. They do not repair a native-cor
 ## Follow-up pass
 
 See [EXTRA_100_BUGFIXES_20_MORE.md](EXTRA_100_BUGFIXES_20_MORE.md) for 20 additional fixes covering identifier collisions, document-provider streams, backup safety and session tracking.
+
+## Relaunch-after-close lifecycle correction
+
+- **Stale frontend state after native exit:** when the native core positively reports idle and there is no active run loop or shutdown owner, the launch path now reconciles a leftover frontend RUNNING/STOPPING state back to STOPPED before deciding whether the new launch may proceed. Unknown native-state results are still treated as active; the code does not guess that shutdown completed.
+- **Duplicate queued restart:** the game run-loop completion path and shutdown worker share one serialized executor. If the run-loop has already queued the next start, the shutdown worker now trusts that queued start instead of starting a second copy. This prevents the duplicate call from arming an unintended restart after the newly launched game later closes.
+- **Regression coverage:** the shutdown patch tests assert both conditions and the diagnostic stage names.
+
+These checks improve safe relaunch handling but do not prove GTA IV relaunch on the handset. A native core that remains active or whose shutdown call never returns still requires a device report and possibly native-core repair.
