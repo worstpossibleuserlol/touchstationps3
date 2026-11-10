@@ -37,12 +37,10 @@ class Extra100Tests(unittest.TestCase):
         self.assertIn("val actual = extra100Digest(context, destination)", SOURCE)
         self.assertIn("check(expected == actual)", SOURCE)
         self.assertIn('return "Copied and re-read $bytes bytes. SHA-256 verified: $actual"', SOURCE)
-        self.assertIn("nativeKeyEvent", SOURCE)
-        self.assertIn("device != null && !device.isVirtual", SOURCE)
-        self.assertIn("InputDevice.SOURCE_GAMEPAD", SOURCE)
+        self.assertNotIn("nativeKeyEvent", SOURCE)
+        self.assertIn("Digital key event:", SOURCE)
+        self.assertIn("cannot distinguish a controller from a keyboard", SOURCE)
         self.assertIn("import androidx.compose.ui.input.key.key", SOURCE)
-        self.assertIn("val deviceIds: IntArray = InputDevice.getDeviceIds()", SOURCE)
-        self.assertNotIn("InputDevice.getDeviceIds().mapNotNull", SOURCE)
 
     def test_game_file_validation_does_not_claim_full_integrity(self):
         self.assertIn("Bounded read-only signature inspection", SOURCE)
