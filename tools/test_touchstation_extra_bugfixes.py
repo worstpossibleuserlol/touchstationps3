@@ -236,6 +236,9 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("source = source.replace(restart_anchor, restart_replacement, 2)", patcher_source)
             self.assertIn("shutdown completion honors Exit Game", patcher_source)
             self.assertIn("late-idle recovery honors Exit Game", patcher_source)
+            self.assertIn("boot-cancelled-before-native-run", patcher_source)
+            self.assertIn("bios-boot-cancelled-before-native-run", patcher_source)
+            self.assertIn("return@invoke", patcher_source)
             with self.assertRaises(SystemExit):
                 PATCH.patch_runtime(path)
 
