@@ -115,6 +115,7 @@ private fun extraCompatibilitySaveRecord(
     serial: String?,
     title: String,
     status: String,
+    failureStage: String,
     notes: String,
 ): String {
     if (serial.isNullOrBlank()) return "A game title ID is required before saving a compatibility record."
@@ -122,6 +123,7 @@ private fun extraCompatibilitySaveRecord(
         .put("gameId", serial)
         .put("title", title)
         .put("status", status.trim().take(80))
+        .put("failureStage", failureStage.trim().take(120))
         .put("notes", notes.trim().take(2000))
         .put("updatedAt", System.currentTimeMillis())
     return runCatching {
@@ -162,10 +164,18 @@ private fun extraCompatibilityCandidate(
     )
 }
 
+private fun extraCompatibilitySettingsFingerprint(settings: Settings): String = runCatching {
+    val bytes = settings.toJson().toString().toByteArray(Charsets.UTF_8)
+    MessageDigest.getInstance("SHA-256").digest(bytes)
+        .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+}.getOrDefault("unavailable")
+
 private fun extraCompatibilityReadinessReport(
     snapshot: ExtraCompatibilitySnapshot,
     serial: String?,
     settings: Settings,
+    gtaIv: Boolean,
+    failureStage: String,
 ): String {
     val validation = TouchStationFinaleReliability.validateSettings(settings)
     return buildString {
@@ -184,6 +194,24 @@ private fun extraCompatibilityReadinessReport(
         appendLine("Thermal status: " + extraCompatibilityThermal(snapshot.thermalStatus))
         appendLine("Native engine initialized: " + runCatching { com.armsx3.core.ARMSX3.initialized }.getOrDefault(false))
         appendLine("Settings validation: " + if (validation.isEmpty()) "passed" else validation.joinToString())
+        appendLine("Settings SHA-256: " + extraCompatibilitySettingsFingerprint(settings))
+        appendLine("User-recorded failure stage: " + failureStage.trim().take(120).ifBlank { "Not recorded" })
+        if (gtaIv) {
+            appendLine("GTA IV profile target: BLES00229 (exact serial match)")
+            appendLine("PPU instruction/module trace: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("PPU recompiler failure/recovery counters: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("PPU cache integrity/rebuild state: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("PPU guest-thread lock and memory-order trace: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("SPU worker queue, scheduling and starvation counters: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("SPU worker exception isolation and cache-recovery state: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("SPU guest timing counters: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("RSX command queue and GPU-fence trace: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("RSX render-target and texture lifetime trace: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("Shader compile/cache recovery counters: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("Guest audio clock/buffer timing: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("Guest save-state schema/checksum validation: NOT EXPOSED BY PINNED NATIVE CORE")
+            appendLine("This report records Android and exposed settings evidence only; it does not claim these native fixes are implemented.")
+        }
         appendLine("Package-manager Vulkan feature is not a live Vulkan device/extension query.")
         appendLine("PPU/SPU worker state, RSX queues, shader internals and guest crash callbacks are not exposed by the pinned core.")
         appendLine("This preflight does not launch or certify the selected game.")
@@ -217,6 +245,7 @@ fun TouchStationExtraCompatibilitySuite(
     val snapshot = remember(context) { mutableStateOf(extraCompatibilitySnapshot(context)) }
     val stored = remember(serial, context) { extraCompatibilityLoadRecord(context, serial) }
     val status = remember(serial) { mutableStateOf(stored.optString("status", "Not tested")) }
+    val failureStage = remember(serial) { mutableStateOf(stored.optString("failureStage", "Not recorded")) }
     val notes = remember(serial) { mutableStateOf(stored.optString("notes", "")) }
     val message = remember { mutableStateOf("No compatibility action performed.") }
     val report = remember { mutableStateOf("") }
@@ -322,6 +351,22 @@ fun TouchStationExtraCompatibilitySuite(
                 )
             }
 
+            if (gtaIv) {
+                Text("GTA IV technical evidence", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Record the last stage reached. This is user-entered evidence; native PPU/SPU/RSX traces are not exposed by the current prebuilt core.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = failureStage.value,
+                    onValueChange = { failureStage.value = it.take(120) },
+                    label = { Text("Failure stage (for example: launch, PPU, SPU, RSX, audio, save/load, shutdown)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+            }
+
             Text("Per-game compatibility record", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
                 value = status.value,
@@ -339,7 +384,9 @@ fun TouchStationExtraCompatibilitySuite(
             )
             OutlinedButton(
                 onClick = {
-                    message.value = extraCompatibilitySaveRecord(context, serial, title, status.value, notes.value)
+                    message.value = extraCompatibilitySaveRecord(
+                        context, serial, title, status.value, failureStage.value, notes.value
+                    )
                 },
                 enabled = !serial.isNullOrBlank(),
                 modifier = Modifier.fillMaxWidth(),
@@ -349,11 +396,17 @@ fun TouchStationExtraCompatibilitySuite(
             OutlinedButton(
                 onClick = {
                     snapshot.value = extraCompatibilitySnapshot(context)
-                    report.value = extraCompatibilityReadinessReport(snapshot.value, serial, settings)
-                    message.value = "Preflight refreshed. It reports Android/device evidence, not PS3 guest internals."
+                    report.value = extraCompatibilityReadinessReport(
+                        snapshot.value, serial, settings, gtaIv, failureStage.value
+                    )
+                    message.value = if (gtaIv) {
+                        "GTA IV diagnostic snapshot captured. Native guest internals remain unavailable."
+                    } else {
+                        "Preflight refreshed. It reports Android/device evidence, not PS3 guest internals."
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Refresh and run preflight checks") }
+            ) { Text(if (gtaIv) "Capture GTA IV diagnostic snapshot" else "Refresh and run preflight checks") }
             if (report.value.isNotBlank()) {
                 Text(report.value, style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(
