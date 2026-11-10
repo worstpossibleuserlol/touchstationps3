@@ -221,7 +221,7 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertNotIn("if (restartNow) {\n                        start()\n                    if (restartQueued)", result)
             self.assertIn("} else if (restartNow) {\n                        start()\n                    } else {", result)
             self.assertEqual(result.count("        fun restart() {"), 1)
-            self.assertIn("onReturnedToLibrary()\n                finishToLauncherIfRequested()\n                return", result)
+            self.assertIn("returnToMainMenuAfterVmStop()\n                return", result)
             self.assertIn("autosave-failed-shutdown-continuing", result)
             self.assertIn("runCatching { NativeApp.shutdown() }", result)
             self.assertIn("shutdown-timeout-observed", result)
