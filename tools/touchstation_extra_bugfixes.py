@@ -388,7 +388,9 @@ def patch_runtime(path: Path) -> None:
                 if (!vmRunLoopActive && !stillActive) {""",
         "native idle completion gate")
     source = replace_once(source,
-        """                    } else if (!restartQueued) {
+        """                    if (restartNow) {
+                        start()
+                    } else if (!restartQueued) {
                         synchronized(vmLifecycleLock) {
                             WindowImpl.toolbarVisible.value = true
                             WindowImpl.showLibrary.value = false
