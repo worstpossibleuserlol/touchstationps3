@@ -508,6 +508,204 @@ def patch_runtime(path: Path) -> None:
 
         fun restart() {""",
         "shutdown completion diagnostics")
+
+    # A user pressing Exit Game owns the terminal outcome. A restart may already
+    # have been queued while the guest was loading; this latch prevents that
+    # stale queued task from reopening the game after the user asked to exit.
+    source = replace_once(source,
+        """@Volatile private var vmStopGeneration = 0L
+        @Volatile private var vmRestartAfterStop = false""",
+        """@Volatile private var vmStopGeneration = 0L
+        @Volatile private var vmExitToMainMenuAfterStop = false
+        @Volatile private var vmRestartAfterStop = false""",
+        "Exit Game intent state")
+    source = replace_once(source,
+        """        /** Close the running game the way the user asked for.""",
+        """        /** Return to TouchStation's own main menu after the VM and native shutdown are both idle.
+         *  The stopping UI remains in place until the terminal cleanup is safe. */
+        private fun returnToMainMenuAfterVmStop() {
+            synchronized(vmLifecycleLock) {
+                WindowImpl.toolbarVisible.value = true
+                WindowImpl.showLibrary.value = false
+                WindowImpl.overlayVisible.value = false
+            }
+            onReturnedToLibrary()
+            finishToLauncherIfRequested()
+        }
+
+        /** Close the running game the way the user asked for.""",
+        "shared main-menu return")
+    source = replace_once(source,
+        """        fun closeGame(saveAutosave: Boolean = false) {
+            if (launchedExternally && prefs.getBoolean("ui.exitToLauncherExternal", true))
+                quitAfterStop = true
+            stop(saveAutosave = saveAutosave)
+        }""",
+        """        fun closeGame(saveAutosave: Boolean = false) {
+            if (launchedExternally && prefs.getBoolean("ui.exitToLauncherExternal", true))
+                quitAfterStop = true
+            synchronized(vmLifecycleLock) {
+                // Exit Game is terminal: discard any not-yet-started restart request.
+                vmExitToMainMenuAfterStop = true
+                vmRestartAfterStop = false
+                vmRestartQueued = false
+            }
+            stop(saveAutosave = saveAutosave)
+        }""",
+        "Exit Game cancels queued restart")
+    source = replace_once(source,
+        """                if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED || nativeActive) {
+                    vmRestartAfterStop = true""",
+        """                if (vmExitToMainMenuAfterStop) {
+                    false
+                } else if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED || nativeActive) {
+                    vmRestartAfterStop = true""",
+        "Exit Game blocks stale queued start")
+    source = replace_once(source,
+        """            currentGame.value = info
+            launchedExternally = external
+            m_szGamefile = uri""",
+        """            // An explicit new game selection supersedes a previous Exit Game request.
+            vmExitToMainMenuAfterStop = false
+            currentGame.value = info
+            launchedExternally = external
+            m_szGamefile = uri""",
+        "new game supersedes exit intent")
+    source = replace_once(source,
+        """        fun startBios() {
+            currentGame.value = null""",
+        """        fun startBios() {
+            vmExitToMainMenuAfterStop = false
+            currentGame.value = null""",
+        "BIOS launch clears exit intent")
+    source = replace_once(source,
+        """        fun restart() {
+            synchronized(vmLifecycleLock) {
+                vmRestartAfterStop = true""",
+        """        fun restart() {
+            synchronized(vmLifecycleLock) {
+                vmExitToMainMenuAfterStop = false
+                vmRestartAfterStop = true""",
+        "explicit restart supersedes exit intent")
+
+    # If the user exits while a restart is pending, the loop-finally path must
+    # not enqueue that restart. Both game and BIOS loops share this ordering.
+    restart_anchor = """                        if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false
+                        if (vmRestartAfterStop) {"""
+    restart_replacement = """                        if (vmShutdownCallReturned && !nativeStillActive) vmStopInProgress = false
+                        if (vmExitToMainMenuAfterStop) {
+                            vmRestartAfterStop = false
+                            vmRestartQueued = false
+                            false
+                        } else if (vmRestartAfterStop) {"""
+    if source.count(restart_anchor) != 2:
+        raise SystemExit("Expected game and BIOS Exit Game restart gates; found " + str(source.count(restart_anchor)))
+    source = source.replace(restart_anchor, restart_replacement, 2)
+
+    # The run-loop may finish before NativeApp.shutdown(). Keep the existing
+    # stopping screen until the shutdown owner confirms native idle.
+    source = replace_once(source,
+        """                    if (restartNow) {
+                        // Queued on vmStopControl rather than called here, because "the run loop has
+                        // exited" is NOT "the stop has finished".""",
+        """                    if (restartNow) {
+                        // Queued on vmStopControl rather than called here, because "the run loop has
+                        // exited" is NOT "the stop has finished".""",
+        "preserve serialized restart ordering") if False else source
+    game_return_old = """                    } else {
+                        WindowImpl.toolbarVisible.value = true
+                        WindowImpl.showLibrary.value = false
+                        WindowImpl.overlayVisible.value = false
+                        // This is the branch that actually fires on a normal game exit (stop()'s
+                        // equivalent block loses the vmRunLoopActive race), so the return-to-library
+                        // cleanup has to happen here or the launcher keeps the game's rotation.
+                        onReturnedToLibrary()
+                        finishToLauncherIfRequested()
+                    }
+                }
+            }
+        }
+
+        /** Push setup-wizard renderer/upscale choices"""
+    game_return_new = """                    } else if (!vmStopInProgress) {
+                        returnToMainMenuAfterVmStop()
+                    }
+                }
+            }
+        }
+
+        /** Push setup-wizard renderer/upscale choices"""
+    source = replace_once(source, game_return_old, game_return_new,
+        "wait for shutdown before leaving stopping screen")
+    bios_return_old = """                    } else {
+                        // BIOS exit had no cleanup at all — it relied entirely on stop()'s racy
+                        // branch, so quitting the BIOS also left the launcher stuck in its rotation.
+                        onReturnedToLibrary()
+                    }
+                }
+            }
+        }
+
+        // pause/resume run on a dedicated serialized executor"""
+    bios_return_new = """                    } else if (!vmStopInProgress) {
+                        returnToMainMenuAfterVmStop()
+                    }
+                }
+            }
+        }
+
+        // pause/resume run on a dedicated serialized executor"""
+    source = replace_once(source, bios_return_old, bios_return_new,
+        "BIOS waits for shutdown before menu return")
+
+    # If the shutdown worker is still active, this branch deliberately does
+    # nothing; the worker or late-idle recovery will perform the same cleanup.
+    source = replace_once(source,
+        """                onReturnedToLibrary()
+                finishToLauncherIfRequested()
+                return
+            }
+            if (!queueShutdown) {""",
+        """                returnToMainMenuAfterVmStop()
+                return
+            }
+            if (!queueShutdown) {""",
+        "already-idle Exit Game returns to menu")
+    source = replace_once(source,
+        """                    if (restartQueued) {
+                        // The run-loop finally block already queued start() on this same""",
+        """                    if (vmExitToMainMenuAfterStop) {
+                        vmRestartAfterStop = false
+                        vmRestartQueued = false
+                        returnToMainMenuAfterVmStop()
+                    } else if (restartQueued) {
+                        // The run-loop finally block already queued start() on this same""",
+        "shutdown completion honors Exit Game")
+    source = replace_once(source,
+        """                if (restartNow) {
+                    start()
+                } else if (!restartQueued) {
+                    synchronized(vmLifecycleLock) {
+                        WindowImpl.toolbarVisible.value = true
+                        WindowImpl.showLibrary.value = false
+                        WindowImpl.overlayVisible.value = false
+                    }
+                    onReturnedToLibrary()
+                    finishToLauncherIfRequested()
+                }
+            }, 1_000L)""",
+        """                if (vmExitToMainMenuAfterStop) {
+                    vmRestartAfterStop = false
+                    vmRestartQueued = false
+                    returnToMainMenuAfterVmStop()
+                } else if (restartNow) {
+                    start()
+                } else if (!restartQueued) {
+                    returnToMainMenuAfterVmStop()
+                }
+            }, 1_000L)""",
+        "late-idle recovery honors Exit Game")
+
     path.write_text(source, encoding="utf-8")
 
 
