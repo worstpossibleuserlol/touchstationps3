@@ -58,6 +58,14 @@ class ExtraPatchTests(unittest.TestCase):
     def test_extra_row_helper_is_compose_annotated(self):
         self.assertIn("@Composable\nprivate fun extraRow", EXTRA.EXTRA_KOTLIN_SOURCE)
 
+    def test_workflow_uses_verified_armlx3_167_native_pin(self):
+        workflow = (Path(__file__).parents[1] / ".github/workflows/android.yml").read_text(encoding="utf-8")
+        self.assertIn('COMMIT="b8eea42f52755f0841afc04a23b06125e5274bab"', workflow)
+        self.assertIn('EXPECTED_SIZE="79258789"', workflow)
+        self.assertIn('EXPECTED_SHA256="a8cb2e4fbbd67c89f6336456a3f74e664a9f0be4f0f39d264e1f031e1b3fc3fd"', workflow)
+        self.assertIn('/releases/assets/724443946', workflow)
+        self.assertIn('ARMSX3-1.6.7-a15-armv8.2-sdk35.apk', workflow)
+
     def test_feature_coverage_and_native_limits(self):
         for marker in (
             "PPU execution diagnostics", "PPU module validator", "PPU thread-state monitor",
