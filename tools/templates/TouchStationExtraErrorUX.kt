@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -103,7 +104,10 @@ fun GameErrorBanner() {
         exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { -it },
     ) {
         // Keep the outgoing copy alive until AnimatedVisibility completes its exit transition.
-        val shown = remember(reason) { reason }.orEmpty()
+        val shown = remember { mutableStateOf(reason.orEmpty()) }
+        LaunchedEffect(reason) {
+            if (!reason.isNullOrBlank()) shown.value = reason
+        }
         val what = if ("RPCN" in shown) str("game.error.rpcn") else str("game.error.other")
 
         Surface(
@@ -148,7 +152,7 @@ fun GameErrorBanner() {
                 )
                 Text(what, style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    shown,
+                    shown.value,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

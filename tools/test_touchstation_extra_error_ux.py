@@ -68,7 +68,9 @@ class ExtraErrorUxTests(unittest.TestCase):
 
     def test_xmb_route_and_exit_animation_content_are_safe(self):
         self.assertIn("xmbGameError(reason)", SOURCE)
-        self.assertIn("remember(reason) { reason }.orEmpty()", SOURCE)
+        self.assertIn("LaunchedEffect(reason)", SOURCE)
+        self.assertIn("if (!reason.isNullOrBlank()) shown.value = reason", SOURCE)
+        self.assertIn("shown.value", SOURCE)
         self.assertIn("WindowInsets.safeDrawing.only(WindowInsetsSides.Top)", SOURCE)
         self.assertIn(".widthIn(max = 560.dp)", SOURCE)
 
