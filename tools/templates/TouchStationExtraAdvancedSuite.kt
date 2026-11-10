@@ -546,7 +546,8 @@ fun TouchStationExtraAdvancedSuite(settings: Settings, onApply: (Settings) -> Bo
         ps3 = settings.ps3.copy(
             ppuThreads = minOf(2, Runtime.getRuntime().availableProcessors()).coerceAtLeast(1),
             llvmThreads = 1, preferredSpuThreads = 0, spuBlockSize = 0,
-            spuXFloat = 0, shaderMode = 1, msaaMode = 0, spuCache = true, llvmPrecompile = true,
+            spuXFloat = 0, shaderMode = 1, msaaMode = 0, spuCache = true,
+            llvmPrecompile = TouchStationFinaleNativeDiagnostics.allowPpuPrecompile(context),
         )
     )
     val availableRamMb = runCatching {

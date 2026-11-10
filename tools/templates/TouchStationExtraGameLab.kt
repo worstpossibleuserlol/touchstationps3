@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Debug
 import android.os.PowerManager
 import android.os.StatFs
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -174,6 +175,16 @@ private fun gameLabLegacyProfileKey(serial: String?): String =
 private fun gameLabRecoveryKey(serial: String?): String =
     "activeRecovery." + gameLabDeviceKey() + "." + gameLabId(serial)
 
+private fun gameLabBootCount(context: Context): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+    runCatching {
+        android.provider.Settings.Global.getInt(
+            context.contentResolver,
+            android.provider.Settings.Global.BOOT_COUNT,
+            -1,
+        )
+    }.getOrDefault(-1)
+} else -1
+
 private fun gameLabReadProfileRaw(context: Context, serial: String?): String? =
     gameLabReadMigrated(context, gameLabProfileKey(serial), gameLabLegacyProfileKey(serial))
 
@@ -186,7 +197,15 @@ private fun gameLabReadActive(context: Context, serial: String?): JSONObject? {
     val key = gameLabActiveKey(serial)
     val raw = gameLabReadMigrated(context, key, gameLabLegacyActiveKey(serial)) ?: return null
     val active = runCatching { JSONObject(raw) }.getOrNull()
-    if (active == null || active.optLong("startedAt", 0L) <= 0L || active.optJSONArray("events") == null) {
+    val events = active?.optJSONArray("events")
+    val eventEntriesValid = events != null && events.length() in 1..40 &&
+        (0 until events.length()).all { events.optJSONObject(it) != null }
+    val storedGameId = active?.optString("gameId").orEmpty()
+    val gameIdentityValid = storedGameId == gameLabId(serial) ||
+        storedGameId == gameLabLegacyId(serial)
+    if (active == null || active.optLong("startedAt", 0L) <= 0L ||
+        !eventEntriesValid || !gameIdentityValid
+    ) {
         prefs.edit().remove(key).putBoolean(gameLabRecoveryKey(serial), true).apply()
         return null
     }
@@ -217,6 +236,8 @@ private fun gameLabStart(
     val events = JSONArray().put(gameLabEvent("Test session started by user", settings, snapshot))
     val session = JSONObject()
         .put("startedAt", now)
+        .put("startedElapsedRealtime", SystemClock.elapsedRealtime())
+        .put("bootCount", gameLabBootCount(context))
         .put("gameId", gameLabId(serial))
         .put("title", title)
         .put("device", Build.MANUFACTURER + " " + Build.MODEL)
@@ -237,6 +258,13 @@ private fun gameLabRecord(
     val active = gameLabReadActive(context, serial) ?: return "Start a test session first."
     val events = active.optJSONArray("events") ?: JSONArray()
     if (events.length() >= 40) return "This test already contains the maximum of 40 observations."
+    val allowedStages = setOf(
+        "Boot started (user observed)", "Main menu reached", "Gameplay reached",
+        "Stable session (10+ min)", "Freeze / stalled boot observed",
+        "App returned to Android home (observed)", "Stuck on stopping (observed)",
+        "Clean exit observed",
+    )
+    if (stage !in allowedStages) return "Unknown observation stage rejected."
     events.put(gameLabEvent(stage, settings, snapshot))
     active.put("events", events)
     prefs.edit().putString(gameLabActiveKey(serial), active.toString()).apply()
@@ -250,10 +278,19 @@ private fun gameLabFinish(
     val active = gameLabReadActive(context, serial) ?: return "There is no unfinished test to finish."
     val events = active.optJSONArray("events") ?: JSONArray()
     if (events.length() < 40) events.put(gameLabEvent("Test finished: " + result, settings, snapshot))
-    val start = active.optLong("startedAt", System.currentTimeMillis())
+    val finishedAt = System.currentTimeMillis()
+    val start = active.optLong("startedAt", finishedAt)
+    val elapsedStart = active.optLong("startedElapsedRealtime", -1L)
+    val sameBoot = active.optInt("bootCount", -2) >= 0 &&
+        active.optInt("bootCount", -2) == gameLabBootCount(context)
+    val elapsedNow = SystemClock.elapsedRealtime()
+    val monotonicDuration = if (sameBoot && elapsedStart in 0L..elapsedNow) {
+        elapsedNow - elapsedStart
+    } else null
     active.put("events", events)
-    active.put("finishedAt", System.currentTimeMillis())
-    active.put("durationMs", (System.currentTimeMillis() - start).coerceAtLeast(0L))
+    active.put("finishedAt", finishedAt)
+    active.put("durationMs", monotonicDuration ?: (finishedAt - start).coerceAtLeast(0L))
+    active.put("durationClock", if (monotonicDuration != null) "monotonic" else "wall-clock fallback (reboot or legacy session)")
     active.put("result", result)
     val old = gameLabReadHistory(context, serial)
     val next = JSONArray()
@@ -327,7 +364,8 @@ private fun gameLabProfileDiff(context: Context, serial: String?, settings: Sett
         val currentKeys = current.keys()
         while (currentKeys.hasNext()) keys += currentKeys.next()
         val changed = keys.sorted().filter {
-            saved.has(it) != current.has(it) || saved.opt(it)?.toString() != current.opt(it)?.toString()
+            saved.has(it) != current.has(it) ||
+                gameLabCanonicalJson(saved.opt(it)) != gameLabCanonicalJson(current.opt(it))
         }
         if (changed.isEmpty()) "Saved profile and current settings match at the top-level JSON fields."
         else "Different fields: " + changed.take(12).joinToString() +

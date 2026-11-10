@@ -8,6 +8,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
 import android.os.StatFs
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.view.InputDevice
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -37,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +47,7 @@ import androidx.core.content.edit
 import com.armsx2.config.Settings
 import com.armsx2.runtime.MainActivityRuntime
 import com.armsx3.core.ARMSX3
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -76,6 +79,40 @@ private fun extra100PersistReadPermission(context: Context, uri: Uri): Boolean =
     context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
     true
 }.getOrDefault(false)
+
+private fun extra100RestorePersistedReadUri(context: Context, preferenceKey: String): Uri? {
+    val prefs = context.getSharedPreferences(EXTRA100_PREFS, Context.MODE_PRIVATE)
+    val raw = prefs.getString(preferenceKey, null) ?: return null
+    val uri = runCatching { Uri.parse(raw) }.getOrNull()
+    val hasPersistedReadGrant = uri != null && runCatching {
+        context.contentResolver.persistedUriPermissions.any {
+            it.uri == uri && it.isReadPermission
+        }
+    }.getOrDefault(false)
+    if (!hasPersistedReadGrant) {
+        prefs.edit().remove(preferenceKey).apply()
+        return null
+    }
+    return uri
+}
+
+private fun extra100CleanDisplayText(value: String, maxChars: Int = 180): String =
+    value.take(maxChars * 4)
+        .filter { it == '\t' || !java.lang.Character.isISOControl(it) }
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .take(maxChars)
+
+private fun extra100SameDocument(context: Context, first: Uri, second: Uri): Boolean {
+    if (first == second) return true
+    return runCatching {
+        first.authority != null &&
+            first.authority == second.authority &&
+            DocumentsContract.isDocumentUri(context, first) &&
+            DocumentsContract.isDocumentUri(context, second) &&
+            DocumentsContract.getDocumentId(first) == DocumentsContract.getDocumentId(second)
+    }.getOrDefault(false)
+}
 
 private fun extra100SaturatingAdd(left: Long, right: Long): Long =
     if (right > 0L && left > Long.MAX_VALUE - right) Long.MAX_VALUE
@@ -144,15 +181,20 @@ private fun extra100LibraryIndex(context: Context): List<String> {
         .sortedWith(compareByDescending<String> { it.startsWith("★ ") }.thenBy { it.lowercase(Locale.ROOT) })
 }
 
-private fun extra100InspectDocument(context: Context, uri: Uri): String = runCatching {
-    var name = uri.lastPathSegment ?: "selected document"
+private fun extra100InspectDocument(context: Context, uri: Uri): String {
+    return try {
+    var name = extra100CleanDisplayText(uri.lastPathSegment ?: "selected document").ifBlank { "selected document" }
     var size = -1L
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
         if (cursor.moveToFirst()) {
             val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-            if (nameIndex >= 0) name = cursor.getString(nameIndex) ?: name
-            if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
+            if (nameIndex >= 0) {
+                name = extra100CleanDisplayText(cursor.getString(nameIndex) ?: name).ifBlank { "selected document" }
+            }
+            if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+                size = cursor.getLong(sizeIndex).takeIf { it >= 0L } ?: -1L
+            }
         }
     }
     val extension = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
@@ -221,7 +263,12 @@ private fun extra100InspectDocument(context: Context, uri: Uri): String = runCat
         "; readable=" + readable + "; recognized extension candidate=" + candidate +
         "; sampled header=" + magic + "; signature result=" + detected +
         ". Bounded read-only signature inspection only; not a full PS3 image, package, file-system or integrity validation."
-}.getOrDefault("Could not inspect the selected document. Check its permission and try again.")
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        "Could not inspect the selected document. Check its permission and try again."
+    }
+}
 
 private fun extra100Digest(context: Context, uri: Uri): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -241,7 +288,9 @@ private fun extra100Digest(context: Context, uri: Uri): String {
 }
 
 private fun extra100CopyAndVerify(context: Context, source: Uri, destination: Uri): String {
-    require(source != destination) { "Source and destination are the same document; refusing to truncate the source." }
+    require(!extra100SameDocument(context, source, destination)) {
+        "Source and destination resolve to the same document; refusing to truncate the source."
+    }
     val digest = MessageDigest.getInstance("SHA-256")
     var bytes = 0L
     try {
@@ -274,21 +323,35 @@ private fun extra100CopyAndVerify(context: Context, source: Uri, destination: Ur
         return "Copied and re-read $bytes bytes. SHA-256 verified: $actual"
     } catch (error: Exception) {
         runCatching { context.contentResolver.delete(destination, null, null) }
+        if (error is CancellationException) throw error
         throw error
     }
 }
+
+private fun extra100TransferResult(context: Context, source: Uri, destination: Uri, action: String): String =
+    try {
+        extra100CopyAndVerify(context, source, destination)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        action + " failed: " + (error.message ?: "unknown error")
+    }
 
 private fun extra100ControllerSummary(): String {
     val descriptions = mutableListOf<String>()
     val deviceIds: IntArray = InputDevice.getDeviceIds()
     for (id in deviceIds) {
+        if (descriptions.size >= 16) break
         val device: InputDevice? = InputDevice.getDevice(id)
         if (device != null && !device.isVirtual) {
             val sources: Int = device.sources
             val isController =
                 (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
                 (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
-            if (isController) descriptions.add(device.name + " · id=" + device.id + " · sources=" + sources)
+            if (isController) descriptions.add(
+                extra100CleanDisplayText(device.name, 80).ifBlank { "Unnamed controller" } +
+                    " · id=" + device.id + " · sources=" + sources
+            )
         }
     }
     return if (descriptions.isEmpty()) "No Android gamepad/joystick input device is currently reported."
@@ -403,11 +466,11 @@ fun TouchStationExtra100Suite(settings: Settings) {
     val actionMessage = remember { mutableStateOf("No Extra 100 action performed.") }
     val fileReport = remember { mutableStateOf("No game file has been inspected.") }
     val transferReport = remember { mutableStateOf("No save-data file transfer performed.") }
-    val selectedSave = remember {
-        mutableStateOf(prefs.getString("selectedSaveUri", null)?.let { runCatching { Uri.parse(it) }.getOrNull() })
+    val selectedSave = remember(prefs) {
+        mutableStateOf(extra100RestorePersistedReadUri(context, "selectedSaveUri"))
     }
-    val selectedRestore = remember {
-        mutableStateOf(prefs.getString("selectedRestoreUri", null)?.let { runCatching { Uri.parse(it) }.getOrNull() })
+    val selectedRestore = remember(prefs) {
+        mutableStateOf(extra100RestorePersistedReadUri(context, "selectedRestoreUri"))
     }
     val controllers = remember { mutableStateOf(extra100ControllerSummary()) }
     val lastInput = remember { mutableStateOf("No controller key received yet.") }
@@ -453,8 +516,7 @@ fun TouchStationExtra100Suite(settings: Settings) {
         val source = selectedSave.value
         if (source != null && destination != null) scope.launch {
             transferReport.value = withContext(Dispatchers.IO) {
-                runCatching { extra100CopyAndVerify(context, source, destination) }
-                    .getOrElse { "Backup failed: " + (it.message ?: "unknown error") }
+                extra100TransferResult(context, source, destination, "Backup")
             }
         }
     }
@@ -476,8 +538,7 @@ fun TouchStationExtra100Suite(settings: Settings) {
         val source = selectedRestore.value
         if (source != null && destination != null) scope.launch {
             transferReport.value = withContext(Dispatchers.IO) {
-                runCatching { extra100CopyAndVerify(context, source, destination) }
-                    .getOrElse { "Restore copy failed: " + (it.message ?: "unknown error") }
+                extra100TransferResult(context, source, destination, "Restore copy")
             }
         }
     }
@@ -560,8 +621,16 @@ fun TouchStationExtra100Suite(settings: Settings) {
                 modifier = Modifier.fillMaxWidth().clickable { runCatching { focusRequester.requestFocus() } }
                     .focusRequester(focusRequester)
                     .onPreviewKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown) {
-                            lastInput.value = "Compose controller key: " + event.key.toString()
+                        val nativeEvent = event.nativeKeyEvent
+                        val device = InputDevice.getDevice(nativeEvent.deviceId)
+                        val sources = device?.sources ?: nativeEvent.source
+                        val isPhysicalController = device != null && !device.isVirtual && (
+                            (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                            (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
+                            (sources and InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
+                        )
+                        if (event.type == KeyEventType.KeyDown && isPhysicalController) {
+                            lastInput.value = "Controller key: " + event.key.toString()
                             true
                         } else false
                     }.focusable().padding(10.dp),

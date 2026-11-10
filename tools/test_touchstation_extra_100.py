@@ -96,7 +96,8 @@ class Extra100Tests(unittest.TestCase):
         self.assertIn('marker[markerCount++] = one.toByte()', SOURCE)
 
     def test_copy_refuses_same_uri_and_cleans_partial_destination(self):
-        self.assertIn('require(source != destination)', SOURCE)
+        self.assertIn('extra100SameDocument(context, source, destination)', SOURCE)
+        self.assertIn('DocumentsContract.getDocumentId(first) == DocumentsContract.getDocumentId(second)', SOURCE)
         self.assertIn('contentResolver.delete(destination, null, null)', SOURCE)
         self.assertIn('Destination checksum differs from source', SOURCE)
 
