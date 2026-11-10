@@ -31,6 +31,24 @@ class ExtraErrorUxTests(unittest.TestCase):
             # Re-running against a complete installation must be idempotent.
             PATCHER.patch(Path(tmp))
 
+    def test_finale_swipe_and_error_history_integration_is_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "app" / PATCHER.TARGET
+            target.parent.mkdir(parents=True)
+            target.write_text(
+                "object TouchStationFinaleErrorHistory { fun record(x: String) {} }\\n"
+                "fun banner() { TouchStationFinaleErrorHistory.record(fullMessage); "
+                "TouchStationFinaleErrorHistory.explanation(shown); "
+                "detectVerticalDragGestures {}; verticalDrag.value <= -72f; "
+                ".graphicsLayer { translationY = verticalDrag.value }; "
+                "onDragCancel = { verticalDrag.value = 0f }; "
+                "slideOutVertically(tween(200)) { -it } }\\n",
+                encoding="utf-8",
+            )
+            original = target.read_text(encoding="utf-8")
+            PATCHER.patch(Path(tmp))
+            self.assertEqual(target.read_text(encoding="utf-8"), original)
+
     def test_partial_existing_swipe_handler_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "app" / PATCHER.TARGET

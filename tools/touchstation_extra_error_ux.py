@@ -25,6 +25,27 @@ def patch(source_root: Path) -> None:
     if not TEMPLATE.is_file():
         raise SystemExit("TouchStation Extra error UX template is missing: " + str(TEMPLATE))
     current = target.read_text(encoding="utf-8")
+    # Finale installs the swipe gesture first and also records full errors in its persistent
+    # history. Preserve that integrated implementation; replacing the whole file here would
+    # silently remove the history and critical-error explanation.
+    if "TouchStationFinaleErrorHistory" in current:
+        integrated_markers = (
+            "detectVerticalDragGestures",
+            "TouchStationFinaleErrorHistory.record(fullMessage)",
+            "TouchStationFinaleErrorHistory.explanation(shown)",
+            "verticalDrag.value <= -72f",
+            ".graphicsLayer { translationY = verticalDrag.value }",
+            "onDragCancel = { verticalDrag.value = 0f }",
+            "slideOutVertically(tween(200)) { -it }",
+        )
+        missing_integrated = [marker for marker in integrated_markers if marker not in current]
+        if missing_integrated:
+            raise SystemExit(
+                "Finale error UX is only partially installed; missing: "
+                + ", ".join(missing_integrated)
+            )
+        print("Finale swipe-up banner and persistent error history are already integrated; preserving them.")
+        return
     if "detectVerticalDragGestures" in current:
         missing_existing = [marker for marker in NEW_MARKERS if marker not in current]
         if missing_existing:
