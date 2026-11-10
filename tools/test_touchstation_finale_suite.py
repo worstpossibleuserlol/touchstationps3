@@ -194,6 +194,7 @@ class HomeViewModel {
             "MediaStore.Downloads.EXTERNAL_CONTENT_URI",
             "logcat",
             "GPU fences",
+            "Video@@Disable FIFO Reordering",
             "Core@@RSX FIFO Fetch Accuracy",
             "Video@@Driver Wake-Up Delay",
             "Ordered & Atomic",
@@ -350,8 +351,43 @@ fun GameErrorBanner() {
         self.assertIn("TouchStation.log", source)
         self.assertIn("MediaStore.Downloads.EXTERNAL_CONTENT_URI", source)
         self.assertIn('JSONObject.quote("Ordered & Atomic")', source)
+        self.assertIn('val reorderingValue = "true"', source)
+        self.assertIn('TOUCHSTATION_FINALE_FIFO_REORDERING_PATH', source)
         self.assertIn('val delayValue = "20"', source)
         self.assertIn("SettingsScope.Game", source)
+
+
+    def test_gta_iv_fifo_boot_defaults_are_scoped_to_bles00229(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary)
+            defaults = app / "src/main/java/com/armsx2/config/GameDefaults.kt"
+            defaults.parent.mkdir(parents=True)
+            defaults.write_text(
+                """package com.armsx2.config
+object GameDefaults {
+    private val BY_SERIAL = mapOf(
+        // God of War: Ascension:
+        "BCUS98232" to mapOf("Core@@Stub PPU Traps" to "1"),
+    )
+    private val STOCK = mapOf(
+        "Video@@Disable FIFO Reordering" to "false",
+        "Core@@RSX FIFO Fetch Accuracy" to "\\"Atomic\\"",
+        "Video@@Driver Wake-Up Delay" to "0",
+    )
+}
+""",
+                encoding="utf-8",
+            )
+            FINALE.patch_gta_iv_game_defaults(app)
+            result = defaults.read_text(encoding="utf-8")
+            self.assertIn('"BLES00229" to mapOf(', result)
+            self.assertIn('"Video@@Disable FIFO Reordering" to "true"', result)
+            self.assertIn('"Core@@RSX FIFO Fetch Accuracy" to "\\"Ordered & Atomic\\""', result)
+            self.assertIn('"Video@@Driver Wake-Up Delay" to "20"', result)
+            self.assertEqual(result.count('"BLES00229" to mapOf('), 1)
+            self.assertIn('"Video@@Disable FIFO Reordering" to "false"', result)
+            with self.assertRaises(SystemExit):
+                FINALE.patch_gta_iv_game_defaults(app)
 
     def test_native_metrics_are_not_fabricated(self) -> None:
         source = FINALE.KOTLIN_SOURCE
