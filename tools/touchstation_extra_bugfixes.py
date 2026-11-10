@@ -98,6 +98,57 @@ def patch_runtime(path: Path) -> None:
             invoke {""",
         "native-aware game start gate")
     source = replace_once(source,
+        """            currentGame.value = info
+            launchedExternally = external
+            m_szGamefile = uri
+            synchronized(vmLifecycleLock) {
+                if (eState.value != EmuState.STOPPED || vmStopInProgress || vmRunLoopActive) {
+                    vmRestartAfterStop = true
+                }
+            }
+            if (eState.value == EmuState.STOPPED && !vmStopInProgress && !vmRunLoopActive)
+                start()
+            else
+                stop(restartAfterStop = true)""",
+        """            currentGame.value = info
+            launchedExternally = external
+            m_szGamefile = uri
+
+            // A game-card tap can arrive after the native VM has stopped but before the
+            // frontend enum has reconciled from RUNNING/STOPPING to STOPPED. Only normalize
+            // that state when the native query positively reports idle and no app-side
+            // run loop or shutdown owner remains.
+            val nativeReadyForLaunch = nativeReady.value
+            val nativeActiveForLaunch = nativeReadyForLaunch &&
+                runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+            var recoveredFrontendState: EmuState? = null
+            if (nativeReadyForLaunch && !nativeActiveForLaunch) {
+                synchronized(vmLifecycleLock) {
+                    if (!vmStopInProgress && !vmRunLoopActive && eState.value != EmuState.STOPPED) {
+                        recoveredFrontendState = eState.value
+                        eState.value = EmuState.STOPPED
+                    }
+                }
+            }
+            recoveredFrontendState?.let { previous ->
+                TouchStationExtraShutdownDiagnostics.record(
+                    com.armsx2.Pasx2Application.appContext,
+                    "launch-recovered-stale-frontend-state",
+                    "Previous frontend state=" + previous + "; native VM was idle before a new game-card launch.",
+                )
+            }
+
+            synchronized(vmLifecycleLock) {
+                if (eState.value != EmuState.STOPPED || vmStopInProgress || vmRunLoopActive) {
+                    vmRestartAfterStop = true
+                }
+            }
+            if (eState.value == EmuState.STOPPED && !vmStopInProgress && !vmRunLoopActive)
+                start()
+            else
+                stop(restartAfterStop = true)""",
+        "launch entry stale frontend-state reconciliation")
+    source = replace_once(source,
         """            val shouldStart = synchronized(vmLifecycleLock) {
                 if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED) {""",
         """            val nativeActive = nativeReady.value && runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
