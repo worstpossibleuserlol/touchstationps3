@@ -48,13 +48,39 @@ private data class GameLabDeviceSnapshot(
     val nativeReady: Boolean,
 )
 
-private fun gameLabId(serial: String?): String =
+private fun gameLabLegacyId(serial: String?): String =
     serial.orEmpty().filter { it.isLetterOrDigit() }.uppercase(Locale.ROOT).ifBlank { "unknown" }
 
-private fun gameLabDeviceKey(): String =
+private fun gameLabId(serial: String?): String {
+    val raw = serial.orEmpty().trim()
+    if (raw.isBlank()) return "unknown"
+    val prefix = raw.filter { it.isLetterOrDigit() }.uppercase(Locale.ROOT).take(20).ifBlank { "ID" }
+    val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+        .take(6).joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+    return "$prefix-$digest"
+}
+
+private fun gameLabLegacyDeviceKey(): String =
     listOf(Build.MANUFACTURER, Build.MODEL, Build.HARDWARE, Build.SUPPORTED_ABIS.firstOrNull().orEmpty())
         .joinToString("|").lowercase(Locale.ROOT)
         .map { if (it.isLetterOrDigit()) it else '_' }.joinToString("").take(100)
+
+private fun gameLabDeviceKey(): String {
+    val raw = listOf(Build.MANUFACTURER, Build.MODEL, Build.HARDWARE, Build.SUPPORTED_ABIS.firstOrNull().orEmpty())
+        .joinToString("|").lowercase(Locale.ROOT)
+    val prefix = raw.map { if (it.isLetterOrDigit()) it else '_' }.joinToString("").take(40).ifBlank { "device" }
+    val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+        .take(6).joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+    return "$prefix-$digest"
+}
+
+private fun gameLabReadMigrated(context: Context, key: String, legacyKey: String): String? {
+    val prefs = context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE)
+    prefs.getString(key, null)?.let { return it }
+    val legacy = prefs.getString(legacyKey, null) ?: return null
+    prefs.edit().putString(key, legacy).remove(legacyKey).apply()
+    return legacy
+}
 
 private fun gameLabSnapshot(context: Context): GameLabDeviceSnapshot {
     val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
@@ -104,12 +130,25 @@ private fun gameLabThermalLabel(status: Int?): String = when (status) {
     else -> "Unknown (" + status + ")"
 }
 
+private fun gameLabCanonicalJson(value: Any?): String = when (value) {
+    null, JSONObject.NULL -> "null"
+    is JSONObject -> {
+        val keys = mutableListOf<String>()
+        val iterator = value.keys()
+        while (iterator.hasNext()) keys += iterator.next()
+        keys.sorted().joinToString(prefix = "{", postfix = "}", separator = ",") {
+            JSONObject.quote(it) + ":" + gameLabCanonicalJson(value.opt(it))
+        }
+    }
+    is JSONArray -> (0 until value.length()).joinToString(prefix = "[", postfix = "]", separator = ",") {
+        gameLabCanonicalJson(value.opt(it))
+    }
+    is String -> JSONObject.quote(value)
+    else -> value.toString()
+}
+
 private fun gameLabSettingsHash(settings: Settings): String {
-    val json = settings.toJson()
-    val keys = mutableListOf<String>()
-    val iterator = json.keys()
-    while (iterator.hasNext()) keys += iterator.next()
-    val canonical = keys.sorted().joinToString("\n") { key -> key + "=" + json.opt(key).toString() }
+    val canonical = gameLabCanonicalJson(settings.toJson())
     return MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
 }
@@ -123,15 +162,36 @@ private fun gameLabActiveKey(serial: String?): String =
 private fun gameLabProfileKey(serial: String?): String =
     "profile." + gameLabDeviceKey() + "." + gameLabId(serial)
 
+private fun gameLabLegacyHistoryKey(serial: String?): String =
+    "history." + gameLabLegacyDeviceKey() + "." + gameLabLegacyId(serial)
+
+private fun gameLabLegacyActiveKey(serial: String?): String =
+    "active." + gameLabLegacyDeviceKey() + "." + gameLabLegacyId(serial)
+
+private fun gameLabLegacyProfileKey(serial: String?): String =
+    "profile." + gameLabLegacyDeviceKey() + "." + gameLabLegacyId(serial)
+
+private fun gameLabRecoveryKey(serial: String?): String =
+    "activeRecovery." + gameLabDeviceKey() + "." + gameLabId(serial)
+
+private fun gameLabReadProfileRaw(context: Context, serial: String?): String? =
+    gameLabReadMigrated(context, gameLabProfileKey(serial), gameLabLegacyProfileKey(serial))
+
 private fun gameLabReadHistory(context: Context, serial: String?): JSONArray = runCatching {
-    JSONArray(context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE)
-        .getString(gameLabHistoryKey(serial), "[]") ?: "[]")
+    JSONArray(gameLabReadMigrated(context, gameLabHistoryKey(serial), gameLabLegacyHistoryKey(serial)) ?: "[]")
 }.getOrDefault(JSONArray())
 
-private fun gameLabReadActive(context: Context, serial: String?): JSONObject? = runCatching {
-    context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE)
-        .getString(gameLabActiveKey(serial), null)?.let { JSONObject(it) }
-}.getOrNull()
+private fun gameLabReadActive(context: Context, serial: String?): JSONObject? {
+    val prefs = context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE)
+    val key = gameLabActiveKey(serial)
+    val raw = gameLabReadMigrated(context, key, gameLabLegacyActiveKey(serial)) ?: return null
+    val active = runCatching { JSONObject(raw) }.getOrNull()
+    if (active == null || active.optLong("startedAt", 0L) <= 0L || active.optJSONArray("events") == null) {
+        prefs.edit().remove(key).putBoolean(gameLabRecoveryKey(serial), true).apply()
+        return null
+    }
+    return active
+}
 
 private fun gameLabEvent(stage: String, settings: Settings, snapshot: GameLabDeviceSnapshot): JSONObject =
     JSONObject()
@@ -150,7 +210,9 @@ private fun gameLabStart(
 ): String {
     if (serial.isNullOrBlank()) return "Select a game with a title ID before starting a test."
     val prefs = context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE)
-    if (prefs.contains(gameLabActiveKey(serial))) return "An unfinished test already exists for this game on this device."
+    if (gameLabReadActive(context, serial) != null) return "An unfinished test already exists for this game on this device."
+    val recoveredCorruptRecord = prefs.getBoolean(gameLabRecoveryKey(serial), false)
+    prefs.edit().remove(gameLabRecoveryKey(serial)).apply()
     val now = System.currentTimeMillis()
     val events = JSONArray().put(gameLabEvent("Test session started by user", settings, snapshot))
     val session = JSONObject()
@@ -164,7 +226,8 @@ private fun gameLabStart(
         .put("settingsSha256", gameLabSettingsHash(settings))
         .put("events", events)
     prefs.edit().putString(gameLabActiveKey(serial), session.toString()).apply()
-    return "Started a user-controlled compatibility test record. It does not launch or benchmark the game automatically."
+    return (if (recoveredCorruptRecord) "An unreadable unfinished record was cleared. " else "") +
+        "Started a user-controlled compatibility test record. It does not launch or benchmark the game automatically."
 }
 
 private fun gameLabRecord(
@@ -241,8 +304,9 @@ private fun gameLabRegressionSummary(context: Context, serial: String?, settings
     else "No same-settings failure-after-stable pattern is recorded."
 }
 
-private fun gameLabSaveProfile(context: Context, serial: String?, settings: Settings): String {
+private fun gameLabSaveProfile(context: Context, serial: String?, settings: Settings, gameScope: Boolean): String {
     if (serial.isNullOrBlank()) return "Select a game before saving a per-game profile."
+    if (!gameScope) return "Select per-game settings scope before saving a game profile."
     return runCatching {
         context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE).edit()
             .putString(gameLabProfileKey(serial), settings.toJson().toString()).apply()
@@ -250,16 +314,21 @@ private fun gameLabSaveProfile(context: Context, serial: String?, settings: Sett
     }.getOrElse { "Profile save failed: " + (it.message ?: "unknown error") }
 }
 
-private fun gameLabProfileDiff(context: Context, serial: String?, settings: Settings): String {
-    val raw = context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE)
-        .getString(gameLabProfileKey(serial), null) ?: return "No saved profile exists for this game on this device."
+private fun gameLabProfileDiff(context: Context, serial: String?, settings: Settings, gameScope: Boolean): String {
+    if (!gameScope) return "Select per-game settings scope before comparing a game profile."
+    val raw = gameLabReadProfileRaw(context, serial)
+        ?: return "No saved profile exists for this game on this device."
     return runCatching {
         val saved = JSONObject(raw)
         val current = settings.toJson()
         val keys = mutableSetOf<String>()
-        val iterator = current.keys()
-        while (iterator.hasNext()) keys += iterator.next()
-        val changed = keys.sorted().filter { saved.opt(it)?.toString() != current.opt(it)?.toString() }
+        val savedKeys = saved.keys()
+        while (savedKeys.hasNext()) keys += savedKeys.next()
+        val currentKeys = current.keys()
+        while (currentKeys.hasNext()) keys += currentKeys.next()
+        val changed = keys.sorted().filter {
+            saved.has(it) != current.has(it) || saved.opt(it)?.toString() != current.opt(it)?.toString()
+        }
         if (changed.isEmpty()) "Saved profile and current settings match at the top-level JSON fields."
         else "Different fields: " + changed.take(12).joinToString() +
             if (changed.size > 12) " (+" + (changed.size - 12) + " more)" else ""
@@ -267,8 +336,7 @@ private fun gameLabProfileDiff(context: Context, serial: String?, settings: Sett
 }
 
 private fun gameLabLoadProfile(context: Context, serial: String?): Settings? = runCatching {
-    val raw = context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE)
-        .getString(gameLabProfileKey(serial), null) ?: return null
+    val raw = gameLabReadProfileRaw(context, serial) ?: return null
     Settings.fromJson(JSONObject(raw))
 }.getOrNull()
 
@@ -305,18 +373,17 @@ private fun gameLabApply(candidate: Settings, onApply: (Settings) -> Boolean): S
     else "Settings were not confirmed. The previous settings should be checked before another launch."
 }
 
-private fun gameLabShare(context: Context, subject: String, report: String) {
-    runCatching {
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, subject)
-            putExtra(Intent.EXTRA_TEXT, report)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(Intent.createChooser(send, "Share TouchStation Game Lab report")
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+private fun gameLabShare(context: Context, subject: String, report: String): Boolean = runCatching {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, report)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-}
+    context.startActivity(Intent.createChooser(send, "Share TouchStation Game Lab report")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    true
+}.getOrDefault(false)
 
 @Composable
 fun TouchStationExtraGameLabSuite(settings: Settings, onApply: (Settings) -> Boolean) {
@@ -332,7 +399,7 @@ fun TouchStationExtraGameLabSuite(settings: Settings, onApply: (Settings) -> Boo
     val prefs = remember(context) { context.getSharedPreferences(GAME_LAB_PREFS, Context.MODE_PRIVATE) }
     val active = remember(serial, prefs) { mutableStateOf(gameLabReadActive(context, serial)?.toString()) }
     val savedProfile = remember(serial, prefs) {
-        mutableStateOf(prefs.getString(gameLabProfileKey(serial), null))
+        mutableStateOf(gameLabReadProfileRaw(context, serial))
     }
     val canApply = !serial.isNullOrBlank() && gameScope
     val currentHash = gameLabSettingsHash(settings)
@@ -403,10 +470,10 @@ fun TouchStationExtraGameLabSuite(settings: Settings, onApply: (Settings) -> Boo
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = {
-                        message.value = gameLabSaveProfile(context, serial, settings)
-                        savedProfile.value = prefs.getString(gameLabProfileKey(serial), null)
+                        message.value = gameLabSaveProfile(context, serial, settings, gameScope)
+                        savedProfile.value = gameLabReadProfileRaw(context, serial)
                     },
-                    enabled = !serial.isNullOrBlank(),
+                    enabled = canApply,
                     modifier = Modifier.weight(1f),
                 ) { Text("Save current profile") }
                 OutlinedButton(
@@ -423,8 +490,8 @@ fun TouchStationExtraGameLabSuite(settings: Settings, onApply: (Settings) -> Boo
                 ) { Text("Restore saved profile") }
             }
             OutlinedButton(
-                onClick = { message.value = gameLabProfileDiff(context, serial, settings) },
-                enabled = savedProfile.value != null,
+                onClick = { message.value = gameLabProfileDiff(context, serial, settings, gameScope) },
+                enabled = canApply && savedProfile.value != null,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Compare saved profile with current settings") }
 
@@ -526,8 +593,9 @@ fun TouchStationExtraGameLabSuite(settings: Settings, onApply: (Settings) -> Boo
                         appendLine("Observations are user-entered. Android process exits are not proof of a PS3 guest crash.")
                         appendLine("The native bridge exposes a coarse PPU compile-stretch indicator; per-worker PPU/SPU counters, FIFO/shader traces and guest crash callbacks remain unavailable unless exported by the pinned native core.")
                     }
-                    gameLabShare(context, "TouchStation Game Compatibility Lab report", report)
-                    message.value = "Opened Android share sheet for the Game Lab report."
+                    message.value = if (gameLabShare(context, "TouchStation Game Compatibility Lab report", report))
+                        "Opened Android share sheet for the Game Lab report."
+                    else "Could not open the Android share sheet; check whether a sharing app is available."
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Share game compatibility report") }

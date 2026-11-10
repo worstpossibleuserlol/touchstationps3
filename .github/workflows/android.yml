@@ -131,7 +131,7 @@ jobs:
           echo "Verified and staged native PS3 engine, JNI bridge, and graphics libraries."
 
       - name: Validate TouchStation build script
-        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/touchstation_extra_suite.py tools/test_touchstation_extra_suite.py tools/touchstation_extra_advanced.py tools/test_touchstation_extra_advanced.py tools/touchstation_extra_100.py tools/test_touchstation_extra_100.py tools/touchstation_extra_game_lab.py tools/test_touchstation_extra_game_lab.py tools/touchstation_extra_bugfixes.py tools/test_touchstation_extra_bugfixes.py tools/touchstation_extra_error_ux.py tools/test_touchstation_extra_error_ux.py tools/add_gpl_modification_notices.py
+        run: python3 -m py_compile tools/prepare_source_build.py tools/touchstation_control_center.py tools/touchstation_v7_performance.py tools/touchstation_v8_suite.py tools/touchstation_v9_auto.py tools/touchstation_v10_suite.py tools/touchstation_v11_suite.py tools/touchstation_finale_suite.py tools/test_touchstation_finale_suite.py tools/touchstation_extra_suite.py tools/test_touchstation_extra_suite.py tools/touchstation_extra_advanced.py tools/test_touchstation_extra_advanced.py tools/touchstation_extra_100.py tools/test_touchstation_extra_100.py tools/touchstation_extra_game_lab.py tools/test_touchstation_extra_game_lab.py tools/touchstation_extra_bugfixes.py tools/test_touchstation_extra_bugfixes.py tools/touchstation_extra_error_ux.py tools/test_touchstation_extra_error_ux.py tools/test_touchstation_extra_bugfixes_20_more.py tools/add_gpl_modification_notices.py
 
       - name: Run TouchStation Finale patcher regression tests
         run: python3 tools/test_touchstation_finale_suite.py
@@ -153,6 +153,9 @@ jobs:
 
       - name: Run TouchStation Extra game-error UX regression tests
         run: python3 tools/test_touchstation_extra_error_ux.py
+
+      - name: Run TouchStation Extra 20 additional bug-fix regression tests
+        run: python3 tools/test_touchstation_extra_bugfixes_20_more.py
 
       - name: Apply TouchStation branding, pause menu, controls and advanced settings
         run: |
@@ -230,7 +233,7 @@ jobs:
           # Package the exact patched source and all build scripts for GPL source distribution.
           mkdir -p "$UPSTREAM/touchstation-build/tools" "$UPSTREAM/touchstation-build/docs" "$UPSTREAM/touchstation-build/.github/workflows"
           cp LICENSE README.md THIRD_PARTY_NOTICES.md SOURCE_DISTRIBUTION.md "$UPSTREAM/touchstation-build/"
-          cp docs/FINALE_FEATURES.md docs/EXTRA_100_FEATURES.md docs/EXTRA_100_BUGFIXES.md docs/EXTRA_GAME_COMPATIBILITY_70.md docs/EXTRA_ERROR_UX_20.md docs/EXTRA_100_BUGFIXES_20_MORE.md "$UPSTREAM/touchstation-build/docs/"
+          cp docs/FINALE_FEATURES.md docs/EXTRA_100_FEATURES.md docs/EXTRA_100_BUGFIXES.md docs/EXTRA_GAME_COMPATIBILITY_70.md docs/EXTRA_ERROR_UX_20.md docs/EXTRA_100_BUGFIXES_20_MORE.md docs/EXTRA_100_BUGFIXES_20_ADDITIONAL.md "$UPSTREAM/touchstation-build/docs/"
           cp tools/*.py "$UPSTREAM/touchstation-build/tools/"
           mkdir -p "$UPSTREAM/touchstation-build/tools/templates"
           cp tools/templates/TouchStationExtraAdvancedSuite.kt tools/templates/TouchStationExtra100Suite.kt tools/templates/TouchStationExtraGameLab.kt tools/templates/TouchStationExtraShutdownSuite.kt tools/templates/TouchStationExtraErrorUX.kt "$UPSTREAM/touchstation-build/tools/templates/"
@@ -262,6 +265,7 @@ jobs:
           grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_100_FEATURES.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_100_BUGFIXES.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_100_BUGFIXES_20_MORE.md" "$RUNNER_TEMP/source-archive-entries.txt"
+          grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_100_BUGFIXES_20_ADDITIONAL.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/docs/EXTRA_GAME_COMPATIBILITY_70.md" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/tools/templates/TouchStationExtraGameLab.kt" "$RUNNER_TEMP/source-archive-entries.txt"
           grep -Fq "armsx3-source/touchstation-build/tools/templates/TouchStationExtraShutdownSuite.kt" "$RUNNER_TEMP/source-archive-entries.txt"
@@ -467,9 +471,20 @@ jobs:
           grep -Fq 'TouchStationControllerWarning' "$APP/src/main/java/com/armsx2/ui/WindowImpl.kt"
           ERROR_BANNER="$APP/src/main/java/com/armsx2/ui/emulation/GameErrorBanner.kt"
           grep -Fq 'detectVerticalDragGestures' "$ERROR_BANNER"
-          grep -Fq 'GAME_ERROR_DISMISS_THRESHOLD_DP = 56' "$ERROR_BANNER"
-          grep -Fq 'slideOutVertically(tween(220)) { -it }' "$ERROR_BANNER"
-          grep -Fq 'Swipe up or tap to dismiss' "$ERROR_BANNER"
+          grep -Fq 'detectVerticalDragGestures' "$ERROR_BANNER"
+          # The Extra banner uses 56dp/220ms; Finale uses a 72px upward threshold/200ms.
+          if ! grep -Eq 'GAME_ERROR_DISMISS_THRESHOLD_DP = 56|verticalDrag.value <= -72f' "$ERROR_BANNER"; then
+            echo "Game error banner has no recognised upward-dismiss threshold" >&2
+            exit 1
+          fi
+          if ! grep -Eq 'slideOutVertically\(tween\((200|220)\)\) \{ -it \}' "$ERROR_BANNER"; then
+            echo "Game error banner has no recognised upward exit animation" >&2
+            exit 1
+          fi
+          if ! grep -Eq 'Swipe up or tap to dismiss|Swipe this notice upward to dismiss it' "$ERROR_BANNER"; then
+            echo "Game error banner is missing its swipe-dismiss guidance" >&2
+            exit 1
+          fi
           grep -Fq 'Controller disconnected' "$APP/src/main/java/com/armsx2/ui/controls/TouchStationControllerMonitor.kt"
           grep -Fq 'Gameplay requires a physical controller.' "$ABOUT"
           grep -Fq 'text = "TouchStation"' "$APP/src/main/java/com/armsx2/ui/common/ArmsComponents.kt"

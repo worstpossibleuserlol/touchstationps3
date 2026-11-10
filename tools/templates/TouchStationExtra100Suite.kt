@@ -283,7 +283,7 @@ private fun extra100ControllerSummary(): String {
     val deviceIds: IntArray = InputDevice.getDeviceIds()
     for (id in deviceIds) {
         val device: InputDevice? = InputDevice.getDevice(id)
-        if (device != null) {
+        if (device != null && !device.isVirtual) {
             val sources: Int = device.sources
             val isController =
                 (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
@@ -363,13 +363,16 @@ private fun extra100SelfChecks(context: Context, settings: Settings, serial: Str
     ).joinToString("\n")
 }
 
-private fun extra100Share(context: Context, report: String) {
+private fun extra100Share(context: Context, report: String): Boolean = runCatching {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, report)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    context.startActivity(Intent.createChooser(intent, "Share TouchStation Extra report"))
-}
+    context.startActivity(Intent.createChooser(intent, "Share TouchStation Extra report")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    true
+}.getOrDefault(false)
 
 private fun extra100Duration(milliseconds: Long): String {
     val seconds = (milliseconds / 1000L).coerceAtLeast(0L)
@@ -433,13 +436,15 @@ fun TouchStationExtra100Suite(settings: Settings) {
         }
     }
     val saveFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        selectedSave.value = uri
         if (uri != null) {
+            selectedSave.value = uri
             val retained = extra100PersistReadPermission(context, uri)
             if (retained) prefs.edit().putString("selectedSaveUri", uri.toString()).apply()
             else prefs.edit().remove("selectedSaveUri").apply()
             transferReport.value = if (retained) "Selected save-data document and selection retained for future backup."
             else "Selected save-data document. Temporary access only; reselect it after TouchStation restarts."
+        } else {
+            transferReport.value = "Save-source picker cancelled; the previous selection was kept."
         }
     }
     val backupDestinationPicker = rememberLauncherForActivityResult(
@@ -454,13 +459,15 @@ fun TouchStationExtra100Suite(settings: Settings) {
         }
     }
     val restoreFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        selectedRestore.value = uri
         if (uri != null) {
+            selectedRestore.value = uri
             val retained = extra100PersistReadPermission(context, uri)
             if (retained) prefs.edit().putString("selectedRestoreUri", uri.toString()).apply()
             else prefs.edit().remove("selectedRestoreUri").apply()
             transferReport.value = if (retained) "Selected backup document and selection retained for future restore."
             else "Selected backup document. Temporary access only; reselect it after TouchStation restarts."
+        } else {
+            transferReport.value = "Restore-source picker cancelled; the previous selection was kept."
         }
     }
     val restoreDestinationPicker = rememberLauncherForActivityResult(
@@ -593,12 +600,13 @@ fun TouchStationExtra100Suite(settings: Settings) {
                 modifier = Modifier.fillMaxWidth()) { Text("Capture Android performance snapshot") }
             Text(extra100CompareMetrics(context, serial), style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = {
-                extra100Share(context, "TouchStation Extra · app-side diagnostics\n" +
+                actionMessage.value = if (extra100Share(context, "TouchStation Extra · app-side diagnostics\n" +
                     extra100SelfChecks(context, settings, serial) + "\n" +
                     "Performance comparison: " + extra100CompareMetrics(context, serial) + "\n" +
                     "Compatibility record: " + compatibility.value +
-                    "\nFirmware/update notes are user-entered and require manual verification.")
-                actionMessage.value = "Opened Android share sheet for the app-side diagnostic report."
+                    "\nFirmware/update notes are user-entered and require manual verification."))
+                    "Opened Android share sheet for the app-side diagnostic report."
+                else "Could not open the Android share sheet; check whether a sharing app is available."
             }, modifier = Modifier.fillMaxWidth()) { Text("Share Extra 100 diagnostic report") }
             OutlinedButton(onClick = { actionMessage.value = extra100SelfChecks(context, settings, serial) },
                 modifier = Modifier.fillMaxWidth()) { Text("Run app-side regression and readiness checks") }

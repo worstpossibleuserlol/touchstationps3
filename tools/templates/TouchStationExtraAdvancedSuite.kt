@@ -48,6 +48,7 @@ import com.armsx3.core.ARMSX3
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -60,11 +61,13 @@ object TouchStationExtraSettingsHistory {
         runCatching {
             val oldJson = before.toJson()
             val newJson = after.toJson()
-            val keys = newJson.keys()
-            val changed = mutableListOf<String>()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                if (oldJson.opt(key)?.toString() != newJson.opt(key)?.toString()) changed += key
+            val keys = mutableSetOf<String>()
+            val oldKeys = oldJson.keys()
+            while (oldKeys.hasNext()) keys += oldKeys.next()
+            val newKeys = newJson.keys()
+            while (newKeys.hasNext()) keys += newKeys.next()
+            val changed = keys.filter {
+                oldJson.has(it) != newJson.has(it) || oldJson.opt(it)?.toString() != newJson.opt(it)?.toString()
             }
             if (changed.isEmpty()) return
             val prefs = context.getSharedPreferences(EXTRA_ADVANCED_PREFS, Context.MODE_PRIVATE)
@@ -108,21 +111,51 @@ private fun extraAdvancedActivity(context: Context): Activity? {
     return null
 }
 
-private fun extraAdvancedDeviceId(): String =
+private fun extraAdvancedLegacyDeviceId(): String =
     listOf(Build.MANUFACTURER, Build.MODEL, Build.HARDWARE, Build.SUPPORTED_ABIS.firstOrNull().orEmpty())
         .joinToString("|").lowercase(Locale.ROOT)
         .map { if (it.isLetterOrDigit()) it else '_' }.joinToString("").take(100)
 
-private fun extraAdvancedGameId(serial: String?): String =
+private fun extraAdvancedDeviceId(): String {
+    val raw = listOf(Build.MANUFACTURER, Build.MODEL, Build.HARDWARE, Build.SUPPORTED_ABIS.firstOrNull().orEmpty())
+        .joinToString("|").lowercase(Locale.ROOT)
+    val prefix = raw.map { if (it.isLetterOrDigit()) it else '_' }.joinToString("").take(40).ifBlank { "device" }
+    val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+        .take(6).joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+    return "$prefix-$digest"
+}
+
+private fun extraAdvancedLegacyGameId(serial: String?): String =
     serial.orEmpty().filter { it.isLetterOrDigit() }.uppercase(Locale.ROOT).ifBlank { "unknown" }
+
+private fun extraAdvancedGameId(serial: String?): String {
+    val raw = serial.orEmpty().trim()
+    if (raw.isBlank()) return "unknown"
+    val prefix = raw.filter { it.isLetterOrDigit() }.uppercase(Locale.ROOT).take(20).ifBlank { "ID" }
+    val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+        .take(6).joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+    return "$prefix-$digest"
+}
+
+private fun extraAdvancedReadMigrated(context: Context, key: String, legacyKey: String): String? {
+    val prefs = context.getSharedPreferences(EXTRA_ADVANCED_PREFS, Context.MODE_PRIVATE)
+    prefs.getString(key, null)?.let { return it }
+    val legacy = prefs.getString(legacyKey, null) ?: return null
+    prefs.edit().putString(key, legacy).remove(legacyKey).apply()
+    return legacy
+}
+
+private fun extraAdvancedLegacyGameKey(serial: String?): String =
+    "game-tests." + extraAdvancedLegacyDeviceId() + "." + extraAdvancedLegacyGameId(serial)
 
 private fun extraAdvancedGameKey(serial: String?): String =
     "game-tests." + extraAdvancedDeviceId() + "." + extraAdvancedGameId(serial)
 
 private fun extraAdvancedReadTests(context: Context, serial: String?): JSONArray =
     runCatching {
-        JSONArray(context.getSharedPreferences(EXTRA_ADVANCED_PREFS, Context.MODE_PRIVATE)
-            .getString(extraAdvancedGameKey(serial), "[]") ?: "[]")
+        JSONArray(extraAdvancedReadMigrated(
+            context, extraAdvancedGameKey(serial), extraAdvancedLegacyGameKey(serial),
+        ) ?: "[]")
     }.getOrDefault(JSONArray())
 
 private fun extraAdvancedRecordTest(context: Context, serial: String?, stage: String) {
@@ -307,6 +340,9 @@ private fun extraAdvancedCompatibilityConfidence(context: Context, serial: Strin
 private fun extraAdvancedDeviceProfileKey(serial: String?): String =
     "device-profile." + extraAdvancedDeviceId() + "." + extraAdvancedGameId(serial)
 
+private fun extraAdvancedLegacyDeviceProfileKey(serial: String?): String =
+    "device-profile." + extraAdvancedLegacyDeviceId() + "." + extraAdvancedLegacyGameId(serial)
+
 private fun extraAdvancedSaveDeviceProfile(context: Context, serial: String?, settings: Settings): String {
     if (serial.isNullOrBlank()) return "A game title ID is required."
     return runCatching {
@@ -318,14 +354,19 @@ private fun extraAdvancedSaveDeviceProfile(context: Context, serial: String?, se
 
 private fun extraAdvancedLoadDeviceProfile(context: Context, serial: String?): Settings? =
     runCatching {
-        val raw = context.getSharedPreferences(EXTRA_ADVANCED_PREFS, Context.MODE_PRIVATE)
-            .getString(extraAdvancedDeviceProfileKey(serial), null) ?: return null
+        val raw = extraAdvancedReadMigrated(
+            context, extraAdvancedDeviceProfileKey(serial), extraAdvancedLegacyDeviceProfileKey(serial),
+        ) ?: return null
         Settings.fromJson(JSONObject(raw))
     }.getOrNull()
 
 private fun extraAdvancedProfileKey(serial: String?, gameScope: Boolean, slot: Int): String =
     "profile." + extraAdvancedDeviceId() + "." +
         (if (gameScope) extraAdvancedGameId(serial) else "global") + "." + slot
+
+private fun extraAdvancedLegacyProfileKey(serial: String?, gameScope: Boolean, slot: Int): String =
+    "profile." + extraAdvancedLegacyDeviceId() + "." +
+        (if (gameScope) extraAdvancedLegacyGameId(serial) else "global") + "." + slot
 
 private fun extraAdvancedSaveProfile(
     context: Context, serial: String?, gameScope: Boolean, slot: Int, settings: Settings,
@@ -341,8 +382,11 @@ private fun extraAdvancedSaveProfile(
 
 private fun extraAdvancedLoadProfile(context: Context, serial: String?, gameScope: Boolean, slot: Int): Settings? =
     runCatching {
-        val raw = context.getSharedPreferences(EXTRA_ADVANCED_PREFS, Context.MODE_PRIVATE)
-            .getString(extraAdvancedProfileKey(serial, gameScope, slot), null) ?: return null
+        val raw = extraAdvancedReadMigrated(
+            context,
+            extraAdvancedProfileKey(serial, gameScope, slot),
+            extraAdvancedLegacyProfileKey(serial, gameScope, slot),
+        ) ?: return null
         Settings.fromJson(JSONObject(raw))
     }.getOrNull()
 
