@@ -196,7 +196,7 @@ jobs:
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_extra_game_lab.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
-          python tools/touchstation_extra_compatibility.py \\
+          python tools/touchstation_extra_compatibility.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
           python tools/touchstation_extra_bugfixes.py \
             --source "$RUNNER_TEMP/armsx3-source/android/armsx3-ui"
