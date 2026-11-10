@@ -79,6 +79,9 @@ def main() -> None:
         "full settings read-back verified",
         "native core/JNI",
         "guest crash callbacks",
+        "EXTRA_COMPATIBILITY_FEATURES",
+        "extraCompatibilityFeatureAudit",
+        "Show 50-feature implementation map",
     )
     missing = [marker for marker in required if marker not in source]
     if missing:
@@ -87,6 +90,7 @@ def main() -> None:
     target.write_text(source, encoding="utf-8")
     print("Installed TouchStation Extra - Compatibility Center.")
     print("Added universal and low-memory profiles, exact BLES00229 profile, local per-game records, Android preflight and report sharing.")
+    print("Added the complete 50-feature implementation map with explicit native-core boundaries.")
     print("Native PPU/SPU/RSX changes remain explicitly marked as requiring a rebuilt native core.")
 
 
