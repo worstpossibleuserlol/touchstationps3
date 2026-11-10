@@ -60,12 +60,33 @@ private const val EXTRA100_META_PREFIX = "game-meta."
 private const val EXTRA100_PLAYTIME_PREFIX = "playtime."
 private const val EXTRA100_METRICS_PREFIX = "metrics."
 
-private fun extra100GameId(serial: String?): String =
+private fun extra100LegacyGameId(serial: String?): String =
     serial.orEmpty().filter { it.isLetterOrDigit() }.uppercase(Locale.ROOT).ifBlank { "unknown" }
 
+private fun extra100GameId(serial: String?): String {
+    val raw = serial.orEmpty().trim()
+    if (raw.isBlank()) return "unknown"
+    val prefix = raw.filter { it.isLetterOrDigit() }.uppercase(Locale.ROOT).take(20).ifBlank { "ID" }
+    val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+        .take(6).joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+    return prefix + "-" + digest
+}
+
+private fun extra100PersistReadPermission(context: Context, uri: Uri): Boolean = runCatching {
+    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    true
+}.getOrDefault(false)
+
+private fun extra100SaturatingAdd(left: Long, right: Long): Long =
+    if (right > 0L && left > Long.MAX_VALUE - right) Long.MAX_VALUE
+    else if (right < 0L && left < Long.MIN_VALUE - right) Long.MIN_VALUE
+    else left + right
+
 private fun extra100LoadMeta(context: Context, serial: String?): JSONObject = runCatching {
-    val key = EXTRA100_META_PREFIX + extra100GameId(serial)
-    JSONObject(context.getSharedPreferences(EXTRA100_PREFS, Context.MODE_PRIVATE).getString(key, "{}") ?: "{}")
+    val prefs = context.getSharedPreferences(EXTRA100_PREFS, Context.MODE_PRIVATE)
+    val currentKey = EXTRA100_META_PREFIX + extra100GameId(serial)
+    val legacyKey = EXTRA100_META_PREFIX + extra100LegacyGameId(serial)
+    JSONObject(prefs.getString(currentKey, null) ?: prefs.getString(legacyKey, "{}") ?: "{}")
 }.getOrDefault(JSONObject())
 
 private fun extra100SaveMeta(
@@ -74,27 +95,36 @@ private fun extra100SaveMeta(
 ) {
     if (serial.isNullOrBlank()) return
     val prefs = context.getSharedPreferences(EXTRA100_PREFS, Context.MODE_PRIVATE)
-    val key = EXTRA100_META_PREFIX + extra100GameId(serial)
-    val previous = runCatching { JSONObject(prefs.getString(key, "{}") ?: "{}") }.getOrDefault(JSONObject())
+    val id = extra100GameId(serial)
+    val legacyId = extra100LegacyGameId(serial)
+    val key = EXTRA100_META_PREFIX + id
+    val legacyKey = EXTRA100_META_PREFIX + legacyId
+    val previousRaw = prefs.getString(key, null) ?: prefs.getString(legacyKey, "{}") ?: "{}"
+    val previous = runCatching { JSONObject(previousRaw) }.getOrDefault(JSONObject())
+    val boundedStatus = status.trim().take(80)
     val next = JSONObject()
-        .put("serial", extra100GameId(serial)).put("title", title.trim()).put("category", category.trim())
-        .put("tags", tags.trim()).put("favorite", favorite).put("status", status.trim())
-        .put("knownIssues", knownIssues.trim()).put("firmwareNote", firmwareNote.trim())
-        .put("updateNote", updateNote.trim()).put("notes", notes.trim())
+        .put("serial", serial.trim().take(80)).put("title", title.trim().take(120))
+        .put("category", category.trim().take(60)).put("tags", tags.trim().take(240))
+        .put("favorite", favorite).put("status", boundedStatus)
+        .put("knownIssues", knownIssues.trim().take(1200)).put("firmwareNote", firmwareNote.trim().take(500))
+        .put("updateNote", updateNote.trim().take(500)).put("notes", notes.trim().take(2000))
         .put("updatedAt", System.currentTimeMillis())
-    val historyKey = "compatibility-history." + extra100GameId(serial)
-    val history = runCatching { JSONArray(prefs.getString(historyKey, "[]") ?: "[]") }.getOrDefault(JSONArray())
-    val oldStatus = previous.optString("status")
-    if (oldStatus != status.trim()) {
+    val historyKey = "compatibility-history." + id
+    val legacyHistoryKey = "compatibility-history." + legacyId
+    val historyRaw = prefs.getString(historyKey, null) ?: prefs.getString(legacyHistoryKey, "[]") ?: "[]"
+    val history = runCatching { JSONArray(historyRaw) }.getOrDefault(JSONArray())
+    val editor = prefs.edit().putString(key, next.toString())
+    if (previous.optString("status") != boundedStatus) {
         val updated = JSONArray()
         for (index in (history.length() - 19).coerceAtLeast(0) until history.length()) {
             history.optJSONObject(index)?.let { updated.put(it) }
         }
         updated.put(JSONObject().put("timestamp", System.currentTimeMillis())
-            .put("previous", oldStatus).put("current", status.trim()))
-        prefs.edit().putString(historyKey, updated.toString()).apply()
+            .put("previous", previous.optString("status").take(80)).put("current", boundedStatus))
+        editor.putString(historyKey, updated.toString())
     }
-    prefs.edit().putString(key, next.toString()).apply()
+    if (legacyId != id) editor.remove(legacyKey).remove(legacyHistoryKey)
+    editor.apply()
 }
 
 private fun extra100LibraryIndex(context: Context): List<String> {
@@ -131,7 +161,11 @@ private fun extra100InspectDocument(context: Context, uri: Uri): String = runCat
         while (prefixCount < prefix.size) {
             val count = input.read(prefix, prefixCount, prefix.size - prefixCount)
             if (count < 0) break
-            if (count > 0) prefixCount += count
+            if (count == 0) {
+                val one = input.read()
+                if (one < 0) break
+                prefix[prefixCount++] = one.toByte()
+            } else prefixCount += count
         }
         val magic = prefix.copyOf(prefixCount).joinToString("") {
             "%02X".format(Locale.ROOT, it.toInt() and 0xff)
@@ -152,7 +186,11 @@ private fun extra100InspectDocument(context: Context, uri: Uri): String = runCat
             while (markerCount < marker.size) {
                 val count = input.read(marker, markerCount, marker.size - markerCount)
                 if (count < 0) break
-                if (count > 0) markerCount += count
+                if (count == 0) {
+                    val one = input.read()
+                    if (one < 0) break
+                    marker[markerCount++] = one.toByte()
+                } else markerCount += count
             }
             if (markerCount >= 6) {
                 val iso = String(marker, 1, 5, Charsets.US_ASCII)
@@ -190,32 +228,52 @@ private fun extra100Digest(context: Context, uri: Uri): String {
         while (true) {
             val count = input.read(buffer)
             if (count < 0) break
-            digest.update(buffer, 0, count)
+            if (count == 0) {
+                val one = input.read()
+                if (one < 0) break
+                digest.update(one.toByte())
+            } else digest.update(buffer, 0, count)
         }
     } ?: error("Cannot open selected source document")
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
 private fun extra100CopyAndVerify(context: Context, source: Uri, destination: Uri): String {
+    require(source != destination) { "Source and destination are the same document; refusing to truncate the source." }
     val digest = MessageDigest.getInstance("SHA-256")
     var bytes = 0L
-    context.contentResolver.openInputStream(source)?.use { input ->
-        context.contentResolver.openOutputStream(destination, "wt")?.use { output ->
-            val buffer = ByteArray(64 * 1024)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
-                output.write(buffer, 0, count)
-                bytes += count.toLong()
-            }
-            output.flush()
-        } ?: error("Cannot open chosen destination")
-    } ?: error("Cannot open selected source")
-    val expected = digest.digest().joinToString("") { "%02x".format(it) }
-    val actual = extra100Digest(context, destination)
-    check(expected == actual) { "Destination checksum differs from source" }
-    return "Copied and re-read $bytes bytes. SHA-256 verified: $actual"
+    try {
+        context.contentResolver.openInputStream(source)?.use { input ->
+            context.contentResolver.openOutputStream(destination, "wt")?.use { output ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (count == 0) {
+                        val one = input.read()
+                        if (one < 0) break
+                        digest.update(one.toByte())
+                        output.write(one)
+                        if (bytes == Long.MAX_VALUE) error("File size counter overflow")
+                        bytes++
+                    } else {
+                        digest.update(buffer, 0, count)
+                        output.write(buffer, 0, count)
+                        if (bytes > Long.MAX_VALUE - count.toLong()) error("File size counter overflow")
+                        bytes += count.toLong()
+                    }
+                }
+                output.flush()
+            } ?: error("Cannot open chosen destination")
+        } ?: error("Cannot open selected source")
+        val expected = digest.digest().joinToString("") { "%02x".format(it) }
+        val actual = extra100Digest(context, destination)
+        check(expected == actual) { "Destination checksum differs from source" }
+        return "Copied and re-read $bytes bytes. SHA-256 verified: $actual"
+    } catch (error: Exception) {
+        runCatching { context.contentResolver.delete(destination, null, null) }
+        throw error
+    }
 }
 
 private fun extra100ControllerSummary(): String {
@@ -350,7 +408,7 @@ fun TouchStationExtra100Suite(settings: Settings) {
     val totalPlaytime = remember(serial) { mutableStateOf(prefs.getLong(sessionKey + ".totalMs", 0L)) }
     val liveElapsed = remember(serial) { mutableStateOf(0L) }
 
-    LaunchedEffect(sessionStart.value) {
+    LaunchedEffect(serial, sessionStart.value) {
         if (sessionStart.value > 0L) {
             while (true) {
                 liveElapsed.value = (System.currentTimeMillis() - sessionStart.value).coerceAtLeast(0L)
@@ -360,13 +418,21 @@ fun TouchStationExtra100Suite(settings: Settings) {
     }
 
     val gameFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            fileReport.value = withContext(Dispatchers.IO) { extra100InspectDocument(context, uri) }
+        if (uri != null) {
+            val retained = extra100PersistReadPermission(context, uri)
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { extra100InspectDocument(context, uri) }
+                fileReport.value = if (retained) result else result + " (temporary access only; reselect after app restart)"
+            }
         }
     }
     val saveFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         selectedSave.value = uri
-        if (uri != null) transferReport.value = "Selected save-data document. Choose Create backup to copy it safely."
+        if (uri != null) {
+            val retained = extra100PersistReadPermission(context, uri)
+            transferReport.value = if (retained) "Selected save-data document. Read access retained for future backup."
+            else "Selected save-data document. Temporary read access only; reselect it if TouchStation restarts."
+        }
     }
     val backupDestinationPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -381,7 +447,11 @@ fun TouchStationExtra100Suite(settings: Settings) {
     }
     val restoreFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         selectedRestore.value = uri
-        if (uri != null) transferReport.value = "Selected backup document. Choose a destination file before restoring."
+        if (uri != null) {
+            val retained = extra100PersistReadPermission(context, uri)
+            transferReport.value = if (retained) "Selected backup document. Read access retained for future restore."
+            else "Selected backup document. Temporary read access only; reselect it if TouchStation restarts."
+        }
     }
     val restoreDestinationPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -484,11 +554,12 @@ fun TouchStationExtra100Suite(settings: Settings) {
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Text("81–90 · Personalization and session tracking", style = MaterialTheme.typography.titleMedium)
-            Text("Tracked time: " + extra100Duration(totalPlaytime.value + liveElapsed.value),
+            Text("Tracked time: " + extra100Duration(extra100SaturatingAdd(totalPlaytime.value, liveElapsed.value)),
                 style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     sessionStart.value = System.currentTimeMillis()
+                    liveElapsed.value = 0L
                     prefs.edit().putLong(sessionKey + ".activeSince", sessionStart.value).apply()
                     actionMessage.value = "Started user-controlled playtime tracking."
                 }, enabled = !serial.isNullOrBlank() && sessionStart.value == 0L,
@@ -496,8 +567,9 @@ fun TouchStationExtra100Suite(settings: Settings) {
                 OutlinedButton(onClick = {
                     val elapsed = if (sessionStart.value > 0L)
                         (System.currentTimeMillis() - sessionStart.value).coerceAtLeast(0L) else 0L
-                    totalPlaytime.value += elapsed
+                    totalPlaytime.value = extra100SaturatingAdd(totalPlaytime.value, elapsed)
                     sessionStart.value = 0L
+                    liveElapsed.value = 0L
                     prefs.edit().putLong(sessionKey + ".activeSince", 0L)
                         .putLong(sessionKey + ".totalMs", totalPlaytime.value).apply()
                     actionMessage.value = "Saved user-controlled playtime session."

@@ -70,6 +70,46 @@ class Extra100Tests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 PATCHER.patch_performance_tab(Path(tmp))
 
+
+    def test_game_ids_are_collision_resistant_and_legacy_metadata_is_migrated(self):
+        self.assertIn("extra100LegacyGameId", SOURCE)
+        self.assertIn('MessageDigest.getInstance("SHA-256")', SOURCE)
+        self.assertIn("prefs.getString(currentKey, null) ?: prefs.getString(legacyKey", SOURCE)
+        self.assertIn("editor.remove(legacyKey).remove(legacyHistoryKey)", SOURCE)
+        self.assertIn('.put("serial", serial.trim().take(80))', SOURCE)
+
+    def test_metadata_is_bounded_and_history_is_written_together(self):
+        for marker in ('title.trim().take(120)', 'category.trim().take(60)',
+                       'tags.trim().take(240)', 'status.trim().take(80)',
+                       'knownIssues.trim().take(1200)', 'firmwareNote.trim().take(500)',
+                       'updateNote.trim().take(500)', 'notes.trim().take(2000)',
+                       'editor.putString(historyKey, updated.toString())'):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, SOURCE)
+
+    def test_stream_readers_handle_zero_length_reads(self):
+        self.assertGreaterEqual(SOURCE.count('if (count == 0) {'), 3)
+        self.assertIn('digest.update(one.toByte())', SOURCE)
+        self.assertIn('prefix[prefixCount++] = one.toByte()', SOURCE)
+        self.assertIn('marker[markerCount++] = one.toByte()', SOURCE)
+
+    def test_copy_refuses_same_uri_and_cleans_partial_destination(self):
+        self.assertIn('require(source != destination)', SOURCE)
+        self.assertIn('contentResolver.delete(destination, null, null)', SOURCE)
+        self.assertIn('Destination checksum differs from source', SOURCE)
+
+    def test_copy_size_counter_is_overflow_safe(self):
+        self.assertIn('bytes > Long.MAX_VALUE - count.toLong()', SOURCE)
+        self.assertIn('bytes == Long.MAX_VALUE', SOURCE)
+
+    def test_document_permissions_and_playtime_lifecycle_are_hardened(self):
+        self.assertIn('takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)', SOURCE)
+        self.assertGreaterEqual(SOURCE.count('extra100PersistReadPermission(context, uri)'), 3)
+        self.assertIn('LaunchedEffect(serial, sessionStart.value)', SOURCE)
+        self.assertIn('extra100SaturatingAdd(totalPlaytime.value, liveElapsed.value)', SOURCE)
+        self.assertIn('totalPlaytime.value = extra100SaturatingAdd(totalPlaytime.value, elapsed)', SOURCE)
+        self.assertIn('liveElapsed.value = 0L', SOURCE)
+
     def test_template_annotation_and_version_identity(self):
         self.assertIn("@Composable\nfun TouchStationExtra100Suite", SOURCE)
         self.assertIn('"TouchStation Extra · 100-feature companion suite"', SOURCE)
