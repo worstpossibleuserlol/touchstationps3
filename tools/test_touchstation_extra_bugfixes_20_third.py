@@ -56,16 +56,25 @@ class ExtraThirdBatchTests(unittest.TestCase):
         self.assertIn("catch (error: CancellationException)", transfer)
         self.assertIn("throw error", transfer)
 
-    def test_controller_test_checks_physical_input_device(self):
-        self.assertIn("val nativeEvent = event.nativeKeyEvent", EXTRA100)
-        self.assertIn("device != null && !device.isVirtual", EXTRA100)
-        self.assertIn("InputDevice.SOURCE_GAMEPAD", EXTRA100)
-        self.assertIn("InputDevice.SOURCE_JOYSTICK", EXTRA100)
-        self.assertIn("InputDevice.SOURCE_DPAD", EXTRA100)
+    def test_controller_inventory_filters_physical_gamepad_joystick_and_dpad_devices(self):
+        inventory = EXTRA100.split("private fun extra100ControllerSummary", 1)[1].split(
+            "private fun extra100CaptureMetrics", 1
+        )[0]
+        self.assertIn("device != null && !device.isVirtual", inventory)
+        self.assertIn("InputDevice.SOURCE_GAMEPAD", inventory)
+        self.assertIn("InputDevice.SOURCE_JOYSTICK", inventory)
+        self.assertIn("InputDevice.SOURCE_DPAD", inventory)
+        # Compose KeyEvent has no supported native-device accessor in this pinned API.
+        self.assertNotIn("event.nativeKeyEvent", EXTRA100)
 
-    def test_non_controller_keyboard_events_are_not_consumed(self):
-        self.assertIn("if (event.type == KeyEventType.KeyDown && isPhysicalController)", EXTRA100)
-        self.assertIn("} else false", EXTRA100)
+    def test_diagnostic_key_probe_observes_but_does_not_consume_input(self):
+        handler = EXTRA100.split(".onPreviewKeyEvent { event ->", 1)[1].split(
+            "}.focusable()", 1
+        )[0]
+        self.assertIn("if (event.type == KeyEventType.KeyDown)", handler)
+        self.assertIn('lastInput.value = "Digital key event: "', handler)
+        self.assertTrue(handler.rstrip().endswith("false"))
+        self.assertNotIn("isPhysicalController", handler)
 
     def test_controller_names_are_sanitized_and_bounded(self):
         self.assertIn("extra100CleanDisplayText(device.name, 80)", EXTRA100)
