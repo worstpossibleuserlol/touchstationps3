@@ -1,5 +1,17 @@
 # TouchStation Extra
 
+## Upstream native engine
+
+The Android release workflow now builds against ARMSX3 **1.6.7**, pinned at
+`b8eea42f52755f0841afc04a23b06125e5274bab`, and stages the official
+Android 15 / ARMv8.2 ARM64 native libraries only after checking the exact
+asset size and SHA-256. This replaces the older 1.6.4 binary pin.
+
+Upstream 1.6.7 includes native fixes for graphics/PPU synchronization waits,
+SPU transfer locking, memory-pressure graphics safety, and safer handling of
+damaged shader-cache and savestate files. These are upstream engine changes;
+they are not a claim that GTA IV has been tested or is playable on every device.
+
 
 
 ## TouchStation Extra — 100-feature companion update
