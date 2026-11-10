@@ -52,10 +52,12 @@ Status meanings:
 37. **Shader compilation recovery — NATIVE CORE REQUIRED.** Needs native shader compiler diagnostics and retry/invalidation support.
 38. **Mali/Vulkan readiness diagnostics — APP IMPLEMENTED.** Reports ARM64 and Android's Vulkan hardware-level feature flag; detailed Mali driver extensions remain unavailable.
 39. **Memory/thermal profile guidance — APP IMPLEMENTED.** Reports RAM, app PSS and Android thermal status; it does not force native scheduling or dynamic resolution.
-40. **GTA IV failure report — APP IMPLEMENTED.** Exports Android/device/settings evidence; native PPU/SPU/RSX guest-failure callbacks remain unavailable.
+40. **GTA IV failure report — APP IMPLEMENTED.** Captures the user-recorded failure stage, a SHA-256 fingerprint of serialized settings, Android/device evidence and explicit unavailable markers for PPU instruction/recompiler/cache/locking, SPU scheduling/exceptions/cache/timing, RSX queue/fences/render targets/textures, shader recovery, guest audio timing and guest save-state validation. Native guest-failure callbacks remain unavailable.
 
 ## Native-core boundary
 
 The current build pipeline checks out the pinned ARMSX3 Android source but packages the upstream prebuilt ARM64 native core/JNI libraries. The new Compatibility Center does not patch or rebuild the native PPU, SPU, RSX, shader compiler, guest audio engine or Mali/Vulkan renderer internals. Those items are **not claimed as fixed**. Implementing them requires matching native sources, native tests, a rebuilt ARM64 library, successful package verification, and device testing with representative games, including BLES00229.
+
+The GTA IV report now preserves a repeatable settings fingerprint and a user-entered failure stage so results from different configurations can be compared without inventing guest telemetry. The listed PPU/SPU/RSX/audio/save-state internals remain **NATIVE CORE REQUIRED**; this update adds evidence capture and truthful capability reporting, not the underlying native fixes.
 
 A successful Android build only verifies compilation and packaging. It does not demonstrate that GTA IV or any other game boots, reaches gameplay, renders correctly, maintains performance, or exits safely.
