@@ -391,6 +391,7 @@ private fun touchStationFinaleDeviceKey(serial: String, device: TouchStationFina
 }
 
 
+private const val TOUCHSTATION_FINALE_FIFO_REORDERING_PATH = "Video@@Disable FIFO Reordering"
 private const val TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH = "Core@@RSX FIFO Fetch Accuracy"
 private const val TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH = "Video@@Driver Wake-Up Delay"
 
@@ -408,23 +409,30 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
     if (serial.isBlank() || !ARMSX3.initialized) {
         return false to "Native runtime or game title ID is unavailable."
     }
+    val reorderingValue = "true"
     val accuracyValue = JSONObject.quote("Ordered & Atomic")
     val delayValue = "20"
-    var accuracyApplied = false
-    var delayApplied = false
     val batchStarted = runCatching { ARMSX3.instance.settingsBeginBatch() }.isSuccess
     try {
-        accuracyApplied = runCatching {
+        runCatching {
+            ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_FIFO_REORDERING_PATH, reorderingValue)
+        }
+        runCatching {
             ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue)
-        }.getOrDefault(false)
-        delayApplied = runCatching {
+        }
+        runCatching {
             ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH, delayValue)
-        }.getOrDefault(false)
+        }
     } finally {
         if (batchStarted) runCatching { ARMSX3.instance.settingsEndBatch() }
     }
-    // Match the upstream Core Settings screen: record the scoped override even when
-    // the native setting is non-dynamic and declines an immediate in-game write.
+    // Match the upstream Core Settings screen: record the scoped overrides even when
+    // a native setting is non-dynamic and declines an immediate in-game write.
+    runCatching {
+        CoreSettingOverrides.record(
+            SettingsScope.Game, serial, TOUCHSTATION_FINALE_FIFO_REORDERING_PATH, reorderingValue,
+        )
+    }
     runCatching {
         CoreSettingOverrides.record(
             SettingsScope.Game, serial, TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue,
@@ -435,19 +443,22 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
             SettingsScope.Game, serial, TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH, delayValue,
         )
     }
+    val reorderingReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_REORDERING_PATH)
     val accuracyReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH)
     val delayReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH)
     val storedOverrides = runCatching { CoreSettingOverrides.load(SettingsScope.Game, serial) }
         .getOrDefault(emptyMap())
+    val reorderingPersisted = storedOverrides[TOUCHSTATION_FINALE_FIFO_REORDERING_PATH] == reorderingValue
     val accuracyPersisted = storedOverrides[TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH] == accuracyValue
     val delayPersisted = storedOverrides[TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH] == delayValue
-    val accuracyAvailable = accuracyReadback != "N/A"
-    val delayAvailable = delayReadback != "N/A"
-    val persisted = accuracyPersisted && delayPersisted && accuracyAvailable && delayAvailable
-    val activeNow = accuracyReadback == "Ordered & Atomic" && delayReadback == delayValue
-    val detail = "RSX FIFO Fetch Accuracy: $accuracyReadback; Driver Wake-Up Delay: $delayReadback µs; " +
-        "per-game overrides persisted: " + (accuracyPersisted && delayPersisted) + "; " +
-        (if (activeNow) "both values are active now." else "saved for the next game launch; restart the game to apply non-dynamic settings.")
+    val available = reorderingReadback != "N/A" && accuracyReadback != "N/A" && delayReadback != "N/A"
+    val persisted = reorderingPersisted && accuracyPersisted && delayPersisted && available
+    val activeNow = reorderingReadback == "true" &&
+        accuracyReadback == "Ordered & Atomic" && delayReadback == delayValue
+    val detail = "Disable FIFO Reordering: $reorderingReadback; RSX FIFO Fetch Accuracy: $accuracyReadback; " +
+        "Driver Wake-Up Delay: $delayReadback µs; per-game overrides persisted: " +
+        (reorderingPersisted && accuracyPersisted && delayPersisted) + "; " +
+        (if (activeNow) "all three values are active now." else "saved for the next game launch; restart the game to apply non-dynamic settings.")
     return persisted to detail
 }
 
@@ -982,7 +993,7 @@ fun TouchStationFinaleSuite(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "The profile selects safe SPU block mode, accurate SPU XFloat, asynchronous shaders, MSAA off, SPU cache, LLVM precompile and restrained PPU/LLVM threads. It saves RSX FIFO Fetch Accuracy = Ordered & Atomic and Driver Wake-Up Delay = 20 µs to this game only. Non-dynamic values may require a game restart. Ordered & Atomic can reduce performance; this is a targeted stability test, not a GTA IV guarantee.",
+                    "The profile selects safe SPU block mode, accurate SPU XFloat, asynchronous shaders, MSAA off, SPU cache, LLVM precompile and restrained PPU/LLVM threads. It saves Disable FIFO Reordering = On, RSX FIFO Fetch Accuracy = Ordered & Atomic and Driver Wake-Up Delay = 20 µs to this game only. Non-dynamic values may require a game restart. These FIFO settings are a targeted stability test, not a GTA IV guarantee.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1769,6 +1780,27 @@ def patch_library_compatibility(app_dir: Path) -> None:
 
 
 
+
+def patch_gta_iv_game_defaults(app_dir: Path) -> None:
+    """Add a conservative BLES00229 RSX FIFO workaround to the per-title boot defaults."""
+    path = app_dir / "src/main/java/com/armsx2/config/GameDefaults.kt"
+    text = path.read_text(encoding="utf-8")
+    if '"BLES00229" to mapOf(' in text:
+        raise SystemExit("GTA IV BLES00229 boot defaults are already present")
+    insertion = """        // GTA IV (Europe, BLES00229). The previous device report recorded a dead RSX FIFO.
+        // Use the same supported FIFO safeguards already used by this core for another
+        // FIFO-stalling title. This is a targeted workaround, not a device-specific boot guarantee.
+        "BLES00229" to mapOf(
+            "Video@@Disable FIFO Reordering" to "true",
+            "Core@@RSX FIFO Fetch Accuracy" to "\\"Ordered & Atomic\\"",
+            "Video@@Driver Wake-Up Delay" to "20",
+        ),
+
+"""
+    anchor = "        // God of War: Ascension:"
+    text = replace_once(text, anchor, insertion + anchor, "GTA IV BLES00229 boot defaults")
+    path.write_text(text, encoding="utf-8")
+
 def patch_application_reliability(app_dir: Path) -> None:
     """Initialize Finale lifecycle and crash diagnostics from Application.onCreate."""
     path = app_dir / "src/main/java/com/armsx2/Pasx2Application.kt"
@@ -1897,6 +1929,7 @@ def main() -> None:
     if suite_path.exists():
         raise SystemExit("TouchStation Finale suite already exists; refusing to overwrite")
     patch_version(app_dir)
+    patch_gta_iv_game_defaults(app_dir)
     suite_path.write_text(KOTLIN_SOURCE, encoding="utf-8")
     patch_performance_tab(app_dir)
     patch_library_compatibility(app_dir)
@@ -1923,6 +1956,7 @@ def main() -> None:
         "Export Finale diagnostic report",
         "Download TouchStation.log",
         "Share TouchStation.log",
+        "Video@@Disable FIFO Reordering",
         "Core@@RSX FIFO Fetch Accuracy",
         "Video@@Driver Wake-Up Delay",
         "Ordered & Atomic",
