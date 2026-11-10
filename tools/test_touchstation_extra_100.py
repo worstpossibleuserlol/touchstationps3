@@ -76,6 +76,8 @@ class Extra100Tests(unittest.TestCase):
         self.assertIn('MessageDigest.getInstance("SHA-256")', SOURCE)
         self.assertIn("prefs.getString(currentKey, null) ?: prefs.getString(legacyKey", SOURCE)
         self.assertIn("editor.remove(legacyKey).remove(legacyHistoryKey)", SOURCE)
+        self.assertIn("migrateLegacyHistory", SOURCE)
+        self.assertIn("if (migrateLegacyHistory) editor.putString(historyKey, history.toString())", SOURCE)
         self.assertIn('.put("serial", serial.trim().take(80))', SOURCE)
 
     def test_metadata_is_bounded_and_history_is_written_together(self):
@@ -105,6 +107,10 @@ class Extra100Tests(unittest.TestCase):
     def test_document_permissions_and_playtime_lifecycle_are_hardened(self):
         self.assertIn('takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)', SOURCE)
         self.assertGreaterEqual(SOURCE.count('extra100PersistReadPermission(context, uri)'), 3)
+        self.assertIn('prefs.getString("selectedSaveUri", null)', SOURCE)
+        self.assertIn('prefs.getString("selectedRestoreUri", null)', SOURCE)
+        self.assertIn('putString("selectedSaveUri", uri.toString())', SOURCE)
+        self.assertIn('putString("selectedRestoreUri", uri.toString())', SOURCE)
         self.assertIn('LaunchedEffect(serial, sessionStart.value)', SOURCE)
         self.assertIn('extra100SaturatingAdd(totalPlaytime.value, liveElapsed.value)', SOURCE)
         self.assertIn('totalPlaytime.value = extra100SaturatingAdd(totalPlaytime.value, elapsed)', SOURCE)

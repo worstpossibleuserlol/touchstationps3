@@ -4,7 +4,7 @@ This pass hardens the game-library companion, document inspection, save backup/r
 
 1. game-ID key collisions — append a SHA-256-derived suffix to the readable game-ID key.
 2. legacy metadata recovery — read existing pre-hash keys when the new key is absent.
-3. legacy key migration — remove old metadata/history keys after writing the migrated record.
+3. legacy key migration — move old metadata and status history before removing old preference keys.
 4. original title-ID preservation — store the raw title ID separately from the preference-key encoding.
 5. metadata size limits — cap title, category, tags, status and note fields.
 6. status-history consistency — write updated metadata and status history through one SharedPreferences editor.

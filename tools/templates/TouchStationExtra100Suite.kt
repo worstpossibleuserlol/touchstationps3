@@ -113,7 +113,9 @@ private fun extra100SaveMeta(
     val legacyHistoryKey = "compatibility-history." + legacyId
     val historyRaw = prefs.getString(historyKey, null) ?: prefs.getString(legacyHistoryKey, "[]") ?: "[]"
     val history = runCatching { JSONArray(historyRaw) }.getOrDefault(JSONArray())
+    val migrateLegacyHistory = legacyId != id && !prefs.contains(historyKey) && prefs.contains(legacyHistoryKey)
     val editor = prefs.edit().putString(key, next.toString())
+    if (migrateLegacyHistory) editor.putString(historyKey, history.toString())
     if (previous.optString("status") != boundedStatus) {
         val updated = JSONArray()
         for (index in (history.length() - 19).coerceAtLeast(0) until history.length()) {
@@ -398,8 +400,12 @@ fun TouchStationExtra100Suite(settings: Settings) {
     val actionMessage = remember { mutableStateOf("No Extra 100 action performed.") }
     val fileReport = remember { mutableStateOf("No game file has been inspected.") }
     val transferReport = remember { mutableStateOf("No save-data file transfer performed.") }
-    val selectedSave = remember { mutableStateOf<Uri?>(null) }
-    val selectedRestore = remember { mutableStateOf<Uri?>(null) }
+    val selectedSave = remember {
+        mutableStateOf(prefs.getString("selectedSaveUri", null)?.let { runCatching { Uri.parse(it) }.getOrNull() })
+    }
+    val selectedRestore = remember {
+        mutableStateOf(prefs.getString("selectedRestoreUri", null)?.let { runCatching { Uri.parse(it) }.getOrNull() })
+    }
     val controllers = remember { mutableStateOf(extra100ControllerSummary()) }
     val lastInput = remember { mutableStateOf("No controller key received yet.") }
     val focusRequester = remember { FocusRequester() }
@@ -430,8 +436,10 @@ fun TouchStationExtra100Suite(settings: Settings) {
         selectedSave.value = uri
         if (uri != null) {
             val retained = extra100PersistReadPermission(context, uri)
-            transferReport.value = if (retained) "Selected save-data document. Read access retained for future backup."
-            else "Selected save-data document. Temporary read access only; reselect it if TouchStation restarts."
+            if (retained) prefs.edit().putString("selectedSaveUri", uri.toString()).apply()
+            else prefs.edit().remove("selectedSaveUri").apply()
+            transferReport.value = if (retained) "Selected save-data document and selection retained for future backup."
+            else "Selected save-data document. Temporary access only; reselect it after TouchStation restarts."
         }
     }
     val backupDestinationPicker = rememberLauncherForActivityResult(
@@ -449,8 +457,10 @@ fun TouchStationExtra100Suite(settings: Settings) {
         selectedRestore.value = uri
         if (uri != null) {
             val retained = extra100PersistReadPermission(context, uri)
-            transferReport.value = if (retained) "Selected backup document. Read access retained for future restore."
-            else "Selected backup document. Temporary read access only; reselect it if TouchStation restarts."
+            if (retained) prefs.edit().putString("selectedRestoreUri", uri.toString()).apply()
+            else prefs.edit().remove("selectedRestoreUri").apply()
+            transferReport.value = if (retained) "Selected backup document and selection retained for future restore."
+            else "Selected backup document. Temporary access only; reselect it after TouchStation restarts."
         }
     }
     val restoreDestinationPicker = rememberLauncherForActivityResult(
