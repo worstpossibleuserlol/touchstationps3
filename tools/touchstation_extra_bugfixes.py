@@ -56,9 +56,20 @@ def patch_runtime(path: Path) -> None:
 
             invoke {""",
         """        fun start() {
-            val nativeActive = nativeReady.value && runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
+            val nativeReadyNow = nativeReady.value
+            val nativeActive = nativeReadyNow && runCatching { NativeApp.hasActiveVM() }.getOrDefault(true)
             var staleNativeSession = false
+            var staleFrontendState: EmuState? = null
             val shouldStart = synchronized(vmLifecycleLock) {
+                // The frontend enum can lag behind a VM that has already stopped (for example,
+                // after an abnormal guest exit). Trust a successful native-idle query only when
+                // there is no run loop and no shutdown owner; normalize that stale UI state.
+                if (nativeReadyNow && !nativeActive &&
+                    !vmStopInProgress && !vmRunLoopActive && eState.value != EmuState.STOPPED
+                ) {
+                    staleFrontendState = eState.value
+                    eState.value = EmuState.STOPPED
+                }
                 if (vmStopInProgress || vmRunLoopActive || eState.value != EmuState.STOPPED || nativeActive) {
                     vmRestartAfterStop = true
                     staleNativeSession = nativeActive && !vmStopInProgress && !vmRunLoopActive &&
@@ -69,6 +80,13 @@ def patch_runtime(path: Path) -> None:
                     vmRestartQueued = false
                     true
                 }
+            }
+            staleFrontendState?.let { previous ->
+                TouchStationExtraShutdownDiagnostics.record(
+                    com.armsx2.Pasx2Application.appContext,
+                    "stale-frontend-state-recovered",
+                    "Previous frontend state=" + previous + "; native VM reported idle and no run loop or shutdown was active.",
+                )
             }
             if (!shouldStart) {
                 // Only request a stop for a stale native session whose frontend flags
@@ -335,7 +353,20 @@ def patch_runtime(path: Path) -> None:
         }
 
         fun restart() {""",
-        """                    } else if (!restartQueued) {
+        """                    if (restartQueued) {
+                        // The run-loop finally block already queued start() on this same
+                        // serialized executor. Do not start a second copy here: that second
+                        // start would see vmRunLoopActive and arm an unintended future restart.
+                        if (restartNow) {
+                            TouchStationExtraShutdownDiagnostics.record(
+                                com.armsx2.Pasx2Application.appContext,
+                                "duplicate-restart-suppressed",
+                                "A launch was already queued by the VM run-loop completion path.",
+                            )
+                        }
+                    } else if (restartNow) {
+                        start()
+                    } else {
                         synchronized(vmLifecycleLock) {
                             WindowImpl.toolbarVisible.value = true
                             WindowImpl.showLibrary.value = false
