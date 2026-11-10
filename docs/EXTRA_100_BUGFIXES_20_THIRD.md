@@ -12,8 +12,8 @@ This batch focuses on Android document permissions, safe file handling, controll
 8. **Preserve cancellation during inspection:** allow a cancelled file-inspection coroutine to cancel instead of converting it into a normal error report.
 9. **Preserve cancellation during backup:** do not turn a cancelled backup coroutine into a completed failure message.
 10. **Preserve cancellation during restore:** do not swallow cancellation in the restore-copy path.
-11. **Filter controller test events:** accept key events only from a physical Android gamepad, joystick or D-pad input device.
-12. **Do not consume keyboard input:** ordinary keyboard and Gboard key events now pass through the controller-test field.
+11. **Filter the controller inventory:** list only non-virtual Android input devices reporting gamepad, joystick or D-pad sources. The pinned Compose key-event API does not expose the native device identity, so the key probe does not pretend to classify an individual key event.
+12. **Do not consume diagnostic input:** record Compose KeyDown events for display and return false so keyboard and controller input can continue through the normal event path.
 13. **Sanitize controller names:** remove control characters and cap device names before displaying them.
 14. **Bound controller output:** show at most 16 detected physical controllers in the summary.
 15. **Respect the safe PPU precompile gate:** the Advanced safe-boot profile now uses the existing RAM/thermal policy instead of always forcing LLVM precompile on.
