@@ -60,7 +60,7 @@ class ExtraPatchTests(unittest.TestCase):
 
     def test_workflow_uses_verified_armlx3_167_native_pin(self):
         workflow = (Path(__file__).parents[1] / ".github/workflows/android.yml").read_text(encoding="utf-8")
-        self.assertIn('COMMIT="b8eea42f52755f0841afc04a23b06125e5274bab"', workflow)
+        self.assertIn('COMMIT="a87cfd55e4f6cf89428b8dfd75335526e5d9b075"', workflow)
         self.assertIn('EXPECTED_SIZE="79258789"', workflow)
         self.assertIn('EXPECTED_SHA256="a8cb2e4fbbd67c89f6336456a3f74e664a9f0be4f0f39d264e1f031e1b3fc3fd"', workflow)
         self.assertIn('/releases/assets/724443946', workflow)
