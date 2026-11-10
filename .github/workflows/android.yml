@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           UPSTREAM="$RUNNER_TEMP/armsx3-source"
-          COMMIT="b8eea42f52755f0841afc04a23b06125e5274bab"
+          COMMIT="a87cfd55e4f6cf89428b8dfd75335526e5d9b075"
           git clone --filter=blob:none --no-checkout https://github.com/ARMSX2/ARMSX3.git "$UPSTREAM"
           git -C "$UPSTREAM" fetch --depth=1 origin "$COMMIT"
           git -C "$UPSTREAM" checkout --detach FETCH_HEAD
