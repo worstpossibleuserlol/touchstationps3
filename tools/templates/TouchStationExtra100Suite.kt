@@ -346,7 +346,8 @@ private fun extra100ControllerSummary(): String {
             val sources: Int = device.sources
             val isController =
                 (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-                (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+                (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
+                (sources and InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
             if (isController) descriptions.add(
                 extra100CleanDisplayText(device.name, 80).ifBlank { "Unnamed controller" } +
                     " · id=" + device.id + " · sources=" + sources
@@ -622,8 +623,9 @@ fun TouchStationExtra100Suite(settings: Settings) {
                     .onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown) {
                             lastInput.value = "Digital key event: " + event.key.toString()
-                            true
-                        } else false
+                        }
+                        // Observe the key without consuming keyboard or controller input.
+                        false
                     }.focusable().padding(10.dp),
                 style = MaterialTheme.typography.bodyMedium)
             Text("Last input: " + lastInput.value, style = MaterialTheme.typography.bodySmall)
