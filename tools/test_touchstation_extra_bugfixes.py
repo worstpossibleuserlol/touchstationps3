@@ -226,6 +226,16 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("runCatching { NativeApp.shutdown() }", result)
             self.assertIn("shutdown-timeout-observed", result)
             self.assertIn("if (!vmRunLoopActive && !stillActive)", result)
+            self.assertIn("@Volatile private var vmExitToMainMenuAfterStop = false", result)
+            self.assertIn("if (vmExitToMainMenuAfterStop) {", result)
+            self.assertIn("vmExitToMainMenuAfterStop = false", result)
+            # Exit Game must be terminal even when a restart was queued during loading.
+            patcher_source = SCRIPT.read_text(encoding="utf-8")
+            self.assertIn("vmExitToMainMenuAfterStop = true", patcher_source)
+            self.assertIn("Exit Game is terminal and returns inside TouchStation", patcher_source)
+            self.assertIn("source = source.replace(restart_anchor, restart_replacement, 2)", patcher_source)
+            self.assertIn("shutdown completion honors Exit Game", patcher_source)
+            self.assertIn("late-idle recovery honors Exit Game", patcher_source)
             with self.assertRaises(SystemExit):
                 PATCH.patch_runtime(path)
 
