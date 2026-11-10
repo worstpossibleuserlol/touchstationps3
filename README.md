@@ -3,7 +3,7 @@
 ## Upstream native engine
 
 The Android release workflow now builds against ARMSX3 **1.6.7**, pinned at
-`b8eea42f52755f0841afc04a23b06125e5274bab`, and stages the official
+`a87cfd55e4f6cf89428b8dfd75335526e5d9b075`, and stages the official
 Android 15 / ARMv8.2 ARM64 native libraries only after checking the exact
 asset size and SHA-256. This replaces the older 1.6.4 binary pin.
 
