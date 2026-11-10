@@ -52,6 +52,20 @@ fun biosFinally() {
                         vmRunLoopActive = false
                         vmStopInProgress = false
                         if (vmRestartAfterStop) {
+fun launchGame(uri: String, info: GameInfo? = null, external: Boolean = false) {
+            currentGame.value = info
+            launchedExternally = external
+            m_szGamefile = uri
+            synchronized(vmLifecycleLock) {
+                if (eState.value != EmuState.STOPPED || vmStopInProgress || vmRunLoopActive) {
+                    vmRestartAfterStop = true
+                }
+            }
+            if (eState.value == EmuState.STOPPED && !vmStopInProgress && !vmRunLoopActive)
+                start()
+            else
+                stop(restartAfterStop = true)
+        }
 """
 fun stop(saveAutosave: Boolean = false, restartAfterStop: Boolean = false) {
             val nativeActive = runCatching { NativeApp.hasActiveVM() }.getOrDefault(false)
@@ -192,7 +206,13 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("staleFrontendState = eState.value", result)
             self.assertIn('eState.value = EmuState.STOPPED', result)
             self.assertIn('"stale-frontend-state-recovered"', result)
+            self.assertIn('"launch-recovered-stale-frontend-state"', result)
             self.assertIn('"duplicate-restart-suppressed"', result)
+            launch = result.split("fun launchGame(", 1)[1].split("fun stop(", 1)[0]
+            self.assertIn("val nativeReadyForLaunch = nativeReady.value", launch)
+            self.assertIn("val nativeActiveForLaunch = nativeReadyForLaunch", launch)
+            self.assertIn("recoveredFrontendState = eState.value", launch)
+            self.assertLess(launch.index("nativeActiveForLaunch"), launch.index("if (eState.value == EmuState.STOPPED"))
             self.assertIn("if (restartQueued) {", result)
             self.assertIn("} else if (restartNow) {", result)
             self.assertLess(result.index("if (restartQueued) {"), result.index("} else if (restartNow) {"))
