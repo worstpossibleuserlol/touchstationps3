@@ -77,7 +77,7 @@ def main() -> None:
         "FEATURE_VULKAN_HARDWARE_LEVEL",
         "SettingsScope.Game",
         "full settings read-back verified",
-        "Native core/JNI",
+        "native core/JNI",
         "guest crash callbacks",
     )
     missing = [marker for marker in required if marker not in source]
