@@ -28,6 +28,18 @@ class ExtraErrorUxTests(unittest.TestCase):
             result = target.read_text(encoding="utf-8")
             self.assertIn("detectVerticalDragGestures", result)
             self.assertIn("Swipe up or tap to dismiss", result)
+            # Re-running against a complete installation must be idempotent.
+            PATCHER.patch(Path(tmp))
+
+    def test_partial_existing_swipe_handler_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "app" / PATCHER.TARGET
+            target.parent.mkdir(parents=True)
+            target.write_text(
+                "object GameErrorNotice { fun show(error: String) {} }\\n"
+                "fun GameErrorBanner() { detectVerticalDragGestures {} }\\n",
+                encoding="utf-8",
+            )
             with self.assertRaises(SystemExit):
                 PATCHER.patch(Path(tmp))
 

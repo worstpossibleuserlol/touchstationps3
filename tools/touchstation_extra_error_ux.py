@@ -26,7 +26,14 @@ def patch(source_root: Path) -> None:
         raise SystemExit("TouchStation Extra error UX template is missing: " + str(TEMPLATE))
     current = target.read_text(encoding="utf-8")
     if "detectVerticalDragGestures" in current:
-        raise SystemExit("Swipe-to-dismiss error UX is already installed; refusing to apply twice")
+        missing_existing = [marker for marker in NEW_MARKERS if marker not in current]
+        if missing_existing:
+            raise SystemExit(
+                "Found a partial or incompatible swipe-to-dismiss implementation; missing: "
+                + ", ".join(missing_existing)
+            )
+        print("Swipe-up error UX is already complete; leaving the upstream source unchanged.")
+        return
     missing = [marker for marker in BASELINE_MARKERS if marker not in current]
     if missing:
         raise SystemExit("Unexpected upstream GameErrorBanner.kt; missing: " + ", ".join(missing))
