@@ -391,7 +391,6 @@ private fun touchStationFinaleDeviceKey(serial: String, device: TouchStationFina
 }
 
 
-private const val TOUCHSTATION_FINALE_FIFO_REORDERING_PATH = "Video@@Disable FIFO Reordering"
 private const val TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH = "Core@@RSX FIFO Fetch Accuracy"
 private const val TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH = "Video@@Driver Wake-Up Delay"
 
@@ -401,22 +400,17 @@ private fun touchStationFinaleReadCoreSetting(path: String): String =
     }.getOrDefault("N/A")
 
 /**
- * The native dead-FIFO exception recommends moving RSX FIFO accuracy away from PS3
- * mode and increasing Driver Wake-Up Delay. Apply supported values only to this
- * game's scope and read them back before reporting success.
+ * The native dead-FIFO error names these two supported mitigations. FIFO reordering is a
+ * separate, title-specific workaround, so GTA IV leaves that setting unchanged.
  */
 private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boolean, String> {
-    if (serial.isBlank() || !ARMSX3.initialized) {
-        return false to "Native runtime or game title ID is unavailable."
+    if (!serial.trim().equals("BLES00229", ignoreCase = true) || !ARMSX3.initialized) {
+        return false to "The native runtime or exact BLES00229 title ID is unavailable."
     }
-    val reorderingValue = "true"
     val accuracyValue = JSONObject.quote("Ordered & Atomic")
     val delayValue = "20"
     val batchStarted = runCatching { ARMSX3.instance.settingsBeginBatch() }.isSuccess
     try {
-        runCatching {
-            ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_FIFO_REORDERING_PATH, reorderingValue)
-        }
         runCatching {
             ARMSX3.instance.settingsSet(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue)
         }
@@ -426,13 +420,9 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
     } finally {
         if (batchStarted) runCatching { ARMSX3.instance.settingsEndBatch() }
     }
-    // Match the upstream Core Settings screen: record the scoped overrides even when
-    // a native setting is non-dynamic and declines an immediate in-game write.
-    runCatching {
-        CoreSettingOverrides.record(
-            SettingsScope.Game, serial, TOUCHSTATION_FINALE_FIFO_REORDERING_PATH, reorderingValue,
-        )
-    }
+
+    // Persist per-game overrides even when a native setting is non-dynamic and declines
+    // an immediate in-game write. The next boot replays them after the stock game defaults.
     runCatching {
         CoreSettingOverrides.record(
             SettingsScope.Game, serial, TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH, accuracyValue,
@@ -443,26 +433,69 @@ private fun touchStationFinaleApplyFifoRecoveryProfile(serial: String): Pair<Boo
             SettingsScope.Game, serial, TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH, delayValue,
         )
     }
-    val reorderingReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_REORDERING_PATH)
+
     val accuracyReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH)
     val delayReadback = touchStationFinaleReadCoreSetting(TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH)
     val storedOverrides = runCatching { CoreSettingOverrides.load(SettingsScope.Game, serial) }
         .getOrDefault(emptyMap())
-    val reorderingPersisted = storedOverrides[TOUCHSTATION_FINALE_FIFO_REORDERING_PATH] == reorderingValue
     val accuracyPersisted = storedOverrides[TOUCHSTATION_FINALE_FIFO_ACCURACY_PATH] == accuracyValue
     val delayPersisted = storedOverrides[TOUCHSTATION_FINALE_DRIVER_WAKE_DELAY_PATH] == delayValue
-    val available = reorderingReadback != "N/A" && accuracyReadback != "N/A" && delayReadback != "N/A"
-    val persisted = reorderingPersisted && accuracyPersisted && delayPersisted && available
-    val activeNow = reorderingReadback == "true" &&
-        accuracyReadback == "Ordered & Atomic" && delayReadback == delayValue
-    val detail = "Disable FIFO Reordering: $reorderingReadback; RSX FIFO Fetch Accuracy: $accuracyReadback; " +
-        "Driver Wake-Up Delay: $delayReadback µs; per-game overrides persisted: " +
-        (reorderingPersisted && accuracyPersisted && delayPersisted) + "; " +
-        (if (activeNow) "all three values are active now." else "saved for the next game launch; restart the game to apply non-dynamic settings.")
+    val available = accuracyReadback != "N/A" && delayReadback != "N/A"
+    val persisted = accuracyPersisted && delayPersisted && available
+    val activeNow = accuracyReadback == "Ordered & Atomic" && delayReadback == delayValue
+    val detail = "RSX FIFO Fetch Accuracy: $accuracyReadback; Driver Wake-Up Delay: $delayReadback µs; " +
+        "per-game overrides persisted: " + (accuracyPersisted && delayPersisted) + "; " +
+        (if (activeNow) "both values are active now." else "saved for the next game launch; restart to apply non-dynamic settings.")
     return persisted to detail
 }
 
-private fun touchStationFinaleGtaIv(title: String): Boolean {
+/**
+ * This is the native bridge's intentionally coarse signal: it appears only for a sustained
+ * PPU compile stretch, not for every short compilation. A negative value means unsupported.
+ */
+object TouchStationFinaleNativeDiagnostics {
+    fun ppuCompilationProgress(): String {
+        val ready = runCatching {
+            ARMSX3.initialized && MainActivityRuntime.nativeReady.value
+        }.getOrDefault(false)
+        if (!ready) return "N/A — native runtime is not ready"
+        val state = runCatching { ARMSX3.instance.getPlayCompileState() }.getOrNull()
+            ?: return "N/A — native PPU compile-state query failed"
+        if (state < 0) return "N/A — native core does not export PPU compile-state support"
+        if (state == 0) return "No sustained PPU compilation reported; short jobs are intentionally hidden"
+        val done = (state and 0xffff) - 1
+        val total = (state ushr 16) and 0x7fff
+        return if (total > 0) {
+            "$done / $total PPU modules completed in the current compile stretch"
+        } else {
+            "$done PPU modules completed in the current compile stretch; total not reported"
+        }
+    }
+
+    fun allowPpuPrecompile(availableRamMb: Long, thermalStatus: Int?): Boolean {
+        val severeThermal = thermalStatus != null &&
+            thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE
+        return availableRamMb >= 3072L && !severeThermal
+    }
+
+    fun allowPpuPrecompile(context: Context): Boolean {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+        val memory = ActivityManager.MemoryInfo()
+        val availableRamMb = runCatching {
+            manager.getMemoryInfo(memory)
+            memory.availMem / (1024L * 1024L)
+        }.getOrDefault(-1L)
+        val thermalStatus = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            runCatching {
+                (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.currentThermalStatus
+            }.getOrNull()
+        } else null
+        return allowPpuPrecompile(availableRamMb, thermalStatus)
+    }
+}
+
+private fun touchStationFinaleGtaIv(title: String, serial: String?): Boolean {
+    if (!serial.orEmpty().trim().equals("BLES00229", ignoreCase = true)) return false
     val normalized = title.lowercase(Locale.ROOT)
     return normalized.contains("grand theft auto iv") ||
         Regex("""\bgta\s*iv\b""", RegexOption.IGNORE_CASE).containsMatchIn(title)
@@ -653,7 +686,7 @@ fun TouchStationFinaleSuite(
     val serial = game?.serial?.takeIf { it.isNotBlank() }
         ?: game?.settingsKey?.takeIf { it.isNotBlank() }
     val settingsArePerGame = InGameOverlay.settingsScope.value == SettingsScope.Game
-    val isGtaIv = touchStationFinaleGtaIv(gameTitle)
+    val isGtaIv = touchStationFinaleGtaIv(gameTitle, game?.serial)
     val officialEntry = TouchStationFinaleCompatibilityStore.entryFor(serial)
     val officialStatus = officialEntry?.status ?: "Not found in cached official database"
     val officialDate = officialEntry?.date ?: "N/A"
@@ -717,6 +750,7 @@ fun TouchStationFinaleSuite(
         appendLine("Physical controllers: " + (deviceSnapshot?.controllers?.joinToString().orEmpty().ifBlank { "None detected" }))
         appendLine("PS3 engine initialized: " + engineReady)
         appendLine("Native runtime ready: " + nativeReady)
+        appendLine("Native PPU compilation progress: " + TouchStationFinaleNativeDiagnostics.ppuCompilationProgress())
         appendLine("Native core health: " + TouchStationFinaleRuntimeGuard.nativeCoreHealth(context, engineReady, nativeReady))
         appendLine("Tracked Android operations: " + TouchStationFinaleRuntimeGuard.activeSummary())
         appendLine("Memory pressure: " + TouchStationFinaleRuntimeGuard.memoryPressure(context))
@@ -993,16 +1027,18 @@ fun TouchStationFinaleSuite(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "The profile selects safe SPU block mode, accurate SPU XFloat, asynchronous shaders, MSAA off, SPU cache, LLVM precompile and restrained PPU/LLVM threads. It saves Disable FIFO Reordering = On, RSX FIFO Fetch Accuracy = Ordered & Atomic and Driver Wake-Up Delay = 20 µs to this game only. Non-dynamic values may require a game restart. These FIFO settings are a targeted stability test, not a GTA IV guarantee.",
+                    "The BLES00229 profile selects LLVM PPU/SPU decoders, one PPU thread, one LLVM compile thread, safe SPU block mode, accurate SPU XFloat, asynchronous shaders and MSAA off. LLVM precompile is enabled only when Android reports at least 3 GiB available RAM and no severe thermal status. The profile saves only the two native dead-FIFO recommendations: RSX FIFO Fetch Accuracy = Ordered & Atomic and Driver Wake-Up Delay = 20 µs. It leaves FIFO reordering unchanged. This is a targeted test, not a GTA IV guarantee.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(
                     onClick = {
-                        val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
+                        val allowPrecompile = TouchStationFinaleNativeDiagnostics.allowPpuPrecompile(context)
                         val configured = settings.copy(
                             ps3 = settings.ps3.copy(
-                                ppuThreads = minOf(2, cores).coerceAtLeast(1),
+                                ppuDecoder = 1,
+                                spuDecoder = 3,
+                                ppuThreads = 1,
                                 llvmThreads = 1,
                                 preferredSpuThreads = 0,
                                 spuBlockSize = 0,
@@ -1010,7 +1046,7 @@ fun TouchStationFinaleSuite(
                                 shaderMode = 1,
                                 msaaMode = 0,
                                 spuCache = true,
-                                llvmPrecompile = true,
+                                llvmPrecompile = allowPrecompile,
                             ),
                         )
                         val saved = runCatching { onApply(configured) }.getOrDefault(false)
@@ -1019,10 +1055,15 @@ fun TouchStationFinaleSuite(
                         } else {
                             false to "A per-game title ID or verified settings save is unavailable."
                         }
+                        val precompileNote = if (allowPrecompile) {
+                            "LLVM precompile enabled (RAM/thermal guard passed). "
+                        } else {
+                            "LLVM precompile disabled (available RAM is low/unknown or thermal status is severe). "
+                        }
                         message.value = when {
                             !saved -> "Settings could not be verified. No successful profile application is claimed."
-                            fifoResult.first -> "GTA IV profile and FIFO recovery settings were saved. " + fifoResult.second
-                            else -> "The standard GTA IV profile was saved, but FIFO settings were not fully verified: " + fifoResult.second
+                            fifoResult.first -> precompileNote + "GTA IV profile and FIFO recovery settings were saved. " + fifoResult.second
+                            else -> precompileNote + "The GTA IV settings profile was saved, but FIFO settings were not fully verified: " + fifoResult.second
                         }
                     },
                     enabled = isGtaIv && settingsArePerGame && game != null && !safeMode.value,
@@ -1031,7 +1072,7 @@ fun TouchStationFinaleSuite(
                     Text("Apply GTA IV per-game profile")
                 }
                 Text(
-                    "This button is enabled only for a detected GTA IV title while per-game scope is active and safe mode is off. It changes supported settings only and leaves global settings untouched.",
+                    "This button is enabled only for the exact BLES00229 GTA IV title while per-game scope is active and safe mode is off. It changes supported settings only and leaves global settings untouched.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1053,7 +1094,7 @@ fun TouchStationFinaleSuite(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "Native PPU/SPU counters, RSX queue depth, GPU fences and shader-cache internals remain unavailable unless the native bridge exposes them. Missing telemetry is never shown as zero.",
+                    "The native bridge exposes a coarse PPU compile-stretch indicator. Per-worker PPU/SPU counters, RSX queue depth, GPU fences and shader-cache internals remain unavailable; missing telemetry is never shown as zero.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -1128,13 +1169,14 @@ fun TouchStationFinaleSuite(
                 TouchStationFinaleRow("Engine initialized", if (engineReady) "Yes" else "No")
                 TouchStationFinaleRow("Native runtime ready", if (nativeReady) "Yes" else "No")
                 Text(
-                    "GPU utilization and exact Vulkan extensions remain N/A unless the Android driver or native bridge exposes them. No fabricated FPS, GPU percentages or PPU compilation counters are displayed.",
+                    "GPU utilization and exact Vulkan extensions remain N/A unless the Android driver exposes them. The native bridge reports only sustained PPU compile progress, not per-worker job counters.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             TouchStationFinaleSection("07 · PS3 core configuration snapshot") {
+                TouchStationFinaleRow("Native PPU compilation progress", TouchStationFinaleNativeDiagnostics.ppuCompilationProgress())
                 TouchStationFinaleRow("PPU decoder / threads", settings.ps3.ppuDecoder.toString() + " / " + settings.ps3.ppuThreads)
                 TouchStationFinaleRow("LLVM threads / precompile", settings.ps3.llvmThreads.toString() + " / " + settings.ps3.llvmPrecompile)
                 TouchStationFinaleRow("SPU decoder / block size", settings.ps3.spuDecoder.toString() + " / " + settings.ps3.spuBlockSize)
@@ -1161,7 +1203,7 @@ fun TouchStationFinaleSuite(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "The bundled native bridge does not expose live FIFO queue depth, command progress, GPU fences or RSX command validation. TouchStation records explicit FIFO errors and exports evidence, but cannot safely reset or repair a stalled native queue from the Android UI.",
+                    "The bundled native bridge exposes sustained PPU compile progress but not live FIFO queue depth, command progress, GPU fences or RSX command validation. TouchStation records explicit FIFO errors and exports evidence, but cannot safely reset or repair a stalled native queue from the Android UI.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -1782,24 +1824,41 @@ def patch_library_compatibility(app_dir: Path) -> None:
 
 
 def patch_gta_iv_game_defaults(app_dir: Path) -> None:
-    """Add a conservative BLES00229 RSX FIFO workaround to the per-title boot defaults."""
+    """Add only the two native dead-FIFO recommendations to BLES00229 boot defaults."""
     path = app_dir / "src/main/java/com/armsx2/config/GameDefaults.kt"
     text = path.read_text(encoding="utf-8")
     if '"BLES00229" to mapOf(' in text:
         raise SystemExit("GTA IV BLES00229 boot defaults are already present")
-    insertion = """        // GTA IV (Europe, BLES00229). The previous device report recorded a dead RSX FIFO.
-        // Use the same supported FIFO safeguards already used by this core for another
-        // FIFO-stalling title. This is a targeted workaround, not a device-specific boot guarantee.
+
+    stock_anchor = "private val STOCK: Map<String, String> = mapOf("
+    stock_start = text.find(stock_anchor)
+    if stock_start < 0:
+        raise SystemExit("GameDefaults STOCK map is missing; refusing to add game-scoped settings without reset values")
+    stock_end = text.find("\n    )", stock_start)
+    stock_text = text[stock_start:] if stock_end < 0 else text[stock_start:stock_end]
+    required_stock = (
+        '"Core@@RSX FIFO Fetch Accuracy" to "\\"Atomic\\""',
+        '"Video@@Driver Wake-Up Delay" to "0"',
+    )
+    missing_stock = [marker for marker in required_stock if marker not in stock_text]
+    if missing_stock:
+        raise SystemExit(
+            "GameDefaults STOCK map is missing reset values for GTA IV settings: "
+            + ", ".join(missing_stock)
+        )
+
+    anchor = "        // God of War: Ascension:"
+    insertion = """        // GTA IV (Europe, BLES00229). The native dead-FIFO message names these two
+        // supported mitigations. Leave FIFO reordering unchanged: that is a separate
+        // title-specific workaround, not part of the dead-FIFO recommendation.
         "BLES00229" to mapOf(
-            "Video@@Disable FIFO Reordering" to "true",
             "Core@@RSX FIFO Fetch Accuracy" to "\\"Ordered & Atomic\\"",
             "Video@@Driver Wake-Up Delay" to "20",
         ),
-
 """
-    anchor = "        // God of War: Ascension:"
     text = replace_once(text, anchor, insertion + anchor, "GTA IV BLES00229 boot defaults")
     path.write_text(text, encoding="utf-8")
+
 
 def patch_application_reliability(app_dir: Path) -> None:
     """Initialize Finale lifecycle and crash diagnostics from Application.onCreate."""
@@ -1956,11 +2015,16 @@ def main() -> None:
         "Export Finale diagnostic report",
         "Download TouchStation.log",
         "Share TouchStation.log",
-        "Video@@Disable FIFO Reordering",
         "Core@@RSX FIFO Fetch Accuracy",
         "Video@@Driver Wake-Up Delay",
         "Ordered & Atomic",
         "touchStationFinaleApplyFifoRecoveryProfile",
+        "TouchStationFinaleNativeDiagnostics",
+        "ppuCompilationProgress()",
+        "allowPpuPrecompile",
+        "ppuThreads = 1",
+        "spuDecoder = 3",
+        "equals(\"BLES00229\", ignoreCase = true)",
         "TouchStationFinaleErrorHistory.fifoFailureCount()",
         "Download TouchStation.log",
         "Physical controllers",

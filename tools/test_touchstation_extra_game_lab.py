@@ -41,6 +41,9 @@ class ExtraGameLabTests(unittest.TestCase):
         self.assertIn("SettingsScope.Game", SOURCE)
         self.assertIn("Apply GTA IV conservative test profile", SOURCE)
         self.assertIn("has not been validated as playable", SOURCE)
+        self.assertIn("ppuDecoder = 1", SOURCE)
+        self.assertIn("spuDecoder = 3", SOURCE)
+        self.assertIn("TouchStationFinaleNativeDiagnostics.allowPpuPrecompile(", SOURCE)
 
     def test_repeatable_session_captures_configuration_and_device_evidence(self):
         for marker in (
@@ -62,7 +65,8 @@ class ExtraGameLabTests(unittest.TestCase):
 
     def test_native_engine_boundaries_are_explicit(self):
         for marker in (
-            "Native PPU/SPU/RSX counters",
+            "coarse PPU compile-stretch indicator",
+            "per-worker PPU/SPU counters",
             "guest crash callbacks remain unavailable",
             "does not launch or benchmark the game automatically",
             "not proof that a game is universally compatible",

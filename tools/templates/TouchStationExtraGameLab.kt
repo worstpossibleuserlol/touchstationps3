@@ -280,6 +280,8 @@ private fun gameLabCandidate(settings: Settings, snapshot: GameLabDeviceSnapshot
         else minOf(2, snapshot.cpuCores).coerceAtLeast(1)
     return settings.copy(
         ps3 = settings.ps3.copy(
+            ppuDecoder = 1,
+            spuDecoder = 3,
             ppuThreads = ppuThreads,
             llvmThreads = 1,
             preferredSpuThreads = 0,
@@ -288,7 +290,9 @@ private fun gameLabCandidate(settings: Settings, snapshot: GameLabDeviceSnapshot
             shaderMode = 1,
             msaaMode = 0,
             spuCache = true,
-            llvmPrecompile = snapshot.availableRamMb >= 3072L && !severeThermal,
+            llvmPrecompile = TouchStationFinaleNativeDiagnostics.allowPpuPrecompile(
+                snapshot.availableRamMb, snapshot.thermalStatus,
+            ),
         ),
     )
 }
@@ -366,7 +370,7 @@ fun TouchStationExtraGameLabSuite(settings: Settings, onApply: (Settings) -> Boo
 
             Text("Device-aware profile", style = MaterialTheme.typography.titleMedium)
             Text(
-                "The profile uses one PPU thread for GTA IV, low available RAM or severe thermal pressure; it uses one LLVM thread, conservative SPU settings and disables precompile when available RAM is below 3 GiB. This is a cautious starting point, not a performance guarantee.",
+                "The profile explicitly selects LLVM PPU/SPU decoders, one PPU thread for GTA IV, one LLVM compile thread and conservative SPU/RSX settings. The shared memory/thermal guard enables LLVM precompile only with at least 3 GiB available RAM and no severe thermal status. This is a cautious starting point, not a performance guarantee.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Button(
@@ -520,7 +524,7 @@ fun TouchStationExtraGameLabSuite(settings: Settings, onApply: (Settings) -> Boo
                                 item.optString("settingsSha256").take(16))
                         }
                         appendLine("Observations are user-entered. Android process exits are not proof of a PS3 guest crash.")
-                        appendLine("Native PPU/SPU/RSX counters, FIFO/shader traces and guest crash callbacks remain unavailable unless exported by the pinned native core.")
+                        appendLine("The native bridge exposes a coarse PPU compile-stretch indicator; per-worker PPU/SPU counters, FIFO/shader traces and guest crash callbacks remain unavailable unless exported by the pinned native core.")
                     }
                     gameLabShare(context, "TouchStation Game Compatibility Lab report", report)
                     message.value = "Opened Android share sheet for the Game Lab report."

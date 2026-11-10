@@ -15,11 +15,11 @@ Version Extra brings the 50-point feature set together with a new compatibility 
 - **Official compatibility sync:** downloads the official RPCS3 compatibility export on request, caches it, and matches PS3 games by exact title ID.
 - **Library compatibility index:** searches the cached PS3 library by game title or ID and displays official status, test date and update metadata when present.
 - **Separate handset test record:** records what you observed on this particular device. It never converts an unknown result into a Playable rating.
-- **GTA IV conservative profile:** applies supported settings only to GTA IV while the active settings scope is per-game. It uses Accurate SPU XFloat, Safe SPU block size, asynchronous shader recompilation, MSAA off, SPU cache and LLVM precompilation, one LLVM compile thread and at most two PPU threads. For BLES00229, the build also applies a per-title RSX FIFO workaround at boot: FIFO reordering disabled, Ordered & Atomic fetch accuracy and a 20 µs driver wake-up delay.
+- **GTA IV conservative profile:** applies only to exact title ID BLES00229 while per-game scope is active. It selects LLVM PPU/SPU decoders, one PPU thread and one LLVM compile thread, Accurate SPU XFloat, Safe SPU block size, asynchronous shader recompilation, MSAA off and SPU cache. LLVM precompilation is enabled only when Android reports at least 3 GiB available RAM and no severe thermal status. The boot-time FIFO workaround uses only the two mitigations named by the native dead-FIFO error: Ordered & Atomic fetch accuracy and a 20 µs driver wake-up delay; FIFO reordering is left unchanged.
 - **Device readiness panel:** reports Android/ABI, SoC identity when exposed, CPU core count, available RAM, app PSS, free app-private storage, thermal severity, physical controllers and native-runtime readiness.
 - **Extra diagnostics export:** combines the current device, game ID, official compatibility result, local test result and configured PS3 settings in a shareable report.
 
-The official compatibility data is for desktop RPCS3 and is not a device-specific guarantee. The BLES00229 FIFO workaround is an experimental per-title configuration, not a native-core change or a promise that GTA IV will boot. It is intended to address a reported RSX FIFO failure; device-specific results still require testing on the actual handset.
+The official compatibility data is for desktop RPCS3 and is not a device-specific guarantee. The BLES00229 FIFO workaround is an experimental per-title configuration, not a native RSX-core fix or a promise that GTA IV will boot. It targets the core's documented dead-FIFO recovery path; device-specific results still require testing on the actual handset.
 
 See [the 50-point feature map](docs/FINALE_FEATURES.md) for the full breakdown. The primary APK remains a clean download; the corresponding-source archive and SHA-256 checksum remain separate. The APK is not padded with arbitrary data to reach a byte target.
 
@@ -66,7 +66,7 @@ TouchStation 10.0.0 builds on the existing ARMSX3/RPCS3 Android core and adds a 
 
 ### 20-feature implementation
 
-1. **PPU recompiler diagnostics:** show configured PPU decoder, PPU threads, LLVM compile threads and precompile setting. Live compile progress and detailed native PPU exception counters remain N/A unless the bridge exports them.
+1. **PPU recompiler diagnostics:** show configured PPU decoder, PPU threads, LLVM compile threads and precompile setting. The native bridge also exposes a coarse progress indicator for sustained PPU compile stretches; per-worker counters and detailed native PPU exception data remain unavailable.
 2. **PPU thread optimizer:** provide a conservative hardware-based thread recommendation with manual settings preserved.
 3. **PPU cache manager:** inspect the PPU cache directory, file count and size without touching game saves.
 4. **SPU workload monitor:** show SPU decoder, block size, preferred thread configuration and native in-game overlay access.

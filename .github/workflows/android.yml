@@ -299,10 +299,26 @@ jobs:
           grep -Fq 'TouchStationExtraGameLabSuite(' "$PERF_TAB"
           grep -Fq 'BLES00229' "$GAME_LAB_SUITE"
           GAME_DEFAULTS="$APP/src/main/java/com/armsx2/config/GameDefaults.kt"
-          grep -Fq '"BLES00229" to mapOf(' "$GAME_DEFAULTS"
-          grep -Fq '"Video@@Disable FIFO Reordering" to "true"' "$GAME_DEFAULTS"
-          grep -Fq '"Core@@RSX FIFO Fetch Accuracy" to "\"Ordered & Atomic\""' "$GAME_DEFAULTS"
-          grep -Fq '"Video@@Driver Wake-Up Delay" to "20"' "$GAME_DEFAULTS"
+          BLES_DEFAULTS_BLOCK="$(sed -n '/"BLES00229" to mapOf(/,/^[[:space:]]*),/p' "$GAME_DEFAULTS")"
+          STOCK_DEFAULTS_BLOCK="$(sed -n '/private val STOCK: Map<String, String> = mapOf(/,/^    )/p' "$GAME_DEFAULTS")"
+          test -n "$BLES_DEFAULTS_BLOCK"
+          printf '%s\n' "$BLES_DEFAULTS_BLOCK" | grep -Fq '"Core@@RSX FIFO Fetch Accuracy" to "\"Ordered & Atomic\""'
+          printf '%s\n' "$BLES_DEFAULTS_BLOCK" | grep -Fq '"Video@@Driver Wake-Up Delay" to "20"'
+          if printf '%s\n' "$BLES_DEFAULTS_BLOCK" | grep -Fq 'Disable FIFO Reordering'; then
+            echo "GTA IV profile must not inherit the separate FIFO-reordering workaround"
+            exit 1
+          fi
+          printf '%s\n' "$STOCK_DEFAULTS_BLOCK" | grep -Fq '"Core@@RSX FIFO Fetch Accuracy" to "\"Atomic\""'
+          printf '%s\n' "$STOCK_DEFAULTS_BLOCK" | grep -Fq '"Video@@Driver Wake-Up Delay" to "0"'
+          NATIVE_GLUE="$APP/src/main/cpp/native-lib.cpp"
+          grep -Fq 'return coreLib.getPlayCompileState ? coreLib.getPlayCompileState() : -1;' "$NATIVE_GLUE"
+          grep -Fq 'TouchStationFinaleNativeDiagnostics.ppuCompilationProgress()' "$V11_SUITE"
+          grep -Fq 'TouchStationFinaleNativeDiagnostics.ppuCompilationProgress()' "$FINALE_SUITE"
+          grep -Fq 'TouchStationFinaleNativeDiagnostics.allowPpuPrecompile(context)' "$FINALE_SUITE"
+          grep -Fq 'TouchStationFinaleNativeDiagnostics.allowPpuPrecompile(' "$GAME_LAB_SUITE"
+          grep -Fq 'ppuDecoder = 1' "$GAME_LAB_SUITE"
+          grep -Fq 'spuDecoder = 3' "$GAME_LAB_SUITE"
+          grep -Fq 'serial.orEmpty().trim().equals("BLES00229", ignoreCase = true)' "$FINALE_SUITE"
           grep -Fq 'Repeatable launch test' "$GAME_LAB_SUITE"
           grep -Fq 'settingsSha256' "$GAME_LAB_SUITE"
           grep -Fq 'guest crash callbacks remain unavailable' "$GAME_LAB_SUITE"

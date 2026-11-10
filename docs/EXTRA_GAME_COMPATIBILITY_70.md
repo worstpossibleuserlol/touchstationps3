@@ -11,7 +11,7 @@ Status labels:
 ## 1–10 · PPU
 
 1. Adaptive PPU recompiler — NATIVE CORE REQUIRED; current bridge does not expose backend-selection control.
-2. PPU LLVM compilation queue — configured thread count is shown; live queue state is NATIVE CORE REQUIRED.
+2. PPU LLVM compilation queue — the bridge exposes coarse progress for sustained compile stretches; per-worker queue state and detailed counters are NATIVE CORE REQUIRED.
 3. Persistent PPU cache — existing upstream cache remains in use; private cache lifecycle control is NATIVE CORE REQUIRED.
 4. PPU cache validation — existing read-only evidence only; native cache integrity API is NATIVE CORE REQUIRED.
 5. PPU compilation fallback — NATIVE CORE REQUIRED.
@@ -76,7 +76,7 @@ Status labels:
 ## 51–60 · GTA IV / BLES00229
 
 51. Exact BLES00229 detection — APP IMPLEMENTED; the GTA IV profile appears only for this title ID.
-52. Conservative GTA IV starting profile — APP IMPLEMENTED; one PPU/LLVM thread, conservative SPU settings, no MSAA and precompile disabled under constrained memory/thermal conditions.
+52. Conservative GTA IV starting profile — APP IMPLEMENTED; LLVM PPU/SPU decoders, one PPU/LLVM thread, conservative SPU settings, no MSAA and precompile disabled below 3 GiB available RAM or under severe thermal conditions.
 53. Per-game scope guard — APP IMPLEMENTED; the profile cannot be applied from the global settings scope.
 54. Repeatable GTA IV test session — APP IMPLEMENTED; user starts the record before launching the game.
 55. Boot and gameplay stage observations — APP IMPLEMENTED as manual observations, not automatic guest callbacks.
@@ -101,4 +101,4 @@ Status labels:
 
 ## Native-engine boundary
 
-The build pipeline uses pinned prebuilt ARM64 native emulator libraries. This expansion does not claim to rebuild or modify native PPU, SPU, RSX, Vulkan, GPU scheduling, guest-thread synchronization, or guest crash callbacks. Those items are explicitly **NATIVE CORE REQUIRED** above. A successful Android build verifies compilation and packaging only; GTA IV and other games still require real device testing, and no profile guarantees playability or stable frame rate.
+The build pipeline uses pinned prebuilt ARM64 native emulator libraries. The Android JNI glue distinguishes a missing optional PPU compile-progress symbol from an idle compiler; the core itself remains prebuilt. This expansion does not claim to rebuild or modify native PPU, SPU, RSX, Vulkan, GPU scheduling, guest-thread synchronization, or guest crash callbacks. Those items are explicitly **NATIVE CORE REQUIRED** above. A successful Android build verifies compilation and packaging only; GTA IV and other games still require real device testing, and no profile guarantees playability or stable frame rate.

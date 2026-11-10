@@ -470,6 +470,26 @@ def patch_bridge(path: Path) -> None:
     )
     path.write_text(source, encoding="utf-8")
 
+def patch_native_compile_state(app_dir: Path) -> None:
+    """Distinguish an unsupported native PPU-progress API from an idle compiler."""
+    native_path = app_dir / "src/main/cpp/native-lib.cpp"
+    kotlin_path = app_dir / "src/main/java/com/armsx3/core/ARMSX3.kt"
+    native_source = native_path.read_text(encoding="utf-8")
+    kotlin_source = kotlin_path.read_text(encoding="utf-8")
+
+    old_native = "return coreLib.getPlayCompileState ? coreLib.getPlayCompileState() : 0;"
+    new_native = "return coreLib.getPlayCompileState ? coreLib.getPlayCompileState() : -1;"
+    old_kotlin = "    /** 0 while nothing compiles during play, else 1 + the PPU modules compiled so far in this stretch. */\n    external fun getPlayCompileState(): Int"
+    new_kotlin = "    /** -1 if unsupported; 0 if no sustained PPU compile is reported; positive values encode progress. */\n    external fun getPlayCompileState(): Int"
+
+    if new_native in native_source or new_kotlin in kotlin_source:
+        raise SystemExit("Native PPU compile-state availability fix is already installed")
+    patched_native = replace_once(native_source, old_native, new_native, "optional PPU compile-state JNI fallback")
+    patched_kotlin = replace_once(kotlin_source, old_kotlin, new_kotlin, "PPU compile-state API contract")
+    native_path.write_text(patched_native, encoding="utf-8")
+    kotlin_path.write_text(patched_kotlin, encoding="utf-8")
+
+
 def patch_performance_tab(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
     if "TouchStationExtraShutdownSuite()" in source:
@@ -493,9 +513,11 @@ def main() -> None:
     reliability_dir = app_dir / "src/main/java/com/armsx2/reliability"
     performance = settings_dir / "PerformanceTab.kt"
     bridge = app_dir / "src/main/java/com/armsx3/Rpcs3Bridge.kt"
+    native_glue = app_dir / "src/main/cpp/native-lib.cpp"
+    core_api = app_dir / "src/main/java/com/armsx3/core/ARMSX3.kt"
     diagnostics = reliability_dir / "TouchStationExtraShutdownDiagnostics.kt"
     suite = settings_dir / "TouchStationExtraShutdownSuite.kt"
-    for path in (runtime, performance, bridge):
+    for path in (runtime, performance, bridge, native_glue, core_api):
         if not path.is_file():
             raise SystemExit("Required upstream source file is missing: " + str(path))
     if not TEMPLATE.is_file():
@@ -515,8 +537,9 @@ def main() -> None:
         encoding="utf-8")
     patch_runtime(runtime)
     patch_bridge(bridge)
+    patch_native_compile_state(app_dir)
     patch_performance_tab(performance)
-    print("Applied TouchStation Extra shutdown/boot lifecycle safeguards, persisted diagnostics and recovery UI.")
+    print("Applied TouchStation Extra shutdown/boot lifecycle safeguards, native PPU-progress availability reporting, persisted diagnostics and recovery UI.")
 
 if __name__ == "__main__":
     main()

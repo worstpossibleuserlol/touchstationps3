@@ -206,6 +206,38 @@ class ShutdownBugfixTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 PATCH.patch_performance_tab(path)
 
+    def test_missing_optional_ppu_compile_api_is_not_reported_as_idle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Path(tmp)
+            native = app / "src/main/cpp/native-lib.cpp"
+            api = app / "src/main/java/com/armsx3/core/ARMSX3.kt"
+            native.parent.mkdir(parents=True)
+            api.parent.mkdir(parents=True)
+            native.write_text(
+                """extern "C" JNIEXPORT jint JNICALL
+Java_com_armsx3_core_ARMSX3_getPlayCompileState(JNIEnv *, jobject) {
+  return coreLib.getPlayCompileState ? coreLib.getPlayCompileState() : 0;
+}
+""",
+                encoding="utf-8",
+            )
+            api.write_text(
+                """package com.armsx3.core
+class ARMSX3 {
+    /** 0 while nothing compiles during play, else 1 + the PPU modules compiled so far in this stretch. */
+    external fun getPlayCompileState(): Int
+}
+""",
+                encoding="utf-8",
+            )
+            PATCH.patch_native_compile_state(app)
+            native_result = native.read_text(encoding="utf-8")
+            api_result = api.read_text(encoding="utf-8")
+            self.assertIn("return coreLib.getPlayCompileState ? coreLib.getPlayCompileState() : -1;", native_result)
+            self.assertIn("-1 if unsupported; 0 if no sustained PPU compile is reported", api_result)
+            with self.assertRaises(SystemExit):
+                PATCH.patch_native_compile_state(app)
+
     def test_diagnostic_template_has_persisted_stages_and_manual_outcomes(self):
         for marker in (
             "prefs.edit().putString(KEY_EVENTS, next.toString()).commit()",

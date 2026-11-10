@@ -71,7 +71,7 @@ This release combines the diagnostics and settings tools from the earlier TouchS
 
 The official database is the desktop RPCS3 compatibility list. Its result is associated with a specific game ID and is not a prediction for a particular Android phone. The local device record is separate, user-entered evidence. The app never upgrades an unknown game to a positive status just because a title string looks similar.
 
-The GTA IV profile is a conservative configuration preset, not a port, patch or native-core modification. It selects Accurate SPU XFloat, Safe SPU block size, asynchronous shader recompilation, MSAA off, SPU cache on, LLVM precompilation on, one LLVM compile thread and at most two PPU threads. The profile is restricted to GTA IV while per-game settings are active. A successful settings write does not mean the game has booted or is playable.
+The GTA IV profile is a conservative configuration preset, not a port, patch or native-core modification. For exact ID BLES00229 it selects LLVM PPU/SPU decoders, one PPU thread, one LLVM compile thread, Accurate SPU XFloat, Safe SPU block size, asynchronous shader recompilation, MSAA off and SPU cache on. LLVM precompilation is enabled only when Android reports at least 3 GiB available RAM and no severe thermal status. The boot-time FIFO workaround applies only Ordered & Atomic fetch accuracy and a 20 µs driver wake-up delay; it leaves FIFO reordering unchanged. A successful settings write does not mean the game has booted or is playable.
 
 ## Branding and source notices
 
@@ -128,7 +128,7 @@ The Finale source patcher now generates a dedicated `com.armsx2.reliability.Touc
 - Game-source readability checks, user-triggered SHA-256 with a 256 MiB limit, and a bounded app-cache inventory.
 - Diagnostic export combines the existing stdout/stderr session log, app-process logcat, Finale event history and the latest Java/Kotlin crash report.
 
-These are Android-side reliability aids. The app does not automatically restart a failed game or reset native worker threads. The pinned prebuilt native engine exposes no trustworthy PPU/SPU task counters, RSX FIFO queue depth, GPU fences, shader-cache internals or safe native FIFO recovery API. These remain marked unavailable and require native-source changes, rebuilt ARM64 libraries and real-device testing.
+These are Android-side reliability aids. The app does not automatically restart a failed game or reset native worker threads. The native bridge exposes a coarse PPU compile-stretch progress signal, but not per-worker PPU/SPU task counters, RSX FIFO queue depth, GPU fences, shader-cache internals or a safe native FIFO recovery API. Those detailed signals remain unavailable and require native-source changes, rebuilt ARM64 libraries and real-device testing.
 
 The OS owns Bluetooth pairing/reconnection; TouchStation can enumerate connected physical input devices but cannot force a reconnect. PSS trends are diagnostic hints, not proof of a memory leak. The app-cache inventory does not inspect private shader-cache internals or delete files. Large game images are not hashed automatically.
 
@@ -143,7 +143,7 @@ The Android-side reliability layer now has a separate `TouchStationFinaleRuntime
 - Memory pressure is classified from Android's `ActivityManager.MemoryInfo` low-memory flag and OS threshold. It is a device-pressure warning, not a guarantee of emulator stability.
 - The current active-operation list, native-library health and memory-pressure reading are included in the Finale diagnostics and export report.
 
-The watchdog protects Android-managed operations; it is not a PPU/SPU execution watchdog. Native PPU task progress, SPU worker validation, RSX command-stream validation, GPU-fence synchronization and private shader-cache validation still require instrumentation in a rebuilt native core. The existing PSS trend remains a diagnostic trend only and must not be described as a confirmed memory-leak detector.
+The watchdog protects Android-managed operations; it is not a PPU/SPU execution watchdog. A coarse sustained-compile PPU signal is available, but detailed native PPU task progress, SPU worker validation, RSX command-stream validation, GPU-fence synchronization and private shader-cache validation still require instrumentation in a rebuilt native core. The existing PSS trend remains a diagnostic trend only and must not be described as a confirmed memory-leak detector.
 
 
 ## TouchStation Extra — 30-feature stability and diagnostics update
@@ -191,7 +191,7 @@ TouchStation Extra builds on the previous releases and adds an Android-side diag
 
 ### Native-core boundary
 
-The pinned ARM64 engine remains a prebuilt upstream binary. TouchStation Extra does not rebuild or modify native PPU, SPU, RSX, Vulkan or GPU scheduling code. Consequently, live PPU execution/module/exception counters, SPU task queues and worker states, RSX command-stream validation, FIFO queue depth, GPU fences, shader compilation counters, physical GPU utilization and native memory allocation traces remain N/A until the native core exports those APIs and matching ARM64 libraries are rebuilt and tested.
+The pinned ARM64 engine remains a prebuilt upstream binary. TouchStation Extra does not rebuild or modify native PPU, SPU, RSX, Vulkan or GPU scheduling code. The existing native bridge exposes only a coarse sustained PPU compile-stretch indicator; live per-worker PPU execution/module/exception counters, SPU task queues and worker states, RSX command-stream validation, FIFO queue depth, GPU fences, shader compilation counters, physical GPU utilization and native memory allocation traces remain N/A until the native core exports those APIs and matching ARM64 libraries are rebuilt and tested.
 
 The watchdog in this release monitors Android-managed operations only. It does not kill or reset native threads. Crash-loop protection records uncaught application crashes and enables frontend safe mode on a subsequent launch; it cannot guarantee recovery from every native process termination. Cache cleanup is narrowly limited to a TouchStation-owned temporary log file and never deletes game files, firmware, save data or emulator shader caches.
 
@@ -273,6 +273,6 @@ The Advanced Suite adds the following product-facing feature areas. Android-side
 
 Per-game boot stages, crash/freeze observations and controller notes are user-entered, device-local evidence. The stability index summarizes these entries; it is not an automatic compatibility rating. Android process-exit history is application-wide and cannot prove that a guest game failed.
 
-The pinned ARM64 core remains a prebuilt upstream binary. Native PPU instruction profiling/fallback/module traces, SPU worker distribution/starvation/retry, RSX command-stream validation, live FIFO queue depth, GPU fences, private shader-cache metadata, exact GPU driver counters and physical GPU utilization remain unavailable until the native core exports those APIs and matching ARM64 libraries are rebuilt and tested.
+The pinned ARM64 core remains a prebuilt upstream binary. The bridge exposes a coarse PPU compile-stretch progress value, but native PPU instruction profiling/fallback/module traces, SPU worker distribution/starvation/retry, RSX command-stream validation, live FIFO queue depth, GPU fences, private shader-cache metadata, exact GPU driver counters and physical GPU utilization remain unavailable until the native core exports those APIs and matching ARM64 libraries are rebuilt and tested.
 
 Settings profiles are device/scope separated. Applying a preset is user initiated, goes through the existing settings callback and is only reported as successful after supported read-back checks. Keep-screen-on is an Android window flag, not a background-service control. The storage scan is bounded and read-only.

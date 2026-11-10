@@ -194,11 +194,16 @@ class HomeViewModel {
             "MediaStore.Downloads.EXTERNAL_CONTENT_URI",
             "logcat",
             "GPU fences",
-            "Video@@Disable FIFO Reordering",
             "Core@@RSX FIFO Fetch Accuracy",
             "Video@@Driver Wake-Up Delay",
             "Ordered & Atomic",
             "touchStationFinaleApplyFifoRecoveryProfile",
+            "TouchStationFinaleNativeDiagnostics",
+            "ppuCompilationProgress()",
+            "allowPpuPrecompile",
+            "ppuThreads = 1",
+            "spuDecoder = 3",
+            'serial.orEmpty().trim().equals("BLES00229", ignoreCase = true)',
             "CoreSettingOverrides.record",
             "CoreSettingOverrides.load",
             "return persisted to detail",
@@ -351,10 +356,12 @@ fun GameErrorBanner() {
         self.assertIn("TouchStation.log", source)
         self.assertIn("MediaStore.Downloads.EXTERNAL_CONTENT_URI", source)
         self.assertIn('JSONObject.quote("Ordered & Atomic")', source)
-        self.assertIn('val reorderingValue = "true"', source)
-        self.assertIn('TOUCHSTATION_FINALE_FIFO_REORDERING_PATH', source)
+        self.assertNotIn('TOUCHSTATION_FINALE_FIFO_REORDERING_PATH', source)
+        self.assertNotIn('val reorderingValue = "true"', source)
         self.assertIn('val delayValue = "20"', source)
         self.assertIn("SettingsScope.Game", source)
+        self.assertIn("not live FIFO queue depth", source)
+        self.assertIn("TouchStationFinaleNativeDiagnostics.ppuCompilationProgress()", source)
 
 
     def test_gta_iv_fifo_boot_defaults_are_scoped_to_bles00229(self) -> None:
@@ -369,7 +376,7 @@ object GameDefaults {
         // God of War: Ascension:
         "BCUS98232" to mapOf("Core@@Stub PPU Traps" to "1"),
     )
-    private val STOCK = mapOf(
+    private val STOCK: Map<String, String> = mapOf(
         "Video@@Disable FIFO Reordering" to "false",
         "Core@@RSX FIFO Fetch Accuracy" to "\\"Atomic\\"",
         "Video@@Driver Wake-Up Delay" to "0",
@@ -381,17 +388,43 @@ object GameDefaults {
             FINALE.patch_gta_iv_game_defaults(app)
             result = defaults.read_text(encoding="utf-8")
             self.assertIn('"BLES00229" to mapOf(', result)
-            self.assertIn('"Video@@Disable FIFO Reordering" to "true"', result)
-            self.assertIn('"Core@@RSX FIFO Fetch Accuracy" to "\\"Ordered & Atomic\\""', result)
-            self.assertIn('"Video@@Driver Wake-Up Delay" to "20"', result)
+            block = result.split('"BLES00229" to mapOf(', 1)[1].split('),', 1)[0]
+            self.assertIn('"Core@@RSX FIFO Fetch Accuracy" to "\\"Ordered & Atomic\\""', block)
+            self.assertIn('"Video@@Driver Wake-Up Delay" to "20"', block)
+            self.assertNotIn("Disable FIFO Reordering", block)
             self.assertEqual(result.count('"BLES00229" to mapOf('), 1)
             self.assertIn('"Video@@Disable FIFO Reordering" to "false"', result)
             with self.assertRaises(SystemExit):
                 FINALE.patch_gta_iv_game_defaults(app)
 
+    def test_gta_iv_defaults_require_stock_reset_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary)
+            defaults = app / "src/main/java/com/armsx2/config/GameDefaults.kt"
+            defaults.parent.mkdir(parents=True)
+            defaults.write_text(
+                """package com.armsx2.config
+object GameDefaults {
+    private val BY_SERIAL = mapOf(
+        // God of War: Ascension:
+        "BCUS98232" to mapOf("Core@@Stub PPU Traps" to "1"),
+    )
+    private val STOCK: Map<String, String> = mapOf(
+        "Core@@RSX FIFO Fetch Accuracy" to "\\"Atomic\\"",
+    )
+}
+""",
+                encoding="utf-8",
+            )
+            with self.assertRaises(SystemExit):
+                FINALE.patch_gta_iv_game_defaults(app)
+            self.assertNotIn('"BLES00229" to mapOf(', defaults.read_text(encoding="utf-8"))
+
     def test_native_metrics_are_not_fabricated(self) -> None:
         source = FINALE.KOTLIN_SOURCE
         self.assertIn("GPU utilization and exact Vulkan extensions remain N/A", source)
+        self.assertIn("No sustained PPU compilation reported", source)
+        self.assertIn("native core does not export PPU compile-state support", source)
         self.assertIn("FPS and frametime are supplied only by the native in-game overlay", source)
         self.assertIn("Official status is a desktop RPCS3 reference", source)
         self.assertIn("internal fun entryFor(serial: String?)", source)

@@ -338,7 +338,7 @@ fun TouchStation11ReliabilitySuite(
             )
 
             TouchStation11Section("1–5. PPU and SPU Diagnostics") {
-                TouchStation11Row("PPU compilation progress", "N/A — live job counters are not exported by the pinned native bridge")
+                TouchStation11Row("PPU compilation progress", TouchStationFinaleNativeDiagnostics.ppuCompilationProgress())
                 TouchStation11Row("PPU cache validation", snapshot.value?.let {
                     it.ppu.files.toString() + " files · " + touchStation11Bytes(it.ppu.bytes) +
                         " · unreadable/empty " + it.ppu.unreadable
@@ -731,6 +731,7 @@ def main() -> None:
 
     feature_markers = [
         "PPU compilation progress",
+        "TouchStationFinaleNativeDiagnostics.ppuCompilationProgress()",
         "PPU cache validation",
         "PPU Thread Recommendation",
         "SPU decoder / block",
