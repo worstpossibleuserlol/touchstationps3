@@ -1,20 +1,21 @@
 name: TouchStation Extra Build
 
 on:
+  # Feature branches are validated by their PR event; do not build every commit twice.
   push:
-    branches: [main, feature/touchstation-extra]
+    branches: [main]
   pull_request:
-    branches: [main, feature/touchstation-10.0.0]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# Each workflow run gets its own queue key. Push/dispatch mirrors must not cancel
-# one another before tests or packaging have completed.
+# A new commit on the same PR supersedes its older build. Main-branch pushes
+# use a separate group and are never duplicated by feature-branch push events.
 concurrency:
-  group: touchstation-extra-${{ github.run_id }}
-  cancel-in-progress: false
+  group: touchstation-extra-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   build-arm64:
