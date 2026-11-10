@@ -15,7 +15,7 @@ assert SPEC is not None and SPEC.loader is not None
 PATCHER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PATCHER)
 TEMPLATE = (ROOT / "tools/templates/TouchStationExtraCompatibility.kt").read_text(encoding="utf-8")
-DOC = (ROOT / "docs/EXTRA_COMPATIBILITY_40.md").read_text(encoding="utf-8")
+DOC = (ROOT / "docs/EXTRA_COMPATIBILITY_50.md").read_text(encoding="utf-8")
 
 
 class ExtraCompatibilityTests(unittest.TestCase):
@@ -65,11 +65,17 @@ class ExtraCompatibilityTests(unittest.TestCase):
         self.assertIn("putString(extraCompatibilityGameKey(serial), record.toString())", TEMPLATE)
         self.assertIn("Share compatibility preflight", TEMPLATE)
 
-    def test_requested_feature_map_has_twenty_general_and_twenty_gta_iv_items(self):
-        general, gta = DOC.split("## 21–40 · GTA IV / BLES00229", 1)
-        general = general.split("## 1–20 · Universal / other PS3 games", 1)[1]
-        self.assertEqual(len(re.findall(r"(?m)^\d+\. ", general)), 20)
-        self.assertEqual(len(re.findall(r"(?m)^\d+\. ", gta.split("## Native-core boundary", 1)[0])), 20)
+    def test_requested_feature_map_has_exactly_fifty_features(self):
+        first, second = DOC.split("## 21–50 · Expanded game compatibility", 1)
+        first = first.split("## 1–20 · PPU / SPU / RSX / GTA IV foundations", 1)[1]
+        first_count = len(re.findall(r"(?m)^\d+\. \*\*", first))
+        second_count = len(re.findall(r"(?m)^\d+\. \*\*", second.split("## Native-core boundary", 1)[0]))
+        self.assertEqual(first_count, 20)
+        self.assertEqual(second_count, 30)
+        self.assertIn("EXTRA_COMPATIBILITY_FEATURES", TEMPLATE)
+        self.assertIn("Show 50-feature implementation map", TEMPLATE)
+        self.assertIn("extraCompatibilityFeatureAudit", TEMPLATE)
+        self.assertEqual(len(re.findall(r"(?m)^\d+\. \*\*", DOC)), 50)
 
     def test_gta_iv_diagnostic_snapshot_captures_settings_and_failure_stage(self):
         for marker in (
@@ -81,6 +87,7 @@ class ExtraCompatibilityTests(unittest.TestCase):
             "SPU worker queue, scheduling and starvation counters: NOT EXPOSED BY PINNED NATIVE CORE",
             "RSX command queue and GPU-fence trace: NOT EXPOSED BY PINNED NATIVE CORE",
             "Guest save-state schema/checksum validation: NOT EXPOSED BY PINNED NATIVE CORE",
+            "50-feature compatibility map",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, TEMPLATE)
