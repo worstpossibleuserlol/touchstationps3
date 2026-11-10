@@ -50,7 +50,10 @@ class ExtraAdditionalBugfixTests(unittest.TestCase):
         self.assertIn('active.optLong("startedAt", 0L) <= 0L', LAB)
 
     def test_active_session_requires_event_array(self):
-        self.assertIn('active.optJSONArray("events") == null', LAB)
+        self.assertIn('val events = active?.optJSONArray("events")', LAB)
+        self.assertIn('val eventEntriesValid = events != null && events.length() in 1..40', LAB)
+        self.assertIn('(0 until events.length()).all { events.optJSONObject(it) != null }', LAB)
+        self.assertIn('!eventEntriesValid', LAB)
 
     def test_corrupt_active_key_is_removed_and_recovery_flag_saved(self):
         self.assertIn("prefs.edit().remove(key).putBoolean(gameLabRecoveryKey(serial), true).apply()", LAB)
