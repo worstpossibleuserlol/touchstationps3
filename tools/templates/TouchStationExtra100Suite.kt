@@ -627,7 +627,7 @@ fun TouchStationExtra100Suite(settings: Settings) {
                     }.focusable().padding(10.dp),
                 style = MaterialTheme.typography.bodyMedium)
             Text("Last input: " + lastInput.value, style = MaterialTheme.typography.bodySmall)
-            Text("This checks Compose digital key events but cannot distinguish a controller from a keyboard. Analog axes and emulator remapping still depend on the native controller bridge.",
+            Text("This checks Compose digital key events but cannot distinguish a controller from a keyboard. Analog axis calibration and emulator remapping still depend on the native controller bridge.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Text("81–90 · Personalization and session tracking", style = MaterialTheme.typography.titleMedium)
