@@ -14,6 +14,10 @@ they are not a claim that GTA IV has been tested or is playable on every device.
 
 
 
+## Repository build layout
+
+The top-level `:app` directory is a legacy import-only prototype and is **not** the APK source used by the release workflow. The distributable TouchStation Extra APK is built from the pinned `android/armsx3-ui` source fetched by `.github/workflows/android.yml`, then patched by the scripts in `tools/`. Building the top-level Gradle project alone will not produce the TouchStation Extra release app or a working PS3 emulator. This distinction is intentional until the legacy shell is either removed or fully integrated.
+
 ## TouchStation Extra — 100-feature companion update
 
 The Extra 100 companion suite adds per-game favorites, categories, tags and notes; a searchable local metadata index; user-entered compatibility, firmware and update notes with status-change history; selected-document readability checks; single-file save backup/restore with SHA-256 read-back verification; Android controller key-event testing; user-controlled playtime tracking; Android performance snapshots and comparisons; app-side readiness checks; and a shareable diagnostic report.
