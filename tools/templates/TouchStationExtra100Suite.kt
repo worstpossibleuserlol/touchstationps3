@@ -10,7 +10,6 @@ import android.os.PowerManager
 import android.os.StatFs
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
-import android.view.InputDevice
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -38,7 +37,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.nativeKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
@@ -617,26 +615,18 @@ fun TouchStationExtra100Suite(settings: Settings) {
                 Text("Refresh Android controller list")
             }
             Text(controllers.value, style = MaterialTheme.typography.bodySmall)
-            Text("Tap this area to focus it, then press a controller button:",
+            Text("Tap this area to focus it, then press a keyboard or controller button:",
                 modifier = Modifier.fillMaxWidth().clickable { runCatching { focusRequester.requestFocus() } }
                     .focusRequester(focusRequester)
                     .onPreviewKeyEvent { event ->
-                        val nativeEvent = event.nativeKeyEvent
-                        val device = InputDevice.getDevice(nativeEvent.deviceId)
-                        val sources = device?.sources ?: nativeEvent.source
-                        val isPhysicalController = device != null && !device.isVirtual && (
-                            (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-                            (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
-                            (sources and InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
-                        )
-                        if (event.type == KeyEventType.KeyDown && isPhysicalController) {
-                            lastInput.value = "Controller key: " + event.key.toString()
+                        if (event.type == KeyEventType.KeyDown) {
+                            lastInput.value = "Digital key event: " + event.key.toString()
                             true
                         } else false
                     }.focusable().padding(10.dp),
                 style = MaterialTheme.typography.bodyMedium)
             Text("Last input: " + lastInput.value, style = MaterialTheme.typography.bodySmall)
-            Text("This checks digital Android key events. Analog axis calibration and emulator remapping still depend on the native controller bridge.",
+            Text("This checks Compose digital key events but cannot distinguish a controller from a keyboard. Analog axes and emulator remapping still depend on the native controller bridge.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Text("81–90 · Personalization and session tracking", style = MaterialTheme.typography.titleMedium)
