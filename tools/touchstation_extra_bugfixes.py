@@ -575,6 +575,33 @@ def patch_runtime(path: Path) -> None:
             m_szGamefile = uri""",
         "new game supersedes exit intent")
     source = replace_if_present(source,
+        """                    val booted = NativeApp.runVMThread(bootTarget)""",
+        """                    // Exit Game (or a newer game selection) can arrive while settings and
+                    // renderer setup are still preparing this boot. Do not enter the native VM
+                    // after that stop has already taken ownership of the session.
+                    if (vmExitToMainMenuAfterStop || vmStopInProgress) {
+                        TouchStationExtraShutdownDiagnostics.record(
+                            com.armsx2.Pasx2Application.appContext,
+                            "boot-cancelled-before-native-run",
+                            "A terminal exit or replacement launch arrived during game preparation.",
+                        )
+                        return@invoke
+                    }
+                    val booted = NativeApp.runVMThread(bootTarget)""",
+        "cancel loading game before native VM entry")
+    source = replace_if_present(source,
+        """                    NativeApp.runVMThread(m_szGamefile)""",
+        """                    if (vmExitToMainMenuAfterStop || vmStopInProgress) {
+                        TouchStationExtraShutdownDiagnostics.record(
+                            com.armsx2.Pasx2Application.appContext,
+                            "bios-boot-cancelled-before-native-run",
+                            "A terminal exit arrived during BIOS preparation.",
+                        )
+                        return@invoke
+                    }
+                    NativeApp.runVMThread(m_szGamefile)""",
+        "cancel BIOS boot before native VM entry")
+    source = replace_if_present(source,
         """        fun startBios() {
             currentGame.value = null""",
         """        fun startBios() {
