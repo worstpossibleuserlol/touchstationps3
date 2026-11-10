@@ -216,6 +216,11 @@ class ShutdownBugfixTests(unittest.TestCase):
             self.assertIn("if (restartQueued) {", result)
             self.assertIn("} else if (restartNow) {", result)
             self.assertLess(result.index("if (restartQueued) {"), result.index("} else if (restartNow) {"))
+            # Replace the complete original if/else chain. Leaving its prefix open
+            # nests every following runtime method inside stop().
+            self.assertNotIn("if (restartNow) {\n                        start()\n                    if (restartQueued)", result)
+            self.assertIn("} else if (restartNow) {\n                        start()\n                    } else {", result)
+            self.assertEqual(result.count("        fun restart() {"), 1)
             self.assertIn("onReturnedToLibrary()\n                finishToLauncherIfRequested()\n                return", result)
             self.assertIn("autosave-failed-shutdown-continuing", result)
             self.assertIn("runCatching { NativeApp.shutdown() }", result)
