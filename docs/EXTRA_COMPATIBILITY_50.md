@@ -67,7 +67,7 @@ This release tracks the exact 50 compatibility features requested for GTA IV and
 
 ## Native-core boundary
 
-The current build workflow packages a pinned prebuilt ARM64 PS3 engine. It does not compile or patch the native PPU, SPU, RSX, Vulkan/OpenGL renderer, shader compiler, guest audio engine or save-state internals. Therefore every **NATIVE CORE REQUIRED** item is tracked but is not claimed as implemented by this Android-only update.
+The current build workflow packages a pinned prebuilt ARM64 PS3 engine. It does not compile or patch the native PPU, SPU, RSX, Vulkan/OpenGL renderer, shader compiler, guest audio engine or save-state internals. Therefore every **NATIVE CORE REQUIRED** item is tracked, but these native fixes are **not claimed as fixed or implemented** by this Android-only update.
 
 The app-side changes in this update are: the complete 50-item in-app status map; explicit status counts and explanations in exported compatibility reports; retained per-game profile/record/preflight tools; and a corrected digital-input diagnostic that no longer depends on a Compose API absent from the pinned source version.
 
