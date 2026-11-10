@@ -1,12 +1,117 @@
-# TouchStation 9.0.0 Release
+# TouchStation Extra
+
+## Upstream native engine
+
+The Android release workflow now builds against ARMSX3 **1.6.7**, pinned at
+`a87cfd55e4f6cf89428b8dfd75335526e5d9b075`, and stages the official
+Android 15 / ARMv8.2 ARM64 native libraries only after checking the exact
+asset size and SHA-256. This replaces the older 1.6.4 binary pin.
+
+Upstream 1.6.7 includes native fixes for graphics/PPU synchronization waits,
+SPU transfer locking, memory-pressure graphics safety, and safer handling of
+damaged shader-cache and savestate files. These are upstream engine changes;
+they are not a claim that GTA IV has been tested or is playable on every device.
+
+
+
+## Repository build layout
+
+The top-level `:app` directory is a legacy import-only prototype and is **not** the APK source used by the release workflow. The distributable TouchStation Extra APK is built from the pinned `android/armsx3-ui` source fetched by `.github/workflows/android.yml`, then patched by the scripts in `tools/`. Building the top-level Gradle project alone will not produce the TouchStation Extra release app or a working PS3 emulator. This distinction is intentional until the legacy shell is either removed or fully integrated.
+
+## 20 more Extra bug fixes
+
+The latest Extra pass hardens game-ID storage, document access, save-data copying and playtime tracking. See [the 20 additional fixes](docs/EXTRA_100_BUGFIXES_20_MORE.md) and their regression tests.
+
+## Swipe-up game error notices
+
+TouchStation Extra now supports swiping a fatal game-error banner upward to dismiss it. The banner fades and slides off-screen, keeps tap-to-dismiss and accessibility support, bounds/sanitises error text, and coalesces repeated identical notices. The full 20-point error UX and regression checklist is in [docs/EXTRA_ERROR_UX_20.md](docs/EXTRA_ERROR_UX_20.md). Dismissing a notice hides the UI only; it does not suppress the error in logs or repair the native emulator failure.
+
+## TouchStation Extra — 100-feature companion update
+
+The Extra 100 companion suite adds per-game favorites, categories, tags and notes; a searchable local metadata index; user-entered compatibility, firmware and update notes with status-change history; selected-document readability checks; single-file save backup/restore with SHA-256 read-back verification; Android controller key-event testing; user-controlled playtime tracking; Android performance snapshots and comparisons; app-side readiness checks; and a shareable diagnostic report.
+
+See [the 100-feature implementation map](docs/EXTRA_100_FEATURES.md). These are app-side tools: file metadata checks are not full ISO/package integrity tests; save-data transfer handles one user-selected document at a time; firmware/update notes are manually verified; and Android metrics are not PS3 guest metrics. The pinned prebuilt native core still does not expose live PPU/SPU/RSX counters, GPU-fence telemetry or guest-game crash callbacks.
+
+## TouchStation Extra
+
+Version Extra brings the 50-point feature set together with a new compatibility centre and device-specific tools:
+
+- **Official compatibility sync:** downloads the official RPCS3 compatibility export on request, caches it, and matches PS3 games by exact title ID.
+- **Library compatibility index:** searches the cached PS3 library by game title or ID and displays official status, test date and update metadata when present.
+- **Separate handset test record:** records what you observed on this particular device. It never converts an unknown result into a Playable rating.
+- **GTA IV conservative profile:** applies only to exact title ID BLES00229 while per-game scope is active. It selects LLVM PPU/SPU decoders, one PPU thread and one LLVM compile thread, Accurate SPU XFloat, Safe SPU block size, asynchronous shader recompilation, MSAA off and SPU cache. LLVM precompilation is enabled only when Android reports at least 3 GiB available RAM and no severe thermal status. The boot-time FIFO workaround uses only the two mitigations named by the native dead-FIFO error: Ordered & Atomic fetch accuracy and a 20 µs driver wake-up delay; FIFO reordering is left unchanged.
+- **Device readiness panel:** reports Android/ABI, SoC identity when exposed, CPU core count, available RAM, app PSS, free app-private storage, thermal severity, physical controllers and native-runtime readiness.
+- **Extra diagnostics export:** combines the current device, game ID, official compatibility result, local test result and configured PS3 settings in a shareable report.
+
+The official compatibility data is for desktop RPCS3 and is not a device-specific guarantee. The BLES00229 FIFO workaround is an experimental per-title configuration, not a native RSX-core fix or a promise that GTA IV will boot. It targets the core's documented dead-FIFO recovery path; device-specific results still require testing on the actual handset.
+
+See [the 50-point feature map](docs/FINALE_FEATURES.md) for the full breakdown. The primary APK remains a clean download; the corresponding-source archive and SHA-256 checksum remain separate. The APK is not padded with arbitrary data to reach a byte target.
 
 ## Licensing and corresponding source
 
 TouchStation is a downstream project built from ARMSX3/RPCS3; it is not the author of the upstream PS3 emulator core. The downstream combined work is distributed under GPL-2.0-only, while independent third-party components remain under their respective licenses.
 
-Each APK release produced by this compliance workflow must include a matching corresponding-source archive and SHA-256 checksum generated by the same workflow run. Older releases may predate this process. The archive includes the pinned upstream source, submodule source, TouchStation patches, dated modification notices, build scripts and workflow. See THIRD_PARTY_NOTICES.md, SOURCE_DISTRIBUTION.md, and LICENSE.
+Each APK release produced by this compliance workflow is accompanied by a matching corresponding-source archive and SHA-256 checksum generated by the same workflow run. The source archive is a separate download, not bundled into the normal APK artifact. For v11, the APK artifact retains the 139-byte source checksum file while the 525 MB matching source archive is available separately. Older releases may predate this split-download process. The archive includes the pinned upstream source, submodule source, TouchStation patches, dated modification notices, build scripts and workflow. See THIRD_PARTY_NOTICES.md, SOURCE_DISTRIBUTION.md, and LICENSE.
 
-Do not treat an APK as a complete release if its corresponding-source archive or checksum is missing.
+Do not treat an APK as a complete release if its corresponding-source archive or checksum is missing from the release downloads.
+
+## 11.0.0 Reliability and Diagnostics Update
+
+TouchStation 11.0.0 adds a reliability suite on top of the existing ARMSX3/RPCS3 Android application. It does not replace or rewrite the native PS3 emulator core.
+
+### 20-feature implementation
+
+1. **PPU compilation status:** shows configured recompiler settings and explicitly reports live compile-job progress as N/A because the pinned native bridge does not export it.
+2. **PPU cache validation:** inventories cache files and size, and reports unreadable entries without deleting or modifying cache data.
+3. **PPU thread tuning:** gives a conservative CPU/RAM-based recommendation and applies it only after settings read-back verification.
+4. **SPU workload diagnostics:** shows the configured SPU decoder, block size, preferred threads and cache inventory.
+5. **Recompiler error details:** surfaces Android historical process-exit evidence; structured native PPU/SPU exception counters remain N/A when unavailable.
+6. **Game boot timeline:** records engine, native-runtime, game and emulator-state transitions in the app-private session log.
+7. **Launch failure analyzer:** combines engine readiness, native runtime state and Android process-exit evidence. Detailed native game-loader errors remain unavailable unless the bridge exports them.
+8. **Game compatibility database:** stores local, user-recorded per-game test notes. These are not universal or independently verified compatibility ratings.
+9. **Crash report export:** shares a diagnostic text report through the Android share sheet when the user requests it.
+10. **Safe frontend relaunch:** offers a frontend relaunch only when the emulator state is STOPPED; it does not remove game data, firmware or saves.
+11. **Frametime graph access:** links users to the existing native in-game FPS and frametime overlay rather than fabricating a second source of per-frame data.
+12. **Performance history:** records recent Android-reported available-RAM samples and displays a compact history trace.
+13. **Thermal warning system:** reports Android thermal-severity levels and warns at elevated severity. This is not a measured SoC temperature.
+14. **Memory pressure monitor:** reports available RAM and app PSS where Android exposes them.
+15. **Vulkan diagnostics:** reports Android's advertised Vulkan feature version/level; physical-device extension enumeration remains N/A without a native Vulkan query.
+16. **Auto Settings 3.0:** applies conservative PPU/LLVM/SPU and output settings, then checks persisted settings before reporting success.
+17. **Per-game profile backup:** backs up and restores the supported numeric settings subset for the active game settings scope.
+18. **Controller diagnostics:** lists Android gamepad/joystick input devices; button-by-button live input tracing is not exposed by this screen.
+19. **Storage manager:** reports app-private free storage and known PPU/SPU/shader cache footprints. External game and firmware directory totals remain N/A when not exposed to this view.
+20. **Session recovery:** saves and restores a last-known settings recovery point without touching games, firmware or save data.
+
+**Native telemetry limits:** live PPU compilation counters, structured native PPU/SPU exceptions, per-frame data inside this panel, detailed FIFO traces, physical GPU utilization and physical Vulkan extension lists remain N/A unless the pinned core or Android driver exposes them. The existing in-game overlay remains the authoritative source for FPS and frametime graphs.
+
+## 10.0.0 Stability and Diagnostics Update
+
+TouchStation 10.0.0 builds on the existing ARMSX3/RPCS3 Android core and adds a diagnostics and stability layer. It does not replace or rewrite the native PS3 emulator core.
+
+### 20-feature implementation
+
+1. **PPU recompiler diagnostics:** show configured PPU decoder, PPU threads, LLVM compile threads and precompile setting. The native bridge also exposes a coarse progress indicator for sustained PPU compile stretches; per-worker counters and detailed native PPU exception data remain unavailable.
+2. **PPU thread optimizer:** provide a conservative hardware-based thread recommendation with manual settings preserved.
+3. **PPU cache manager:** inspect the PPU cache directory, file count and size without touching game saves.
+4. **SPU workload monitor:** show SPU decoder, block size, preferred thread configuration and native in-game overlay access.
+5. **PPU/SPU error tracker:** report available Android process exits and clearly identify when structured native error history is unavailable.
+6. **Recompiler performance analyzer:** combine configured thread data, cache inspection and the native overlay; unsupported compilation timings remain N/A.
+7. **Game launch verification:** check engine initialization, native-runtime readiness and active game metadata. A full byte-for-byte game integrity scan is not exposed by the current storage bridge.
+8. **Crash Detection 2.0:** show Android historical Java/native crash, ANR and low-memory exit records where supported.
+9. **FIFO/RSX diagnostics:** report the absence or presence of available native crash evidence; detailed FIFO command traces remain N/A because the pinned bridge does not expose them.
+10. **Game Boot Recovery:** apply a conservative emulator profile and verify that its settings were saved. It never deletes firmware, game files or saves.
+11. **Shader Compilation Monitor:** inspect known cache footprint and reuse the native overlay. Live shader job counters remain N/A unless exported by the core.
+12. **Game Compatibility Profiles:** retain the upstream per-game configuration store and identify whether Global or Game scope is active.
+13. **Save Data Protection:** diagnostic/cache operations avoid the PS3 home/save-data tree; no automatic save deletion or rewrite is performed.
+14. **Vulkan Driver Diagnostics:** show Android-reported Vulkan feature information. Full physical-device extension enumeration requires a native Vulkan query not exposed by the current UI bridge.
+15. **Real-Time Performance Dashboard:** reuse the native FPS, frametime and guest PPU/SPU/RSX overlay. Physical GPU utilization remains N/A if the phone's driver does not expose counters.
+16. **Thermal Stability Monitor:** show Android thermal severity and memory/storage readings; thermal severity is not a measured SoC temperature.
+17. **Adaptive Output Scaling:** retain the Android output-surface scale recommendations; this does not change the PS3 game's internal RSX resolution.
+18. **Auto Settings 2.0:** apply a profile, reload the persisted configuration and compare the saved values before reporting success.
+19. **Game-Specific Auto Optimizer:** apply recommendations through the active per-game settings scope when a game is selected; profiles remain user-editable and are not claimed to be game-benchmarked.
+20. **Session Diagnostic Recorder:** store user-triggered session snapshots in app-private storage and export a diagnostic report only when the user presses Share.
+
+**Telemetry honesty:** this release only reports values available from Android or the pinned native bridge. It does not invent PPU/SPU compile timings, Vulkan extension lists, FIFO traces, GPU utilization or game-file integrity results.
 
 ## 9.0.0 Auto Optimization Update
 
@@ -92,7 +197,7 @@ The GitHub Actions workflow:
 3. Applies TouchStation branding, controller-only gameplay, advanced settings, monitoring, Control Center, PPU/SPU/RSX suite and pause-menu overlay controls.
 4. Builds the ARM64 release APK.
 5. Verifies app version, native libraries, launcher artwork, APK signature and alignment.
-6. Uploads the APK artifact and publishes the `v9.0.0` GitHub release when all checks pass.
+6. Uploads the APK plus the small source checksum as one artifact, publishes the corresponding-source archive as a separate artifact, and publishes the `vextra` GitHub release when all checks pass.
 
 The release workflow is the authoritative APK build path. The upstream source revision and native library release are intentionally pinned for reproducibility.
 
@@ -105,3 +210,12 @@ While a game is running, the pause menu provides Options, the Performance Overla
 ## License and credits
 
 The emulator distribution is governed by GPL-2.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for upstream source and third-party notices.
+
+
+## TouchStation Extra Advanced Suite
+
+The Extra Advanced Suite adds 50 further feature areas spanning crash-risk advisories, Android process-exit analysis, per-game user test history, device-specific profiles, PPU/SPU configuration advice, RSX/FIFO error guidance, output scaling recommendations, searchable settings help, settings profile slots, settings reset/history, battery-focused presets, keep-screen-on controls and an expanded diagnostics report.
+
+The suite distinguishes verified Android/app data from manual handset observations and desktop compatibility references. PPU/SPU native worker counters, RSX command traces, GPU fences, physical GPU utilization, shader-cache internals and guest-game crash callbacks remain N/A where the pinned native bridge does not expose them. Per-game stability indexes are based on user-entered observations and are not compatibility ratings.
+
+Open **Settings → Performance → TouchStation Extra · Advanced suite** for the advanced feature panel. Three settings-profile slots are stored per handset and Global/per-game scope. The settings-change history is recorded through the central settings save path. A confirmed reset restores upstream defaults for the active scope; it does not delete games, firmware or saves.
