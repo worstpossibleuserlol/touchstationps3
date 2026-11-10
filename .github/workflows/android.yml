@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           UPSTREAM="$RUNNER_TEMP/armsx3-source"
-          COMMIT="482d35b6a9f2eee61cdc6c0820a2d57392b235e6"
+          COMMIT="b8eea42f52755f0841afc04a23b06125e5274bab"
           git clone --filter=blob:none --no-checkout https://github.com/ARMSX2/ARMSX3.git "$UPSTREAM"
           git -C "$UPSTREAM" fetch --depth=1 origin "$COMMIT"
           git -C "$UPSTREAM" checkout --detach FETCH_HEAD
@@ -67,18 +67,18 @@ jobs:
           # corresponding-source release archive is complete, not just the Android UI.
           git -C "$UPSTREAM" submodule update --init --recursive --depth 1
           test -f "$UPSTREAM/android/armsx3-ui/app/src/main/java/com/armsx2/ui/settings/PerformanceTab.kt"
-          echo "Upstream source and submodules pinned to $COMMIT"
+          echo "Upstream ARMSX3 1.6.7 source and submodules pinned to $COMMIT"
 
       - name: Download and verify pinned upstream ARM64 native libraries
         shell: bash
         run: |
           set -euo pipefail
-          UPSTREAM_APK="$RUNNER_TEMP/armsx3-1.6.4.apk"
-          DOWNLOAD_TMP="$RUNNER_TEMP/armsx3-1.6.4.download"
-          EXPECTED_SIZE="79216349"
-          EXPECTED_SHA256="e84d287e297dc0e8edc9e0fa9b9930b12a4fe38140e5b5dd585a1454fd22b708"
-          RELEASE_URL="https://github.com/ARMSX2/ARMSX3/releases/download/1.6.4/ARMSX3-1.6.4-a15-armv8.2-sdk35.apk"
-          ASSET_API_URL="https://api.github.com/repos/ARMSX2/ARMSX3/releases/assets/714709325"
+          UPSTREAM_APK="$RUNNER_TEMP/armsx3-1.6.7.apk"
+          DOWNLOAD_TMP="$RUNNER_TEMP/armsx3-1.6.7.download"
+          EXPECTED_SIZE="79258789"
+          EXPECTED_SHA256="a8cb2e4fbbd67c89f6336456a3f74e664a9f0be4f0f39d264e1f031e1b3fc3fd"
+          RELEASE_URL="https://github.com/ARMSX2/ARMSX3/releases/download/1.6.7/ARMSX3-1.6.7-a15-armv8.2-sdk35.apk"
+          ASSET_API_URL="https://api.github.com/repos/ARMSX2/ARMSX3/releases/assets/724443946"
 
           verify_download() {
             local file="$1"
@@ -108,7 +108,7 @@ jobs:
             fi
             mv "$DOWNLOAD_TMP" "$UPSTREAM_APK"
           fi
-          echo "Verified upstream release asset size and SHA-256."
+          echo "Verified ARMSX3 1.6.7 ARM64 release asset size and SHA-256."
 
           unzip -Z1 "$UPSTREAM_APK" > "$RUNNER_TEMP/upstream-entries.txt"
           grep -Fxq "lib/arm64-v8a/libarmsx3-core.so" "$RUNNER_TEMP/upstream-entries.txt"
