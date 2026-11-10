@@ -168,3 +168,7 @@ The follow-up audit found two additional frontend defects and adds regression co
 - **False boot success:** the native bridge previously returned success after its 10-second boot-settle wait even if the emulator never left Stopped. It now reports BootTimeout and returns false, while preserving a user stop or an armed restart. A passing BootResult alone is no longer treated as proof that the VM started.
 
 These changes are frontend lifecycle safeguards. They do not repair a native-core hang or prove GTA IV/GTA SA stability on the target handset.
+
+## Follow-up pass
+
+See [EXTRA_100_BUGFIXES_20_MORE.md](EXTRA_100_BUGFIXES_20_MORE.md) for 20 additional fixes covering identifier collisions, document-provider streams, backup safety and session tracking.
