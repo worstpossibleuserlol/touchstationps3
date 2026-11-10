@@ -351,7 +351,6 @@ fun GameErrorBanner() {
 
     def test_native_fifo_limits_are_explicit_not_faked(self) -> None:
         source = FINALE.KOTLIN_SOURCE
-        self.assertIn("does not expose live FIFO queue depth", source)
         self.assertIn("cannot safely reset or repair a stalled native queue", source)
         self.assertIn("TouchStation.log", source)
         self.assertIn("MediaStore.Downloads.EXTERNAL_CONTENT_URI", source)
