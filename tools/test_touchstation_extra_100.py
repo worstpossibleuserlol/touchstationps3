@@ -40,6 +40,10 @@ class Extra100Tests(unittest.TestCase):
         self.assertNotIn("nativeKeyEvent", SOURCE)
         self.assertIn("Digital key event:", SOURCE)
         self.assertIn("cannot distinguish a controller from a keyboard", SOURCE)
+        self.assertIn("InputDevice.SOURCE_GAMEPAD", SOURCE)
+        self.assertIn("InputDevice.SOURCE_JOYSTICK", SOURCE)
+        self.assertIn("val deviceIds: IntArray = InputDevice.getDeviceIds()", SOURCE)
+        self.assertIn("import android.view.InputDevice", SOURCE)
         self.assertIn("import androidx.compose.ui.input.key.key", SOURCE)
 
     def test_game_file_validation_does_not_claim_full_integrity(self):
